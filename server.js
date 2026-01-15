@@ -35,6 +35,9 @@ connection.connect((err) => {
   }
   console.log('Conectado a la base de datos MySQL');
 });
+app.get('/', (req, res) => {
+  res.send('Backend funcionando correctamente');
+});
 
 // Ruta POST para crear un presupuesto
 app.post('/presupuestos', (req, res) => {
