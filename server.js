@@ -13,12 +13,13 @@ app.use(bodyParser.json());
 
 // Crear conexión a MySQL
 const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '', // Cambia esto según tu configuración
-  database: 'presupuestos',
-  port: 3307 // Cambia el puerto si es necesario
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLDATABASE,
+  port: process.env.MYSQLPORT,
 });
+
 
 // Conectar a la base de datos
 connection.connect((err) => {
