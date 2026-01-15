@@ -105,23 +105,34 @@ app.post('/gastos', (req, res) => {
 // Ruta GET para obtener los gastos de un presupuesto específico
 app.get('/presupuestos/:id/gastos', (req, res) => {
   const { id } = req.params;
+
   const query = `
-    SELECT * FROM gastos g 
-    WHERE g.presupuesto_id = ? AND g.tipo != 'ahorro'
-       OR (g.tipo = 'ahorro' 
-           AND g.numero_quincena = (SELECT MIN(g2.numero_quincena)
-                                    FROM gastos g2
-                                    WHERE g2.ahorro_id = g.ahorro_id
-                                      AND g2.pagado = 0))`;
+    SELECT *
+    FROM gastos g
+    WHERE g.presupuesto_id = ?
+    AND (
+      g.tipo != 'ahorro'
+      OR (
+        g.tipo = 'ahorro'
+        AND g.numero_quincena = (
+          SELECT MIN(g2.numero_quincena)
+          FROM gastos g2
+          WHERE g2.ahorro_id = g.ahorro_id
+            AND g2.pagado = 0
+        )
+      )
+    )
+  `;
 
   connection.execute(query, [id], (err, results) => {
     if (err) {
-      console.error('Error al obtener los gastos:', err);
-      return res.status(500).send('Error al obtener los gastos');
+      console.error(err);
+      return res.status(500).json({ error: 'Error al obtener gastos' });
     }
     res.json(results);
   });
 });
+
 
 // Ruta PUT para actualizar el estado de un gasto (pagado/no pagado)
 app.put('/gastos/:id', (req, res) => {
