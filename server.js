@@ -1,112 +1,138 @@
 const express = require('express');
 const mysql = require('mysql2');
-const bodyParser = require('body-parser');
 const cors = require('cors');
 
 const app = express();
 
-// Middleware para habilitar CORS
+/* =========================
+   MIDDLEWARE
+========================= */
 app.use(cors());
+app.use(express.json());
 
-// Middleware para manejar JSON
-app.use(bodyParser.json());
-
+/* =========================
+   VARIABLES DE ENTORNO (LOG CONTROLADO)
+========================= */
 console.log('DB HOST:', process.env.MYSQLHOST);
 console.log('DB USER:', process.env.MYSQLUSER);
 console.log('DB NAME:', process.env.MYSQLDATABASE);
 console.log('DB PORT:', process.env.MYSQLPORT);
 
-
-// Crear conexión a MySQL
+/* =========================
+   CONEXIÓN MYSQL
+========================= */
 const connection = mysql.createConnection({
   host: process.env.MYSQLHOST,
   user: process.env.MYSQLUSER,
   password: process.env.MYSQLPASSWORD,
   database: process.env.MYSQLDATABASE,
-  port: process.env.MYSQLPORT,
+  port: Number(process.env.MYSQLPORT),
 });
 
-
-// Conectar a la base de datos
 connection.connect((err) => {
   if (err) {
-    console.error('Error conectando a la base de datos:', err);
-    return;
+    console.error('❌ Error conectando a MySQL:', err);
+    process.exit(1);
   }
-  console.log('Conectado a la base de datos MySQL');
+  console.log('✅ Conectado a MySQL');
 });
+
+/* =========================
+   RUTA HEALTHCHECK
+========================= */
 app.get('/', (req, res) => {
-  res.send('Backend funcionando correctamente');
+  res.json({ status: 'Backend funcionando correctamente' });
 });
 
-// Ruta POST para crear un presupuesto
-app.post('/presupuestos', (req, res) => {
-  const { nombre, monto_total } = req.body; // Obtener los datos del cuerpo de la solicitud
+/* =========================
+   PRESUPUESTOS
+========================= */
 
-  if (!nombre || !monto_total) {
-    return res.status(400).send('Faltan datos');
+// Crear presupuesto
+app.post('/presupuestos', (req, res) => {
+  const { nombre, monto_total } = req.body;
+
+  if (!nombre || monto_total == null) {
+    return res.status(400).json({ error: 'nombre y monto_total son obligatorios' });
   }
 
-  const query = 'INSERT INTO presupuestos (nombre, monto_total) VALUES (?, ?)';
-  connection.execute(query, [nombre, monto_total], (err, results) => {
+  const sql = `
+    INSERT INTO presupuestos (nombre, monto_total)
+    VALUES (?, ?)
+  `;
+
+  connection.execute(sql, [nombre, monto_total], (err, result) => {
     if (err) {
-      console.error('Error al crear el presupuesto:', err);
-      return res.status(500).send('Error al crear el presupuesto');
+      console.error(err);
+      return res.status(500).json({ error: 'Error al crear presupuesto' });
     }
-    res.status(201).send('Presupuesto creado correctamente');
+
+    res.status(201).json({
+      id: result.insertId,
+      nombre,
+      monto_total
+    });
   });
 });
 
-// Ruta GET para obtener todos los presupuestos
+// Obtener presupuestos
 app.get('/presupuestos', (req, res) => {
-  const query = 'SELECT * FROM presupuestos';
-  connection.execute(query, (err, results) => {
-    if (err) {
-      console.error('Error al obtener los presupuestos:', err);
-      return res.status(500).send('Error en el servidor');
+  connection.execute(
+    'SELECT * FROM presupuestos',
+    (err, results) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Error al obtener presupuestos' });
+      }
+      res.json(results);
     }
-    res.json(results);
-  });
+  );
 });
 
-// Ruta PUT para reanudar gastos fijos
-app.put('/presupuestos/:id/gastos/reanudar-fijos', (req, res) => {
-  const { id } = req.params;
+/* =========================
+   GASTOS
+========================= */
 
-  const query = 'UPDATE gastos SET pagado = 0 WHERE presupuesto_id = ? AND tipo = "fijo"';
-  connection.execute(query, [id], (err, results) => {
-    if (err) {
-      console.error('Error al reanudar los gastos fijos:', err);
-      return res.status(500).send('Error al reanudar los gastos fijos');
-    }
-
-    res.status(200).send('Gastos fijos reanudados correctamente');
-  });
-});
-
-// Ruta POST para agregar un gasto a un presupuesto
+// Agregar gasto
 app.post('/gastos', (req, res) => {
   const { presupuesto_id, descripcion, monto, tipo, fecha } = req.body;
 
-  if (!presupuesto_id || !descripcion || !monto || !tipo || !fecha) {
-    return res.status(400).send('Faltan datos');
+  if (!presupuesto_id || !descripcion || monto == null || !tipo || !fecha) {
+    return res.status(400).json({ error: 'Datos incompletos' });
   }
 
-  const query = 'INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha) VALUES (?, ?, ?, ?, ?)';
-  connection.execute(query, [presupuesto_id, descripcion, monto, tipo, fecha], (err, results) => {
-    if (err) {
-      console.error('Error al agregar el gasto:', err);
-      return res.status(500).send('Error al agregar el gasto');
+  const sql = `
+    INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado)
+    VALUES (?, ?, ?, ?, ?, 0)
+  `;
+
+  connection.execute(
+    sql,
+    [presupuesto_id, descripcion, monto, tipo, fecha],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Error al agregar gasto' });
+      }
+
+      res.status(201).json({
+        id: result.insertId,
+        presupuesto_id,
+        descripcion,
+        monto,
+        tipo,
+        fecha,
+        pagado: 0
+      });
     }
-    res.status(201).send('Gasto agregado correctamente');
-  });
+  );
 });
 
-// Ruta GET para obtener los gastos de un presupuesto específico
+// Obtener gastos por presupuesto
 app.get('/presupuestos/:id/gastos', (req, res) => {
   const { id } = req.params;
 
-  const query = `
+  const sql = `
     SELECT *
     FROM gastos g
     WHERE g.presupuesto_id = ?
@@ -124,7 +150,7 @@ app.get('/presupuestos/:id/gastos', (req, res) => {
     )
   `;
 
-  connection.execute(query, [id], (err, results) => {
+  connection.execute(sql, [id], (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al obtener gastos' });
@@ -133,38 +159,92 @@ app.get('/presupuestos/:id/gastos', (req, res) => {
   });
 });
 
-
-// Ruta PUT para actualizar el estado de un gasto (pagado/no pagado)
+// Actualizar estado de gasto
 app.put('/gastos/:id', (req, res) => {
   const { id } = req.params;
   const { pagado } = req.body;
 
-  const query = 'UPDATE gastos SET pagado = ? WHERE id = ?';
-  connection.execute(query, [pagado, id], (err, results) => {
+  if (pagado === undefined) {
+    return res.status(400).json({ error: 'Campo pagado es obligatorio' });
+  }
+
+  const pagadoValue = pagado === true || pagado === 1 ? 1 : 0;
+
+  const sql = `
+    UPDATE gastos
+    SET pagado = ?
+    WHERE id = ?
+  `;
+
+  connection.execute(sql, [pagadoValue, id], (err, result) => {
     if (err) {
-      console.error('Error al actualizar el gasto:', err);
-      return res.status(500).send('Error al actualizar el gasto');
+      console.error(err);
+      return res.status(500).json({ error: 'Error al actualizar gasto' });
     }
-    res.status(200).send('Estado del gasto actualizado');
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Gasto no encontrado' });
+    }
+
+    res.json({
+      message: 'Estado actualizado',
+      id,
+      pagado: pagadoValue
+    });
   });
 });
 
-// Ruta DELETE para eliminar un gasto
+// Reanudar gastos fijos
+app.put('/presupuestos/:id/gastos/reanudar-fijos', (req, res) => {
+  const { id } = req.params;
+
+  const sql = `
+    UPDATE gastos
+    SET pagado = 0
+    WHERE presupuesto_id = ?
+      AND tipo = 'fijo'
+  `;
+
+  connection.execute(sql, [id], (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Error al reanudar gastos fijos' });
+    }
+
+    res.json({
+      message: 'Gastos fijos reanudados',
+      afectados: result.affectedRows
+    });
+  });
+});
+
+// Eliminar gasto
 app.delete('/gastos/:id', (req, res) => {
   const { id } = req.params;
-  const query = 'DELETE FROM gastos WHERE id = ?';
 
-  connection.execute(query, [id], (err, results) => {
-    if (err) {
-      console.error('Error al eliminar el gasto:', err);
-      return res.status(500).send('Error al eliminar el gasto');
+  connection.execute(
+    'DELETE FROM gastos WHERE id = ?',
+    [id],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Error al eliminar gasto' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Gasto no encontrado' });
+      }
+
+      res.json({ message: 'Gasto eliminado' });
     }
-    res.status(200).send('Gasto eliminado correctamente');
-  });
+  );
 });
 
-// Iniciar el servidor
-const PORT = 3002;
+/* =========================
+   SERVER
+========================= */
+const PORT = process.env.PORT || 3002;
+
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor activo en puerto ${PORT}`);
 });
