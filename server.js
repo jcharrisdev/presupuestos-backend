@@ -11,6 +11,12 @@ app.use(cors());
 // Middleware para manejar JSON
 app.use(bodyParser.json());
 
+console.log('DB HOST:', process.env.MYSQLHOST);
+console.log('DB USER:', process.env.MYSQLUSER);
+console.log('DB NAME:', process.env.MYSQLDATABASE);
+console.log('DB PORT:', process.env.MYSQLPORT);
+
+
 // Crear conexión a MySQL
 const connection = mysql.createConnection({
   host: process.env.MYSQLHOST,
