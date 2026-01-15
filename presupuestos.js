@@ -4,11 +4,11 @@ const mysql = require('mysql2');
 
 // Crear conexión a MySQL
 const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'presupuestos',
-  port: 3307  // Asegúrate de poner tu puerto correcto
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLDATABASE,
+  port: process.env.MYSQLPORT,
 });
 
 // Ruta para crear un presupuesto
