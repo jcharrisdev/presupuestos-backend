@@ -63,7 +63,7 @@ router.get('/', (req, res) => {
   const query = `
     SELECT *
     FROM presupuestos
-    WHERE firebase_uid = ?
+    WHERE firebase_uid = IFNULL(?,'N/A')
     ORDER BY id DESC
   `;
 
