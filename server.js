@@ -50,18 +50,18 @@ app.get('/', (req, res) => {
 
 // Crear presupuesto
 app.post('/presupuestos', (req, res) => {
-  const { nombre, monto_total } = req.body;
+  const { nombre, monto_total, firebase_uid } = req.body;
 
-  if (!nombre || monto_total == null) {
+  if (!nombre || monto_total == null || !firebase_uid) {
     return res.status(400).json({ error: 'nombre y monto_total son obligatorios' });
   }
 
   const sql = `
-    INSERT INTO presupuestos (nombre, monto_total)
-    VALUES (?, ?)
+    INSERT INTO presupuestos (nombre, monto_total, firebase_uid)
+    VALUES (?, ?, ?)
   `;
 
-  connection.execute(sql, [nombre, monto_total], (err, result) => {
+  connection.execute(sql, [nombre, monto_total, firebase_uid], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al crear presupuesto' });
@@ -77,8 +77,17 @@ app.post('/presupuestos', (req, res) => {
 
 // Obtener presupuestos
 app.get('/presupuestos', (req, res) => {
+   const { firebase_uid } = req.query;
+   if(!firebase_uid) {
+      return res.status(400).json({
+       error: 'firebase_uid es requerido',  
+      })
+   }
+
+   const sql =`select * from presupuestos where firebase_uid = ? order by id desc`;
+   
   connection.execute(
-    'SELECT * FROM presupuestos',
+    sql, [firebase_uid],
     (err, results) => {
       if (err) {
         console.error(err);
@@ -95,20 +104,20 @@ app.get('/presupuestos', (req, res) => {
 
 // Agregar gasto
 app.post('/gastos', (req, res) => {
-  const { presupuesto_id, descripcion, monto, tipo, fecha } = req.body;
+  const { presupuesto_id, descripcion, monto, tipo, fecha, firebase_uid} = req.body;
 
-  if (!presupuesto_id || !descripcion || monto == null || !tipo || !fecha) {
+  if (!presupuesto_id || !descripcion || monto == null || !tipo || !fecha || !firebase_uid) {
     return res.status(400).json({ error: 'Datos incompletos' });
   }
 
   const sql = `
-    INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado)
-    VALUES (?, ?, ?, ?, ?, 0)
+    INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid)
+    VALUES (?, ?, ?, ?, ?, 0, ?)
   `;
 
   connection.execute(
     sql,
-    [presupuesto_id, descripcion, monto, tipo, fecha],
+    [presupuesto_id, descripcion, monto, tipo, fecha, firebase_uid],
     (err, result) => {
       if (err) {
         console.error(err);
@@ -122,7 +131,8 @@ app.post('/gastos', (req, res) => {
         monto,
         tipo,
         fecha,
-        pagado: 0
+        pagado: 0,
+        firebase_uid
       });
     }
   );
@@ -131,11 +141,17 @@ app.post('/gastos', (req, res) => {
 // Obtener gastos por presupuesto
 app.get('/presupuestos/:id/gastos', (req, res) => {
   const { id } = req.params;
+  const { firebase_uid } = req.query;
+
+   if(!firebase_uid){
+      return res.status(400).json({error: 'firebase_uid es requerido'});
+   }
 
   const sql = `
     SELECT *
     FROM gastos g
     WHERE g.presupuesto_id = ?
+    and g.firebase_uid = ?
     AND (
       g.tipo != 'ahorro'
       OR (
@@ -150,7 +166,7 @@ app.get('/presupuestos/:id/gastos', (req, res) => {
     )
   `;
 
-  connection.execute(sql, [id], (err, results) => {
+  connection.execute(sql, [id, firebase_uid], (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al obtener gastos' });
