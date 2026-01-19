@@ -38,6 +38,102 @@ connection.connect((err) => {
 });
 
 /* =========================
+   Nuevo:periodos 
+========================= */
+async function getPeriodoActivo(presupuesto_id, firebase_uid, tipoPeriodo = 'quincenal') {
+  const hoy = new Date().toISOString().split('T')[0];
+  
+  //1. Verificar si hay un periodo activo
+  const [rows] = await connection
+    .promise()
+    .execute(
+      `select *
+      from periodos
+      where presupuesto_id = ?
+      and firebase_uid = ?
+      and estado = 'activo'
+       LIMIT 1`,
+      [presupuesto_id, firebase_uid]
+  );
+  
+  // Si existe un periodo activo, retornarlo
+  if (rows.length > 0) {
+    const periodo = rows[0];
+    
+    if (hoy <= periodo.fecha_fin) {
+      return periodo;
+    }
+
+    // Si el periodo activo ha expirado, marcarlo como 'cerrado'
+    await connection
+      .promise()
+      .execute(
+        `update periodos
+         set estado = 'cerrado',
+         closed_at = NOW()
+         where id = ?`,
+        [periodo.id]
+      );
+  }
+
+  //4. Crear un nuevo periodo
+  const [[{ ultimo }]] = await connection
+    .promise()
+    .execute(
+      `select COALESCE(MAX(numero_periodo), 0) as ultimo
+       from periodos
+       where presupuesto_id = ?
+       and firebase_uid = ?`,
+      [presupuesto_id, firebase_uid]
+  );
+  
+  const numeroPeriodo = ultimo + 1;
+
+  const fechaInicio = hoy;
+  const fechaFin = tipoPeriodo === 'mensual'
+    ? new Date(new Date(fechaInicio).getFullYear(), new Date(fechaInicio).getMonth() + 1, 0)
+    : new Date(new Date(fechaInicio).getTime() + 14 * 24 * 60 * 60 * 1000);
+  
+  const fechaFinISO = fechaFin.toISOString().split('T')[0];
+
+  const [result] = await connection
+    .promise()
+    .execute(
+      `INSERT INTO periodos (
+        presupuesto_id,
+        firebase_uid,
+        numero_periodo,
+        tipo_periodo,
+        fecha_inicio,
+        fecha_fin,
+        estado
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'activo')`,
+      [   presupuestoId,
+        firebaseUid,
+        numeroPeriodo,
+        tipoPeriodo,
+        fechaInicio,
+        fechaFinISO]
+  );
+
+   return {
+    id: result.insertId,
+    presupuesto_id: presupuestoId,
+    firebase_uid: firebaseUid,
+    numero_periodo: numeroPeriodo,
+    tipo_periodo: tipoPeriodo,
+    fecha_inicio: fechaInicio,
+    fecha_fin: fechaFinISO,
+    estado: 'activo'
+  };
+}
+
+
+
+
+
+/* =========================
    RUTA HEALTHCHECK
 ========================= */
 app.get('/', (req, res) => {
