@@ -288,57 +288,60 @@ app.get('/', (req, res) => {
 ========================= */
 
 // Crear presupuesto
-app.post('/presupuestos', (req, res) => {
-  const { nombre,
+app.post('/presupuestos', async (req, res) => {
+  const {
+    nombre,
     monto_total,
     firebase_uid,
     tipo_periodo,
-    dia_inicio_periodo} = req.body;
+    dia_inicio_periodo
+  } = req.body;
 
-  if (!nombre ||
-    monto_total == null ||
-    !firebase_uid ||
-    !tipo_periodo ||
-    !dia_inicio_periodo) {
-    return res.status(400).json({ error: 'nombre y monto_total son obligatorios' });
-  }
-  
-  if (!['quincenal', 'mensual'].includes(tipo_periodo)) {
-    return res.status(400).json({
-      error: 'tipo_periodo inválido',
-    });
+  if (!nombre || monto_total == null || !firebase_uid || !tipo_periodo || !dia_inicio_periodo) {
+    return res.status(400).json({ error: 'Datos incompletos' });
   }
 
-  const sql = `
-   INSERT INTO presupuestos (
-      nombre,
-      monto_total,
+  try {
+    // 1️⃣ Crear presupuesto
+    const [result] = await connection.promise().execute(
+      `
+      INSERT INTO presupuestos (
+        nombre,
+        monto_total,
+        firebase_uid,
+        tipo_periodo,
+        fecha_inicio_configurada
+      )
+      VALUES (?, ?, ?, ?, ?)
+      `,
+      [nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo]
+    );
+
+    const presupuestoId = result.insertId;
+
+    // 2️⃣ CREAR PRIMER PERÍODO (ESTO FALTABA)
+    await crearPrimerPeriodo(
+      presupuestoId,
       firebase_uid,
       tipo_periodo,
       dia_inicio_periodo
-    )
-    VALUES (?, ?, ?, ?, ?)
-  `;
+    );
 
-  connection.execute(sql, [ nombre,
-      monto_total,
-      firebase_uid,
-      tipo_periodo,
-      dia_inicio_periodo], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Error al crear presupuesto' });
-    }
-
+    // 3️⃣ Responder OK
     res.status(201).json({
-        id: result.insertId,
-        nombre,
-        monto_total,
-        tipo_periodo,
-        dia_inicio_periodo
+      id: presupuestoId,
+      nombre,
+      monto_total,
+      tipo_periodo,
+      dia_inicio_periodo
     });
-  });
+
+  } catch (error) {
+    console.error('Error creando presupuesto:', error);
+    res.status(500).json({ error: 'Error al crear presupuesto' });
+  }
 });
+
 
 // Obtener presupuestos
 app.get('/presupuestos', (req, res) => {
