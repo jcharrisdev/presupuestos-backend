@@ -64,7 +64,8 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
     throw new Error('Presupuesto no encontrado');
   }
 
-  const { tipo_periodo, fecha_inicio_configurada } = presupuesto;
+  const { tipo_periodo, dia_inicio_periodo } = presupuesto;
+
 
   // 2️⃣ Buscar período activo
   const [periodos] = await connection
@@ -126,7 +127,23 @@ async function crearPrimerPeriodo(
   tipoPeriodo,
   fechaInicioConfigurada
 ) {
-  const fechaInicio = new Date(fechaInicioConfigurada);
+  const hoy = new Date();
+
+let fechaInicio = new Date(
+  hoy.getFullYear(),
+  hoy.getMonth(),
+  dia_inicio_periodo
+);
+
+// Si el día ya pasó este mes, iniciar en el próximo período
+if (fechaInicio < hoy) {
+  if (tipoPeriodo === 'quincenal') {
+    fechaInicio.setDate(fechaInicio.getDate() + 14);
+  } else {
+    fechaInicio.setMonth(fechaInicio.getMonth() + 1);
+  }
+}
+
   const fechaFin = calcularFechaFin(fechaInicio, tipoPeriodo);
 
   const [[{ ultimo }]] = await connection
@@ -298,7 +315,7 @@ app.post('/presupuestos', (req, res) => {
       monto_total,
       firebase_uid,
       tipo_periodo,
-      fecha_inicio_configurada
+      dia_inicio_periodo
     )
     VALUES (?, ?, ?, ?, ?)
   `;
