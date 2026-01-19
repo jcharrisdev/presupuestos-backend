@@ -413,26 +413,14 @@ app.get('/presupuestos/:id/gastos', async (req, res) => {
   }
 
   try {
-    // ⬅️ AQUÍ sí es válido usar await
     await getPeriodoActivo(id, firebase_uid);
 
     const sql = `
       SELECT *
-      FROM gastos g
-      WHERE g.presupuesto_id = ?
-        AND g.firebase_uid = ?
-        AND (
-          g.tipo != 'ahorro'
-          OR (
-            g.tipo = 'ahorro'
-            AND g.numero_quincena = (
-              SELECT MIN(g2.numero_quincena)
-              FROM gastos g2
-              WHERE g2.ahorro_id = g.ahorro_id
-                AND g2.pagado = 0
-            )
-          )
-        )
+      FROM gastos
+      WHERE presupuesto_id = ?
+        AND firebase_uid = ?
+      ORDER BY id DESC
     `;
 
     connection.execute(sql, [id, firebase_uid], (err, results) => {
