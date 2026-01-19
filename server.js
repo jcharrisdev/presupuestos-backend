@@ -276,13 +276,13 @@ app.post('/presupuestos', (req, res) => {
     monto_total,
     firebase_uid,
     tipo_periodo,
-    fecha_inicio_periodo} = req.body;
+    dia_inicio_periodo} = req.body;
 
   if (!nombre ||
     monto_total == null ||
     !firebase_uid ||
     !tipo_periodo ||
-    !fecha_inicio_periodo) {
+    !dia_inicio_periodo) {
     return res.status(400).json({ error: 'nombre y monto_total son obligatorios' });
   }
   
@@ -307,7 +307,7 @@ app.post('/presupuestos', (req, res) => {
       monto_total,
       firebase_uid,
       tipo_periodo,
-      fecha_inicio_periodo], (err, result) => {
+      dia_inicio_periodo], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al crear presupuesto' });
@@ -318,7 +318,7 @@ app.post('/presupuestos', (req, res) => {
         nombre,
         monto_total,
         tipo_periodo,
-        fecha_inicio_periodo
+        dia_inicio_periodo
     });
   });
 });
