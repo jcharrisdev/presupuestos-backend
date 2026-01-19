@@ -40,66 +40,113 @@ connection.connect((err) => {
 /* =========================
    Nuevo:periodos 
 ========================= */
-async function getPeriodoActivo(presupuesto_id, firebase_uid, tipoPeriodo = 'quincenal') {
+/* =========================
+   ===== NUEVO: PERIODOS =====
+========================= */
+
+async function getPeriodoActivo(presupuestoId, firebaseUid) {
   const hoy = new Date().toISOString().split('T')[0];
-  
-  //1. Verificar si hay un periodo activo
-  const [rows] = await connection
+
+  // 1️⃣ Obtener reglas del presupuesto
+  const [[presupuesto]] = await connection
     .promise()
     .execute(
-      `select *
-      from periodos
-      where presupuesto_id = ?
-      and firebase_uid = ?
-      and estado = 'activo'
-       LIMIT 1`,
-      [presupuesto_id, firebase_uid]
-  );
-  
-  // Si existe un periodo activo, retornarlo
-  if (rows.length > 0) {
-    const periodo = rows[0];
-    
+      `
+      SELECT tipo_periodo, fecha_inicio_configurada
+      FROM presupuestos
+      WHERE id = ?
+        AND firebase_uid = ?
+      `,
+      [presupuestoId, firebaseUid]
+    );
+
+  if (!presupuesto) {
+    throw new Error('Presupuesto no encontrado');
+  }
+
+  const { tipo_periodo, fecha_inicio_configurada } = presupuesto;
+
+  // 2️⃣ Buscar período activo
+  const [periodos] = await connection
+    .promise()
+    .execute(
+      `
+      SELECT *
+      FROM periodos
+      WHERE presupuesto_id = ?
+        AND firebase_uid = ?
+        AND estado = 'activo'
+      LIMIT 1
+      `,
+      [presupuestoId, firebaseUid]
+    );
+
+  if (periodos.length > 0) {
+    const periodo = periodos[0];
+
+    // 3️⃣ Si sigue vigente → devolverlo
     if (hoy <= periodo.fecha_fin) {
       return periodo;
     }
 
-    // Si el periodo activo ha expirado, marcarlo como 'cerrado'
+    // 4️⃣ Si venció → cerrarlo
     await connection
       .promise()
       .execute(
-        `update periodos
-         set estado = 'cerrado',
-         closed_at = NOW()
-         where id = ?`,
+        `
+        UPDATE periodos
+        SET estado = 'cerrado',
+            closed_at = NOW()
+        WHERE id = ?
+        `,
         [periodo.id]
       );
+
+    // el siguiente período comienza al día siguiente
+    return await crearNuevoPeriodo(
+      presupuestoId,
+      firebaseUid,
+      tipo_periodo,
+      periodo.fecha_fin
+    );
   }
 
-  //4. Crear un nuevo periodo
+  // 5️⃣ No existe ningún período → crear el primero
+  return await crearPrimerPeriodo(
+    presupuestoId,
+    firebaseUid,
+    tipo_periodo,
+    fecha_inicio_configurada
+  );
+}
+
+async function crearPrimerPeriodo(
+  presupuestoId,
+  firebaseUid,
+  tipoPeriodo,
+  fechaInicioConfigurada
+) {
+  const fechaInicio = new Date(fechaInicioConfigurada);
+  const fechaFin = calcularFechaFin(fechaInicio, tipoPeriodo);
+
   const [[{ ultimo }]] = await connection
     .promise()
     .execute(
-      `select COALESCE(MAX(numero_periodo), 0) as ultimo
-       from periodos
-       where presupuesto_id = ?
-       and firebase_uid = ?`,
-      [presupuesto_id, firebase_uid]
-  );
-  
-  const numeroPeriodo = ultimo + 1;
+      `
+      SELECT MAX(numero_periodo) AS ultimo
+      FROM periodos
+      WHERE presupuesto_id = ?
+      `,
+      [presupuestoId]
+    );
 
-  const fechaInicio = hoy;
-  const fechaFin = tipoPeriodo === 'mensual'
-    ? new Date(new Date(fechaInicio).getFullYear(), new Date(fechaInicio).getMonth() + 1, 0)
-    : new Date(new Date(fechaInicio).getTime() + 14 * 24 * 60 * 60 * 1000);
-  
-  const fechaFinISO = fechaFin.toISOString().split('T')[0];
+  const numeroPeriodo = (ultimo || 0) + 1;
 
   const [result] = await connection
     .promise()
     .execute(
-      `INSERT INTO periodos (
+      `
+      INSERT INTO periodos (
         presupuesto_id,
         firebase_uid,
         numero_periodo,
@@ -108,25 +155,104 @@ async function getPeriodoActivo(presupuesto_id, firebase_uid, tipoPeriodo = 'qui
         fecha_fin,
         estado
       )
-      VALUES (?, ?, ?, ?, ?, ?, 'activo')`,
-      [   presupuestoId,
+      VALUES (?, ?, ?, ?, ?, ?, 'activo')
+      `,
+      [
+        presupuestoId,
         firebaseUid,
         numeroPeriodo,
         tipoPeriodo,
-        fechaInicio,
-        fechaFinISO]
-  );
+        fechaInicio.toISOString().split('T')[0],
+        fechaFin
+      ]
+    );
 
-   return {
+  return {
     id: result.insertId,
     presupuesto_id: presupuestoId,
     firebase_uid: firebaseUid,
     numero_periodo: numeroPeriodo,
     tipo_periodo: tipoPeriodo,
     fecha_inicio: fechaInicio,
-    fecha_fin: fechaFinISO,
-    estado: 'activo'
+    fecha_fin: fechaFin,
+    estado: 'activo',
   };
+}
+
+
+async function crearNuevoPeriodo(
+  presupuestoId,
+  firebaseUid,
+  tipoPeriodo,
+  fechaFinAnterior
+) {
+  const fechaInicio = new Date(fechaFinAnterior);
+  fechaInicio.setDate(fechaInicio.getDate() + 1);
+
+  const fechaFin = calcularFechaFin(fechaInicio, tipoPeriodo);
+
+  const [[{ ultimo }]] = await connection
+    .promise()
+    .execute(
+      `
+      SELECT MAX(numero_periodo) AS ultimo
+      FROM periodos
+      WHERE presupuesto_id = ?
+      `,
+      [presupuestoId]
+    );
+
+  const numeroPeriodo = (ultimo || 0) + 1;
+
+  const [result] = await connection
+    .promise()
+    .execute(
+      `
+      INSERT INTO periodos (
+        presupuesto_id,
+        firebase_uid,
+        numero_periodo,
+        tipo_periodo,
+        fecha_inicio,
+        fecha_fin,
+        estado
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'activo')
+      `,
+      [
+        presupuestoId,
+        firebaseUid,
+        numeroPeriodo,
+        tipoPeriodo,
+        fechaInicio.toISOString().split('T')[0],
+        fechaFin
+      ]
+    );
+
+  return {
+    id: result.insertId,
+    presupuesto_id: presupuestoId,
+    firebase_uid: firebaseUid,
+    numero_periodo: numeroPeriodo,
+    tipo_periodo: tipoPeriodo,
+    fecha_inicio: fechaInicio,
+    fecha_fin: fechaFin,
+    estado: 'activo',
+  };
+}
+
+
+function calcularFechaFin(fechaInicio, tipoPeriodo) {
+  const fechaFin = new Date(fechaInicio);
+
+  if (tipoPeriodo === 'quincenal') {
+    fechaFin.setDate(fechaFin.getDate() + 14);
+  } else {
+    fechaFin.setMonth(fechaFin.getMonth() + 1);
+    fechaFin.setDate(fechaFin.getDate() - 1);
+  }
+
+  return fechaFin.toISOString().split('T')[0];
 }
 
 
@@ -146,27 +272,53 @@ app.get('/', (req, res) => {
 
 // Crear presupuesto
 app.post('/presupuestos', (req, res) => {
-  const { nombre, monto_total, firebase_uid } = req.body;
+  const { nombre,
+    monto_total,
+    firebase_uid,
+    tipo_periodo,
+    fecha_inicio_configurada} = req.body;
 
-  if (!nombre || monto_total == null || !firebase_uid) {
+  if (!nombre ||
+    monto_total == null ||
+    !firebase_uid ||
+    !tipo_periodo ||
+    !fecha_inicio_configurada) {
     return res.status(400).json({ error: 'nombre y monto_total son obligatorios' });
+  }
+  
+  if (!['quincenal', 'mensual'].includes(tipo_periodo)) {
+    return res.status(400).json({
+      error: 'tipo_periodo inválido',
+    });
   }
 
   const sql = `
-    INSERT INTO presupuestos (nombre, monto_total, firebase_uid)
-    VALUES (?, ?, ?)
+   INSERT INTO presupuestos (
+      nombre,
+      monto_total,
+      firebase_uid,
+      tipo_periodo,
+      fecha_inicio_configurada
+    )
+    VALUES (?, ?, ?, ?, ?)
   `;
 
-  connection.execute(sql, [nombre, monto_total, firebase_uid], (err, result) => {
+  connection.execute(sql, [ nombre,
+      monto_total,
+      firebase_uid,
+      tipo_periodo,
+      fecha_inicio_configurada], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al crear presupuesto' });
     }
 
     res.status(201).json({
-      id: result.insertId,
-      nombre,
-      monto_total
+        id: result.insertId,
+        nombre,
+        monto_total,
+        tipo_periodo,
+        fecha_inicio_configurada
     });
   });
 });
@@ -241,7 +393,9 @@ app.get('/presupuestos/:id/gastos', (req, res) => {
 
    if(!firebase_uid){
       return res.status(400).json({error: 'firebase_uid es requerido'});
-   }
+  }
+  await getPeriodoActivo(id, firebase_uid);
+
 
   const sql = `
     SELECT *
