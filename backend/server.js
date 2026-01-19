@@ -310,7 +310,7 @@ app.post('/presupuestos', async (req, res) => {
         monto_total,
         firebase_uid,
         tipo_periodo,
-        fecha_inicio_configurada
+        dia_inicio_periodo
       )
       VALUES (?, ?, ?, ?, ?)
       `,
