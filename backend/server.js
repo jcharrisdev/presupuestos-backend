@@ -125,7 +125,7 @@ async function crearPrimerPeriodo(
   presupuestoId,
   firebaseUid,
   tipoPeriodo,
-  fechaInicioConfigurada
+  dia_inicio_periodo
 ) {
   const hoy = new Date();
 
