@@ -387,43 +387,51 @@ app.post('/gastos', (req, res) => {
 });
 
 // Obtener gastos por presupuesto
-app.get('/presupuestos/:id/gastos', (req, res) => {
+app.get('/presupuestos/:id/gastos', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid } = req.query;
 
-   if(!firebase_uid){
-      return res.status(400).json({error: 'firebase_uid es requerido'});
+  if (!firebase_uid) {
+    return res.status(400).json({ error: 'firebase_uid es requerido' });
   }
-  await getPeriodoActivo(id, firebase_uid);
 
+  try {
+    // ⬅️ AQUÍ sí es válido usar await
+    await getPeriodoActivo(id, firebase_uid);
 
-  const sql = `
-    SELECT *
-    FROM gastos g
-    WHERE g.presupuesto_id = ?
-    and g.firebase_uid = ?
-    AND (
-      g.tipo != 'ahorro'
-      OR (
-        g.tipo = 'ahorro'
-        AND g.numero_quincena = (
-          SELECT MIN(g2.numero_quincena)
-          FROM gastos g2
-          WHERE g2.ahorro_id = g.ahorro_id
-            AND g2.pagado = 0
+    const sql = `
+      SELECT *
+      FROM gastos g
+      WHERE g.presupuesto_id = ?
+        AND g.firebase_uid = ?
+        AND (
+          g.tipo != 'ahorro'
+          OR (
+            g.tipo = 'ahorro'
+            AND g.numero_quincena = (
+              SELECT MIN(g2.numero_quincena)
+              FROM gastos g2
+              WHERE g2.ahorro_id = g.ahorro_id
+                AND g2.pagado = 0
+            )
+          )
         )
-      )
-    )
-  `;
+    `;
 
-  connection.execute(sql, [id, firebase_uid], (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Error al obtener gastos' });
-    }
-    res.json(results);
-  });
+    connection.execute(sql, [id, firebase_uid], (err, results) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Error al obtener gastos' });
+      }
+
+      res.json(results);
+    });
+  } catch (error) {
+    console.error('Error en período activo:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
+
 
 // Actualizar estado de gasto
 app.put('/gastos/:id', (req, res) => {
