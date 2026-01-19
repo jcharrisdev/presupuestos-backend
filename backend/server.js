@@ -52,7 +52,7 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
     .promise()
     .execute(
       `
-      SELECT tipo_periodo, fecha_inicio_configurada
+      SELECT tipo_periodo, dia_inicio_periodo
       FROM presupuestos
       WHERE id = ?
         AND firebase_uid = ?
