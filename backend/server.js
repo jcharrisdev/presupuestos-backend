@@ -86,7 +86,7 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
     const periodo = periodos[0];
 
     // 3️⃣ Si sigue vigente → devolverlo
-    if (hoy <= periodo.fecha_fin) {
+    if ( periodo.fecha_fin >hoy) {
       return periodo;
     }
 
