@@ -72,7 +72,7 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
     .promise()
     .execute(
       `
-      SELECT *
+      SELECT *, DATE(NOW()) fecha_hoy
       FROM periodos
       WHERE presupuesto_id = ?
         AND firebase_uid = ?
@@ -86,7 +86,7 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
     const periodo = periodos[0];
 
     // 3️⃣ Si sigue vigente → devolverlo
-    if ( periodo.fecha_fin >hoy) {
+    if ( periodo.fecha_hoy <= periodo.fecha_fin) {
       return periodo;
     }
 
