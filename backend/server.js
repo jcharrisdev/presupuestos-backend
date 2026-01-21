@@ -671,6 +671,80 @@ app.get('/presupuestos/:id/detalle', async (req, res) => {
   }
 });
 
+// ===============================
+// CREAR MOVIMIENTOS DESDE GASTOS
+// ===============================
+app.post('/presupuestos/:id/movimientos', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, items } = req.body;
+
+  if (!firebase_uid || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Datos incompletos' });
+  }
+
+  try {
+    // 1️⃣ Obtener período activo
+    const periodo = await getPeriodoActivo(id, firebase_uid);
+
+    // 2️⃣ Procesar cada gasto seleccionado
+    for (const item of items) {
+      const { gasto_id, monto } = item;
+
+      if (!gasto_id || monto == null || monto <= 0) continue;
+
+      // Obtener definición del gasto
+      const [[gasto]] = await connection.promise().execute(
+        `
+        SELECT *
+        FROM gastos
+        WHERE id = ?
+          AND presupuesto_id = ?
+          AND firebase_uid = ?
+        `,
+        [gasto_id, id, firebase_uid]
+      );
+
+      if (!gasto) continue;
+
+      // Insertar movimiento
+      await connection.promise().execute(
+        `
+        INSERT INTO movimientos (
+          presupuesto_id,
+          periodo_id,
+          gasto_id,
+          descripcion,
+          monto,
+          tipo,
+          pagado,
+          firebase_uid,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())
+        `,
+        [
+          id,
+          periodo.id,
+          gasto.id,
+          gasto.descripcion,
+          monto,
+          gasto.tipo,
+          firebase_uid
+        ]
+      );
+    }
+
+    res.status(201).json({
+      message: 'Movimientos creados correctamente',
+      periodo_id: periodo.id
+    });
+
+  } catch (error) {
+    console.error('Error creando movimientos:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 
 /* =========================
