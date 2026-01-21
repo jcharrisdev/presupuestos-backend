@@ -608,6 +608,70 @@ app.post('/movimientos/bulk', async (req, res) => {
   }
 });
 
+// ===============================
+// DETALLE DEL PRESUPUESTO (MOVIMIENTOS)
+// ===============================
+app.get('/presupuestos/:id/detalle', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+
+  if (!firebase_uid) {
+    return res.status(400).json({ error: 'firebase_uid es requerido' });
+  }
+
+  try {
+    // 1️⃣ Obtener período activo (o crearlo si no existe)
+    const periodo = await getPeriodoActivo(id, firebase_uid);
+
+    // 2️⃣ Obtener movimientos del período activo
+    const [movimientos] = await connection.promise().execute(
+      `
+      SELECT *
+      FROM movimientos
+      WHERE presupuesto_id = ?
+        AND periodo_id = ?
+        AND firebase_uid = ?
+      ORDER BY id DESC
+      `,
+      [id, periodo.id, firebase_uid]
+    );
+
+    // 3️⃣ Totales
+    let totalFijo = 0;
+    let totalNoFijo = 0;
+    let totalAhorro = 0;
+
+    movimientos.forEach(m => {
+      if (m.tipo === 'fijo') totalFijo += Number(m.monto);
+      if (m.tipo === 'no fijo') totalNoFijo += Number(m.monto);
+      if (m.tipo === 'ahorro') totalAhorro += Number(m.monto);
+    });
+
+    const totalGastado = totalFijo + totalNoFijo + totalAhorro;
+    const pagados = movimientos.filter(m => m.pagado === 1).length;
+    const porcentajePagados =
+      movimientos.length > 0 ? pagados / movimientos.length : 0;
+
+    // 4️⃣ Respuesta
+    res.json({
+      periodo,
+      movimientos,
+      resumen: {
+        totalFijo,
+        totalNoFijo,
+        totalAhorro,
+        totalGastado,
+        porcentajePagados,
+      },
+    });
+
+  } catch (error) {
+    console.error('Error detalle presupuesto:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 /* =========================
    SERVER
