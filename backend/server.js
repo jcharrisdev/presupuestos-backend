@@ -523,6 +523,93 @@ app.delete('/gastos/:id', (req, res) => {
 });
 
 /* =========================
+   MOVIMIENTOS
+========================= */
+
+app.post('/movimientos/bulk', async (req, res) => {
+  const { presupuesto_id, firebase_uid, items } = req.body;
+
+  if (
+    !presupuesto_id ||
+    !firebase_uid ||
+    !Array.isArray(items) ||
+    items.length === 0
+  ) {
+    return res.status(400).json({ error: 'Datos incompletos' });
+  }
+
+  const conn = connection.promise();
+
+  try {
+    // 1️⃣ Obtener período activo
+    const periodo = await getPeriodoActivo(presupuesto_id, firebase_uid);
+
+    // 2️⃣ Iniciar transacción
+    await conn.beginTransaction();
+
+    for (const item of items) {
+      const { gasto_id, descripcion, monto, tipo } = item;
+
+      if (!gasto_id || !descripcion || monto <= 0) continue;
+
+      // 3️⃣ Insertar movimiento
+      await conn.execute(
+        `
+        INSERT INTO movimientos (
+          gasto_id,
+          presupuesto_id,
+          periodo_id,
+          firebase_uid,
+          descripcion,
+          monto,
+          tipo,
+          pagado,
+          fecha_pagado
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW())
+        `,
+        [
+          gasto_id,
+          presupuesto_id,
+          periodo.id,
+          firebase_uid,
+          descripcion,
+          monto,
+          tipo
+        ]
+      );
+
+      // 4️⃣ Si es fijo por X períodos → reducir contador
+      if (tipo === 'fijo_x_periodo') {
+        await conn.execute(
+          `
+          UPDATE gastos
+          SET periodos_restantes = periodos_restantes - 1
+          WHERE id = ?
+            AND periodos_restantes > 0
+          `,
+          [gasto_id]
+        );
+      }
+    }
+
+    // 5️⃣ Commit
+    await conn.commit();
+
+    res.status(201).json({
+      message: 'Movimientos creados correctamente',
+      periodo_id: periodo.id,
+    });
+
+  } catch (error) {
+    await conn.rollback();
+    console.error('Error creando movimientos:', error);
+    res.status(500).json({ error: 'Error al crear movimientos' });
+  }
+});
+
+
+/* =========================
    SERVER
 ========================= */
 const PORT = process.env.PORT || 3002;
