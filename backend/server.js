@@ -793,6 +793,64 @@ app.get('/presupuestos/:id/gastos-seleccionables', async (req, res) => {
   }
 });
 
+// ===============================
+// MARCAR MOVIMIENTO COMO PAGADO
+// ===============================
+app.put('/movimientos/:id/pagar', async (req, res) => {
+  const { id } = req.params;
+  const { pagado } = req.body;
+
+  if (pagado === undefined) {
+    return res.status(400).json({ error: 'Campo pagado es obligatorio' });
+  }
+
+  const pagadoValue = pagado === true || pagado === 1 ? 1 : 0;
+
+  try {
+    // 1️⃣ Obtener movimiento
+    const [[movimiento]] = await connection
+      .promise()
+      .execute(
+        `
+        SELECT *
+        FROM movimientos
+        WHERE id = ?
+        `,
+        [id]
+      );
+
+    if (!movimiento) {
+      return res.status(404).json({ error: 'Movimiento no encontrado' });
+    }
+
+    // 2️⃣ Marcar como pagado
+    await connection
+      .promise()
+      .execute(
+        `
+        UPDATE movimientos
+        SET pagado = ?,
+            fecha_pagado = CASE
+              WHEN ? = 1 THEN NOW()
+              ELSE NULL
+            END
+        WHERE id = ?
+        `,
+        [pagadoValue, pagadoValue, id]
+      );
+
+    res.json({
+      message: 'Movimiento actualizado',
+      id,
+      pagado: pagadoValue,
+    });
+
+  } catch (error) {
+    console.error('Error pagando movimiento:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 /* =========================
    SERVER
