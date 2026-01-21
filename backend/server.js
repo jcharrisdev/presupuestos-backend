@@ -121,6 +121,75 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
   );
 }
 
+async function generarMovimientosPeriodo(
+  presupuestoId,
+  periodoId,
+  firebaseUid
+) {
+  const conn = connection.promise();
+
+  // 1️⃣ Obtener gastos que aplican al período
+  const [gastos] = await conn.execute(
+    `
+    SELECT *
+    FROM gastos
+    WHERE presupuesto_id = ?
+      AND firebase_uid = ?
+      AND (
+        tipo = 'fijo'
+        OR (
+          tipo = 'fijo_x_periodo'
+          AND periodos_restantes > 0
+        )
+      )
+    `,
+    [presupuestoId, firebaseUid]
+  );
+
+  for (const gasto of gastos) {
+    // 2️⃣ Crear movimiento
+    await conn.execute(
+      `
+      INSERT INTO movimientos (
+        presupuesto_id,
+        periodo_id,
+        gasto_id,
+        descripcion,
+        monto,
+        tipo,
+        pagado,
+        firebase_uid,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())
+      `,
+      [
+        presupuestoId,
+        periodoId,
+        gasto.id,
+        gasto.descripcion,
+        gasto.monto,
+        gasto.tipo,
+        firebaseUid
+      ]
+    );
+
+    // 3️⃣ Reducir contador si es fijo_x_periodo
+    if (gasto.tipo === 'fijo_x_periodo') {
+      await conn.execute(
+        `
+        UPDATE gastos
+        SET periodos_restantes = periodos_restantes - 1
+        WHERE id = ?
+          AND periodos_restantes > 0
+        `,
+        [gasto.id]
+      );
+    }
+  }
+}
+
+
 async function crearPrimerPeriodo(
   presupuestoId,
   firebaseUid,
@@ -184,6 +253,13 @@ if (fechaInicio < hoy) {
       ]
     );
 
+   await generarMovimientosPeriodo(
+  presupuestoId,
+  result.insertId,
+  firebaseUid
+);
+
+
   return {
     id: result.insertId,
     presupuesto_id: presupuestoId,
@@ -245,6 +321,13 @@ async function crearNuevoPeriodo(
         fechaFin
       ]
     );
+
+   await generarMovimientosPeriodo(
+  presupuestoId,
+  result.insertId,
+  firebaseUid
+);
+
 
   return {
     id: result.insertId,
