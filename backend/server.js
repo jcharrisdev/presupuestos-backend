@@ -745,6 +745,53 @@ app.post('/presupuestos/:id/movimientos', async (req, res) => {
   }
 });
 
+// ===============================
+// GASTOS SELECCIONABLES (MODAL)
+// ===============================
+app.get('/presupuestos/:id/gastos-seleccionables', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+
+  if (!firebase_uid) {
+    return res.status(400).json({ error: 'firebase_uid es requerido' });
+  }
+
+  try {
+    // 1️⃣ Obtener período activo
+    const periodo = await getPeriodoActivo(id, firebase_uid);
+
+    // 2️⃣ Obtener gastos elegibles
+    const [gastos] = await connection.promise().execute(
+      `
+      SELECT g.*
+      FROM gastos g
+      WHERE g.presupuesto_id = ?
+        AND g.firebase_uid = ?
+        AND (
+          g.tipo = 'no fijo'
+          OR (
+            g.tipo = 'fijo_x_periodo'
+            AND (
+              g.periodos_restantes IS NULL
+              OR g.periodos_restantes > 0
+            )
+          )
+        )
+      ORDER BY g.descripcion
+      `,
+      [id, firebase_uid]
+    );
+
+    res.json({
+      periodo_id: periodo.id,
+      gastos
+    });
+
+  } catch (error) {
+    console.error('Error obteniendo gastos seleccionables:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 /* =========================
