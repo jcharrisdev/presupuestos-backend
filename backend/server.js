@@ -855,8 +855,8 @@ app.get('/presupuestos/:id/gastos-seleccionables', async (req, res) => {
           OR (
             g.tipo = 'fijo_x_periodo'
             AND (
-              g.periodos_restantes IS NULL
-              OR g.periodos_restantes > 0
+              g.numero_quincena IS NULL
+              OR g.numero_quincena > 0
             )
           )
         )
