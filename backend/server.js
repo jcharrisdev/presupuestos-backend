@@ -139,7 +139,7 @@ async function generarMovimientosPeriodo(
         tipo = 'fijo'
         OR (
           tipo = 'fijo_x_periodo'
-          AND periodos_restantes > 0
+          AND numero_quincena > 0
         )
       )
     `,
@@ -179,9 +179,9 @@ async function generarMovimientosPeriodo(
       await conn.execute(
         `
         UPDATE gastos
-        SET periodos_restantes = periodos_restantes - 1
+        SET numero_quincena = numero_quincena - 1
         WHERE id = ?
-          AND periodos_restantes > 0
+          AND numero_quincena > 0
         `,
         [gasto.id]
       );
