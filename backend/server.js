@@ -876,29 +876,26 @@ app.get('/presupuestos/:id/gastos-seleccionables', async (req, res) => {
   }
 });
 
-// ===============================
-// MARCAR MOVIMIENTO COMO PAGADO
+/// ===============================
+// MARCAR MOVIMIENTO COMO PAGADO (CON MONTO REAL)
 // ===============================
 app.put('/movimientos/:id/pagar', async (req, res) => {
   const { id } = req.params;
-  const { pagado } = req.body;
+  const { pagado, monto_pagado_real, firebase_uid } = req.body;
 
-  if (pagado === undefined) {
-    return res.status(400).json({ error: 'Campo pagado es obligatorio' });
+  if (pagado === undefined || !firebase_uid) {
+    return res.status(400).json({ error: 'Datos incompletos' });
   }
 
-  const pagadoValue = pagado === true || pagado === 1 ? 1 : 0;
+  if (pagado === 1 && (!monto_pagado_real || monto_pagado_real <= 0)) {
+    return res.status(400).json({ error: 'Monto pagado real inválido' });
+  }
 
   try {
-    // 1️⃣ Obtener movimiento
     const [[movimiento]] = await connection
       .promise()
       .execute(
-        `
-        SELECT *
-        FROM movimientos
-        WHERE id = ?
-        `,
+        `SELECT * FROM movimientos WHERE id = ?`,
         [id]
       );
 
@@ -906,27 +903,31 @@ app.put('/movimientos/:id/pagar', async (req, res) => {
       return res.status(404).json({ error: 'Movimiento no encontrado' });
     }
 
-    // 2️⃣ Marcar como pagado
     await connection
       .promise()
       .execute(
         `
         UPDATE movimientos
-        SET pagado = ?,
-            fecha_pagado = CASE
-              WHEN ? = 1 THEN NOW()
-              ELSE NULL
-            END
+        SET
+          pagado = ?,
+          monto_pagado_real = ?,
+          pagado_por_uid = ?,
+          fecha_pagado = CASE
+            WHEN ? = 1 THEN NOW()
+            ELSE NULL
+          END
         WHERE id = ?
         `,
-        [pagadoValue, pagadoValue, id]
+        [
+          pagado,
+          pagado ? monto_pagado_real : null,
+          pagado ? firebase_uid : null,
+          pagado,
+          id
+        ]
       );
 
-    res.json({
-      message: 'Movimiento actualizado',
-      id,
-      pagado: pagadoValue,
-    });
+    res.json({ message: 'Movimiento actualizado correctamente' });
 
   } catch (error) {
     console.error('Error pagando movimiento:', error);
