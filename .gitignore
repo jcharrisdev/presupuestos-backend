@@ -1,2 +1,34 @@
 node_modules/
 .env
+
+# =========================
+# FLUTTER
+# =========================
+.dart_tool/
+.build/
+.metadata
+.packages
+
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+android/**/GeneratedPluginRegistrant.java
+
+# iOS / macOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+macos/Pods/
+
+# Windows / Linux
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+
+# IDEs
+.idea/
+*.iml
+
+# Build outputs
+build/
