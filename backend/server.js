@@ -137,7 +137,26 @@ function calcularFechaFin(fechaInicio, tipoPeriodo) {
 /* =========================
    HEALTHCHECK
 ========================= */
-app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente' }));
+app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente', version: '2.1' }));
+
+// Diagnóstico temporal
+app.get('/debug/autocreate/:presupuesto_id/:gasto_id', async (req, res) => {
+  const { presupuesto_id, gasto_id } = req.params;
+  const { firebase_uid } = req.query;
+  try {
+    const [[gasto]] = await db.execute(`SELECT * FROM gastos WHERE id = ?`, [gasto_id]);
+    if (!gasto) return res.status(404).json({ error: 'Gasto no encontrado' });
+    const periodo = await getPeriodoActivo(presupuesto_id, firebase_uid);
+    await db.execute(
+      `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
+      [presupuesto_id, periodo.id, gasto.id, gasto.descripcion, gasto.monto, gasto.tipo, firebase_uid]
+    );
+    res.json({ ok: true, periodo_id: periodo.id, gasto });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
 
 /* =========================
    PRESUPUESTOS
