@@ -48,7 +48,13 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
 
   if (periodos.length > 0) {
     const periodo = periodos[0];
-    if (periodo.fecha_hoy <= periodo.fecha_fin) return periodo;
+    const hoyStr = periodo.fecha_hoy instanceof Date
+      ? periodo.fecha_hoy.toISOString().split('T')[0]
+      : String(periodo.fecha_hoy);
+    const finStr = periodo.fecha_fin instanceof Date
+      ? periodo.fecha_fin.toISOString().split('T')[0]
+      : String(periodo.fecha_fin);
+    if (hoyStr <= finStr) return periodo;
     await db.execute(
       `UPDATE periodos SET estado = 'cerrado', closed_at = NOW() WHERE id = ?`,
       [periodo.id]
@@ -83,10 +89,14 @@ async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) 
 
 async function crearPrimerPeriodo(presupuestoId, firebaseUid, tipoPeriodo, dia_inicio_periodo) {
   const hoy = new Date();
-  let fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), dia_inicio_periodo);
-  if (fechaInicio < hoy) {
-    if (tipoPeriodo === 'quincenal') fechaInicio.setDate(fechaInicio.getDate() + 14);
-    else fechaInicio.setMonth(fechaInicio.getMonth() + 1);
+  const hoyStr = hoy.toISOString().split('T')[0];
+  let fechaInicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), dia_inicio_periodo));
+  const fechaInicioStr = fechaInicio.toISOString().split('T')[0];
+
+  // Solo avanza si el día de inicio ya pasó (comparar solo fecha, no hora)
+  if (fechaInicioStr < hoyStr) {
+    if (tipoPeriodo === 'quincenal') fechaInicio.setUTCDate(fechaInicio.getUTCDate() + 14);
+    else fechaInicio.setUTCMonth(fechaInicio.getUTCMonth() + 1);
   }
   return _insertarPeriodo(presupuestoId, firebaseUid, tipoPeriodo, fechaInicio);
 }
@@ -209,7 +219,9 @@ app.post('/gastos/ahorroMeta', async (req, res) => {
          VALUES (?, ?, ?, ?, ?, 'ahorro', 0, ?, NOW())`,
         [presupuesto_id, periodo.id, gastoId, descripcion, monto, firebase_uid]
       );
-    } catch (_) {}
+    } catch (err) {
+      console.error('⚠️ No se pudo auto-crear movimiento para ahorro:', err.message);
+    }
 
     res.status(201).json({ id: gastoId, message: 'Ahorro/Meta creado' });
   } catch (error) {
@@ -241,8 +253,9 @@ app.post('/gastos', async (req, res) => {
            VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
           [presupuesto_id, periodo.id, gastoId, descripcion, monto, tipo, firebase_uid]
         );
-      } catch (_) {
-        // Sin período activo aún — el movimiento se creará cuando inicie el período
+        console.log(`✅ Movimiento auto-creado para gasto ${gastoId} en periodo ${periodo.id}`);
+      } catch (err) {
+        console.error('⚠️ No se pudo auto-crear movimiento para gasto:', err.message);
       }
     }
 
