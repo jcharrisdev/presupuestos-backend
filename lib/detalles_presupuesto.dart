@@ -94,18 +94,32 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
       'descripcion': descripcion.trim(),
       'monto': monto,
       'tipo': tipo,
-      'fecha': DateTime.now().toIso8601String(),
+      'fecha': DateTime.now().toIso8601String().split('T')[0],
       'firebase_uid': widget.firebaseUid,
     });
 
-    if (response.statusCode == 201) {
-      _cargarDetalle();
-    } else {
+    if (response.statusCode != 201) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al crear gasto (${response.statusCode})')),
       );
+      return;
     }
+
+    // Para gastos fijos y ahorros, crear movimiento en el período activo explícitamente
+    if (tipo == 'fijo' || tipo == 'fijo_x_periodo' || tipo == 'ahorro') {
+      final data = json.decode(response.body);
+      final gastoId = data['id'];
+      await ApiClient.post(
+        '/presupuestos/${widget.presupuesto['id']}/movimientos',
+        {
+          'firebase_uid': widget.firebaseUid,
+          'items': [{'gasto_id': gastoId, 'monto': monto}],
+        },
+      );
+    }
+
+    _cargarDetalle();
   }
 
   Future<void> _crearMovimientos(List items) async {
