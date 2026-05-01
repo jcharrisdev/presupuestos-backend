@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-
-// Pantallas
+import 'package:flutter/services.dart';
+import 'theme/app_theme.dart';
 import 'login_screen.dart';
-import 'calendario.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
   runApp(const MyApp());
 }
 
@@ -14,16 +18,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gestor Financiero',
+      title: 'Salarying',
       debugShowCheckedModeBanner: false,
-
-      // 🔑 La app SIEMPRE inicia en login
+      theme: AppTheme.theme,
       home: const LoginScreen(),
-
-      // 🚫 SOLO rutas que NO requieren argumentos
-      routes: {
-        '/calendario': (context) => CalendarioScreen(),
-      },
     );
   }
 }
