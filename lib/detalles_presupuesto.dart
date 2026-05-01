@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'services/api_client.dart';
 
 class DetallesPresupuesto extends StatefulWidget {
   final Map<String, dynamic> presupuesto;
@@ -17,13 +17,14 @@ class DetallesPresupuesto extends StatefulWidget {
 }
 
 class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
-  List<dynamic> gastos = [];
+  List<dynamic> movimientos = [];
+  Map<String, dynamic>? periodo;
 
-  double totalFijo = 0.0;
-  double totalNoFijo = 0.0;
-  double totalAhorro = 0.0;
-  double montoTotalPresupuesto = 0.0;
-  double porcentajePagados = 0.0;
+  double totalFijo = 0;
+  double totalNoFijo = 0;
+  double totalAhorro = 0;
+  double montoTotalPresupuesto = 0;
+  double porcentajePagados = 0;
 
   bool isLoading = true;
 
@@ -31,45 +32,25 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
   void initState() {
     super.initState();
     montoTotalPresupuesto = _toDouble(widget.presupuesto['monto_total']);
-    _cargarGastos();
+    _cargarDetalle();
   }
 
-  // ===============================
-  // CARGAR GASTOS (CON UID)
-  // ===============================
-  Future<void> _cargarGastos() async {
+  Future<void> _cargarDetalle() async {
+    setState(() => isLoading = true);
     try {
-      final url = Uri.parse(
-        'https://presupuestos-backend-h3l6.onrender.com/presupuestos/${widget.presupuesto['id']}/gastos'
-            '?firebase_uid=${widget.firebaseUid}',
+      final response = await ApiClient.get(
+        '/presupuestos/${widget.presupuesto['id']}/detalle?firebase_uid=${widget.firebaseUid}',
       );
 
-
-      final response = await http.get(url);
-
       if (response.statusCode == 200) {
-        final datos = json.decode(response.body);
-
+        final data = json.decode(response.body);
         setState(() {
-          gastos = datos;
-
-          totalFijo = gastos
-              .where((g) => g['tipo'] == 'fijo')
-              .fold(0.0, (s, g) => s + _toDouble(g['monto']));
-
-          totalNoFijo = gastos
-              .where((g) => g['tipo'] == 'no fijo')
-              .fold(0.0, (s, g) => s + _toDouble(g['monto']));
-
-          totalAhorro = gastos
-              .where((g) => g['tipo'] == 'ahorro')
-              .fold(0.0, (s, g) => s + _toDouble(g['monto']));
-
-          final total = gastos.length;
-          final pagados = gastos.where((g) => g['pagado'] == 1).length;
-
-          porcentajePagados = total > 0 ? pagados / total : 0.0;
-
+          movimientos = data['movimientos'];
+          periodo = data['periodo'];
+          totalFijo = _toDouble(data['resumen']['totalFijo']);
+          totalNoFijo = _toDouble(data['resumen']['totalNoFijo']);
+          totalAhorro = _toDouble(data['resumen']['totalAhorro']);
+          porcentajePagados = _toDouble(data['resumen']['porcentajePagados']);
           isLoading = false;
         });
       } else {
@@ -77,11 +58,122 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
       }
     } catch (_) {
       setState(() => isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar gastos')),
+        const SnackBar(content: Text('Error al cargar el detalle')),
       );
     }
   }
+
+  Future<void> _reanudarGastosFijos() async {
+    await ApiClient.put(
+      '/presupuestos/${widget.presupuesto['id']}/gastos/reanudar-fijos',
+      {},
+    );
+    _cargarDetalle();
+  }
+
+  Future<List<dynamic>> _cargarGastosSeleccionables() async {
+    final res = await ApiClient.get(
+      '/presupuestos/${widget.presupuesto['id']}/gastos-seleccionables?firebase_uid=${widget.firebaseUid}',
+    );
+    if (res.statusCode != 200) throw Exception('Error cargando gastos seleccionables');
+    return json.decode(res.body)['gastos'];
+  }
+
+  Future<void> _agregarGasto(String descripcion, double monto, String tipo) async {
+    if (descripcion.trim().isEmpty || monto <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Descripción y monto válidos son obligatorios')),
+      );
+      return;
+    }
+
+    final response = await ApiClient.post('/gastos', {
+      'presupuesto_id': widget.presupuesto['id'],
+      'descripcion': descripcion.trim(),
+      'monto': monto,
+      'tipo': tipo,
+      'fecha': DateTime.now().toIso8601String(),
+      'firebase_uid': widget.firebaseUid,
+    });
+
+    if (response.statusCode == 201) {
+      _cargarDetalle();
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al crear gasto (${response.statusCode})')),
+      );
+    }
+  }
+
+  Future<void> _crearMovimientos(List items) async {
+    final res = await ApiClient.post(
+      '/presupuestos/${widget.presupuesto['id']}/movimientos',
+      {'firebase_uid': widget.firebaseUid, 'items': items},
+    );
+
+    if (res.statusCode != 201) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error creando movimientos')),
+      );
+    }
+  }
+
+  Future<void> _pagarMovimiento({required int movimientoId, required double montoPagado}) async {
+    final res = await ApiClient.put('/movimientos/$movimientoId/pagar', {
+      'pagado': 1,
+      'monto_pagado_real': montoPagado,
+      'firebase_uid': widget.firebaseUid,
+    });
+
+    if (!mounted) return;
+
+    if (res.statusCode == 200) {
+      _cargarDetalle();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error al registrar el pago')),
+      );
+    }
+  }
+
+  void _mostrarModalPago({required int movimientoId, required double montoSugerido}) {
+    final montoCtrl = TextEditingController(text: montoSugerido.toStringAsFixed(2));
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Registrar pago'),
+        content: TextField(
+          controller: montoCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Monto pagado real', prefixText: '\$ '),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () async {
+              final monto = double.tryParse(montoCtrl.text) ?? 0;
+              if (monto <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Monto inválido')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              await _pagarMovimiento(movimientoId: movimientoId, montoPagado: monto);
+            },
+            child: const Text('Confirmar pago'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _mostrarModalCrearGasto() {
     final descripcionCtrl = TextEditingController();
     final montoCtrl = TextEditingController();
@@ -89,153 +181,152 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Agregar Gasto'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: descripcionCtrl,
-              decoration: InputDecoration(labelText: 'Descripción'),
-            ),
-            TextField(
-              controller: montoCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'Monto'),
-            ),
-            DropdownButton<String>(
-              value: tipo,
-              items: ['fijo', 'no fijo', 'ahorro']
-                  .map(
-                    (t) => DropdownMenuItem(
-                  value: t,
-                  child: Text(t),
-                ),
-              )
-                  .toList(),
-              onChanged: (v) {
-                setState(() {
-                  tipo = v!;
-                });
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Nuevo gasto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: descripcionCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
+              TextField(
+                controller: montoCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Monto'),
+              ),
+              DropdownButton<String>(
+                value: tipo,
+                items: ['fijo', 'no fijo', 'ahorro']
+                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                    .toList(),
+                onChanged: (v) => setS(() => tipo = v!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _agregarGasto(
+                  descripcionCtrl.text,
+                  double.tryParse(montoCtrl.text) ?? 0,
+                  tipo,
+                );
               },
+              child: const Text('Agregar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _agregarGasto(
-                descripcionCtrl.text,
-                double.tryParse(montoCtrl.text) ?? 0,
-                tipo,
-              );
-              Navigator.pop(context);
-            },
-            child: Text('Agregar'),
-          ),
-        ],
       ),
     );
   }
 
-
-  // ===============================
-  // ACTUALIZAR ESTADO GASTO
-  // ===============================
-  Future<void> _actualizarEstadoGasto(int id, bool pagado) async {
-    final url = Uri.parse(
-      'https://presupuestos-backend-h3l6.onrender.com/gastos/$id',
-    );
-
-    await http.put(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'pagado': pagado ? 1 : 0}),
-    );
-
-    _cargarGastos();
-  }
-
-  // ===============================
-  // REANUDAR GASTOS FIJOS
-  // ===============================
-  Future<void> _reanudarGastosFijos() async {
-    final url = Uri.parse(
-      'https://presupuestos-backend-h3l6.onrender.com/'
-          'presupuestos/${widget.presupuesto['id']}/gastos/reanudar-fijos',
-    );
-
-    await http.put(url);
-    _cargarGastos();
-  }
-
-  Future<List<dynamic>> _cargarGastosSeleccionables() async {
-    final url = Uri.parse(
-      'https://presupuestos-backend-h3l6.onrender.com'
-          '/presupuestos/${widget.presupuesto['id']}/gastos-seleccionables'
-          '?firebase_uid=${widget.firebaseUid}',
-    );
-
-    final res = await http.get(url);
-
-    if (res.statusCode != 200) {
-      throw Exception('Error cargando gastos seleccionables');
-    }
-
-    final data = json.decode(res.body);
-    return data['gastos'];
-  }
-
-
-  // ===============================
-  // AGREGAR GASTO
-  // ===============================
-  Future<void> _agregarGasto(
-      String descripcion,
-      double monto,
-      String tipo,
-      ) async {
-    if (descripcion.trim().isEmpty || monto <= 0) {
+  void _mostrarModalAgregarGasto() async {
+    List<dynamic> gastosDisponibles = [];
+    try {
+      gastosDisponibles = await _cargarGastosSeleccionables();
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Descripción y monto válidos son obligatorios')),
+        const SnackBar(content: Text('Error cargando gastos')),
       );
       return;
     }
 
-    final url = Uri.parse(
-      'https://presupuestos-backend-h3l6.onrender.com/gastos',
-    );
+    if (!mounted) return;
 
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'presupuesto_id': widget.presupuesto['id'],
-        'descripcion': descripcion.trim(),
-        'monto': monto,
-        'tipo': tipo,
-        'fecha': DateTime.now().toIso8601String(),
-        'firebase_uid': widget.firebaseUid,
-      }),
-    );
-
-    if (response.statusCode == 201) {
-      _cargarGastos();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error al crear gasto (${response.statusCode})',
+    if (gastosDisponibles.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Sin gastos'),
+          content: const Text(
+            'No hay gastos asignados para este presupuesto.\nCrea al menos uno para continuar.',
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () { Navigator.pop(context); _mostrarModalCrearGasto(); },
+              child: const Text('Crear gasto'),
+            ),
+          ],
         ),
       );
+      return;
     }
-  }
 
+    final Map<int, bool> seleccionados = {};
+    final Map<int, TextEditingController> montosCtrl = {};
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Seleccionar gastos'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: gastosDisponibles.map((g) {
+                final id = g['id'] as int;
+                seleccionados[id] ??= false;
+                montosCtrl[id] ??= TextEditingController(text: g['monto'].toString());
+
+                return Row(
+                  children: [
+                    Checkbox(
+                      value: seleccionados[id],
+                      onChanged: (v) => setS(() => seleccionados[id] = v ?? false),
+                    ),
+                    Expanded(child: Text(g['descripcion'])),
+                    SizedBox(
+                      width: 80,
+                      child: TextField(
+                        controller: montosCtrl[id],
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(prefixText: '\$'),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () { Navigator.pop(ctx); _mostrarModalCrearGasto(); },
+              child: const Text('Crear gasto nuevo'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final items = gastosDisponibles
+                    .where((g) => seleccionados[g['id']] == true)
+                    .map((g) {
+                      final monto = double.tryParse(montosCtrl[g['id']]!.text) ?? 0;
+                      return monto > 0 ? {'gasto_id': g['id'], 'monto': monto} : null;
+                    })
+                    .where((e) => e != null)
+                    .toList();
+
+                if (items.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Selecciona gastos válidos')),
+                  );
+                  return;
+                }
+
+                await _crearMovimientos(items);
+                if (!mounted) return;
+                Navigator.pop(ctx);
+                _cargarDetalle();
+              },
+              child: const Text('Agregar seleccionados'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   double _toDouble(dynamic v) {
     if (v is num) return v.toDouble();
@@ -246,389 +337,171 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
   @override
   Widget build(BuildContext context) {
     final totalGastado = totalFijo + totalNoFijo + totalAhorro;
-    final porcentajeGastado =
-    montoTotalPresupuesto > 0 ? totalGastado / montoTotalPresupuesto : 0.0;
+    final porcentajeGastado = montoTotalPresupuesto > 0 ? totalGastado / montoTotalPresupuesto : 0.0;
 
     Color colorBarra;
-    if (totalGastado > montoTotalPresupuesto) {
-      colorBarra = Colors.red;
-    } else if (porcentajeGastado >= 0.75) {
-      colorBarra = Colors.orange;
-    } else {
-      colorBarra = Colors.green;
-    }
+    if (totalGastado > montoTotalPresupuesto) colorBarra = Colors.red;
+    else if (porcentajeGastado >= 0.75) colorBarra = Colors.orange;
+    else colorBarra = Colors.green;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Detalles del Presupuesto'),
-        backgroundColor: Color(0xFF6ABF69),
+        title: const Text('Detalle del Presupuesto'),
+        backgroundColor: const Color(0xFF6ABF69),
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.presupuesto['nombre'],
-              style:
-              TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Monto Total: \$${montoTotalPresupuesto.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 18),
-            ),
-
-            SizedBox(height: 20),
-            Text('Total Gastos Fijos: \$${totalFijo.toStringAsFixed(2)}'),
-            Text(
-                'Total Gastos No Fijos: \$${totalNoFijo.toStringAsFixed(2)}'),
-            Text(
-                'Total Gastos de Ahorro: \$${totalAhorro.toStringAsFixed(2)}'),
-
-            SizedBox(height: 20),
-            Text('Progreso del Presupuesto'),
-            SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: porcentajeGastado > 1 ? 1 : porcentajeGastado,
-              minHeight: 20,
-              backgroundColor: Colors.grey[300],
-              color: colorBarra,
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Gastado: \$${totalGastado.toStringAsFixed(2)} '
-                  '(${(porcentajeGastado * 100).toStringAsFixed(2)}%)',
-            ),
-
-            SizedBox(height: 30),
-            Center(
-              child: Stack(
-                alignment: Alignment.center,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 150,
-                    height: 150,
-                    child: CircularProgressIndicator(
-                      value: porcentajePagados,
-                      strokeWidth: 10,
-                      backgroundColor: Colors.grey[300],
-                      color: Colors.green,
+                  Text(
+                    widget.presupuesto['nombre'],
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  if (periodo != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 8),
+                      child: Text(
+                        'Período ${periodo!['numero_periodo']} · ${periodo!['fecha_inicio']} → ${periodo!['fecha_fin']}',
+                        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      ),
+                    ),
+                  Text('Monto Total: \$${montoTotalPresupuesto.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 18)),
+
+                  const SizedBox(height: 16),
+                  Text('Fijos: \$${totalFijo.toStringAsFixed(2)}'),
+                  Text('No fijos: \$${totalNoFijo.toStringAsFixed(2)}'),
+                  Text('Ahorro: \$${totalAhorro.toStringAsFixed(2)}'),
+
+                  const SizedBox(height: 16),
+                  const Text('Progreso del presupuesto'),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: porcentajeGastado.clamp(0.0, 1.0),
+                    minHeight: 20,
+                    backgroundColor: Colors.grey[300],
+                    color: colorBarra,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Gastado: \$${totalGastado.toStringAsFixed(2)} (${(porcentajeGastado * 100).toStringAsFixed(1)}%)',
+                  ),
+
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 130,
+                          height: 130,
+                          child: CircularProgressIndicator(
+                            value: porcentajePagados,
+                            strokeWidth: 10,
+                            backgroundColor: Colors.grey[300],
+                            color: Colors.green,
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${(porcentajePagados * 100).toStringAsFixed(1)}%',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text('pagado', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    '${(porcentajePagados * 100).toStringAsFixed(1)}%',
-                    style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
 
-            SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ElevatedButton(
-                  onPressed: _mostrarModalAgregarGasto,
-                  child: Text('Agregar Gasto'),
-                ),
-                ElevatedButton(
-                  onPressed: _reanudarGastosFijos,
-                  child: Text('Reanudar Fijos'),
-                ),
-              ],
-            ),
-
-            SizedBox(height: 20),
-            if (gastos.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 30),
-                child: Center(
-                  child: Column(
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.receipt_long, size: 48, color: Colors.grey),
-                      SizedBox(height: 12),
-                      Text(
-                        'Aún no se han creado gastos para este presupuesto.',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                        textAlign: TextAlign.center,
+                      ElevatedButton.icon(
+                        onPressed: _mostrarModalAgregarGasto,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Agregar'),
                       ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Usa el botón "Agregar Gasto" para comenzar.',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
+                      ElevatedButton.icon(
+                        onPressed: _reanudarGastosFijos,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reanudar fijos'),
                       ),
                     ],
                   ),
-                ),
-              )
-            else
-              ...gastos.map((g) {
-                return ListTile(
-                  title: Text(g['descripcion']),
-                  subtitle: Text(
-                    '\$${_toDouble(g['monto']).toStringAsFixed(2)} - ${g['tipo']}',
-                  ),
-                  trailing: Checkbox(
-                    value: g['pagado'] == 1,
-                    onChanged: g['pagado'] == 1
-                        ? null
-                        : (_) {
-                      _mostrarModalPagoMovimiento(
-                        movimientoId: g['id'],
-                        montoSugerido: _toDouble(g['monto']),
-                      );
-                    },
-                  ),
 
-                );
-              }).toList(),
-
-          ],
-        ),
-      ),
-    );
-  }
-  Future<void> _crearMovimientos(List items) async {
-    final url = Uri.parse(
-      'https://presupuestos-backend-h3l6.onrender.com'
-          '/presupuestos/${widget.presupuesto['id']}/movimientos',
-    );
-
-    final res = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'firebase_uid': widget.firebaseUid,
-        'items': items,
-      }),
-    );
-
-    if (res.statusCode != 201) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creando movimientos')),
-      );
-    }
-  }
-
-  Future<void> _pagarMovimiento({
-    required int movimientoId,
-    required double montoPagado,
-  }) async {
-    final url = Uri.parse(
-      'https://presupuestos-backend-h3l6.onrender.com/movimientos/$movimientoId/pagar',
-    );
-
-    final res = await http.put(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'pagado': 1,
-        'monto_pagado_real': montoPagado,
-        'firebase_uid': widget.firebaseUid,
-      }),
-    );
-
-    if (res.statusCode != 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al marcar como pagado')),
-      );
-      return;
-    }
-
-    _cargarGastos(); // refresca la vista
-  }
-
-  void _mostrarModalPagoMovimiento({
-    required int movimientoId,
-    required double montoSugerido,
-  }) {
-    final montoCtrl = TextEditingController(
-      text: montoSugerido.toStringAsFixed(2),
-    );
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Registrar pago'),
-        content: TextField(
-          controller: montoCtrl,
-          keyboardType: TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: 'Monto pagado real',
-            prefixText: '\$ ',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final monto = double.tryParse(montoCtrl.text) ?? 0;
-
-              if (monto <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Monto inválido')),
-                );
-                return;
-              }
-
-              await _pagarMovimiento(
-                movimientoId: movimientoId,
-                montoPagado: monto,
-              );
-
-              Navigator.pop(context);
-            },
-            child: Text('Confirmar pago'),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  // ===============================
-  // MODAL AGREGAR GASTO
-  // ===============================
-  void _mostrarModalAgregarGasto() async {
-    List<dynamic> gastosDisponibles = [];
-    Map<int, bool> seleccionados = {};
-    Map<int, TextEditingController> montosCtrl = {};
-
-    try {
-      gastosDisponibles = await _cargarGastosSeleccionables();
-    } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error cargando gastos')),
-      );
-      return;
-    }
-
-    if (gastosDisponibles.isEmpty) {
-      if (!mounted) return;
-
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text('Sin gastos'),
-          content: Text(
-            'No hay ningún gasto asignado para este presupuesto.\n'
-                'Debes crear al menos un gasto antes de continuar.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _mostrarModalCrearGasto();
-              },
-              child: Text('Crear gasto'),
-            ),
-          ],
-        ),
-      );
-
-      return;
-    }
-
-
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          title: Text('Seleccionar gastos'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView(
-              shrinkWrap: true,
-              children: gastosDisponibles.map((g) {
-                final id = g['id'];
-
-                seleccionados[id] ??= false;
-                montosCtrl[id] ??=
-                    TextEditingController(text: g['monto'].toString());
-
-                return Row(
-                  children: [
-                    Checkbox(
-                      value: seleccionados[id],
-                      onChanged: (v) {
-                        setModalState(() {
-                          seleccionados[id] = v ?? false;
-                        });
-                      },
-                    ),
-                    Expanded(
-                      child: Text(g['descripcion']),
-                    ),
-                    SizedBox(
-                      width: 80,
-                      child: TextField(
-                        controller: montosCtrl[id],
-                        keyboardType:
-                        TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          prefixText: '\$',
+                  const SizedBox(height: 16),
+                  if (movimientos.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 30),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(Icons.receipt_long, size: 48, color: Colors.grey[400]),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No hay movimientos en este período.',
+                              style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Usa "Agregar" para registrar gastos.',
+                              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _mostrarModalCrearGasto(); // modal viejo intacto
-              },
-              child: Text('Crear gasto nuevo'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final items = gastosDisponibles
-                    .where((g) => seleccionados[g['id']] == true)
-                    .map((g) {
-                  final monto =
-                      double.tryParse(montosCtrl[g['id']]!.text) ?? 0;
-                  if (monto <= 0) return null;
+                    )
+                  else
+                    ...movimientos.map((m) {
+                      final monto = _toDouble(m['monto']);
+                      final montoPagado = m['monto_pagado_real'] != null
+                          ? _toDouble(m['monto_pagado_real'])
+                          : null;
+                      final pagado = m['pagado'] == 1;
 
-                  return {
-                    'gasto_id': g['id'],
-                    'monto': monto,
-                  };
-                })
-                    .where((e) => e != null)
-                    .toList();
-
-                if (items.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Selecciona gastos válidos')),
-                  );
-                  return;
-                }
-
-                await _crearMovimientos(items);
-                Navigator.pop(context);
-                _cargarGastos(); // refresca vista
-              },
-              child: Text('Agregar seleccionados'),
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          title: Text(m['descripcion']),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Presupuestado: \$${monto.toStringAsFixed(2)} · ${m['tipo']}'),
+                              if (pagado && montoPagado != null)
+                                Text(
+                                  'Pagado: \$${montoPagado.toStringAsFixed(2)}  '
+                                  '(${montoPagado > monto ? '+' : ''}\$${(montoPagado - monto).toStringAsFixed(2)})',
+                                  style: TextStyle(
+                                    color: montoPagado > monto ? Colors.red : Colors.green,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          trailing: pagado
+                              ? const Icon(Icons.check_circle, color: Colors.green)
+                              : IconButton(
+                                  icon: const Icon(Icons.radio_button_unchecked, color: Colors.grey),
+                                  onPressed: () => _mostrarModalPago(
+                                    movimientoId: m['id'],
+                                    montoSugerido: monto,
+                                  ),
+                                ),
+                        ),
+                      );
+                    }).toList(),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
     );
   }
-
 }

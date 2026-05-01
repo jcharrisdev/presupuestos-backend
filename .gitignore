@@ -32,3 +32,4 @@ linux/flutter/ephemeral/
 
 # Build outputs
 build/
+android/app/.cxx/

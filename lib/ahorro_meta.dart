@@ -205,7 +205,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ProgresoAhorroScreen(),
+                    builder: (_) => ProgresoAhorroScreen(firebaseUid: widget.firebaseUid),
                   ),
                 );
               },

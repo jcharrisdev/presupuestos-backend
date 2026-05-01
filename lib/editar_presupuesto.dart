@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'services/api_client.dart';
 
 class EditarPresupuesto extends StatefulWidget {
   final Map<String, dynamic> presupuesto;
+  final String firebaseUid;
 
-  EditarPresupuesto({required this.presupuesto});
+  const EditarPresupuesto({
+    Key? key,
+    required this.presupuesto,
+    required this.firebaseUid,
+  }) : super(key: key);
 
   @override
   _EditarPresupuestoState createState() => _EditarPresupuestoState();
@@ -14,6 +19,7 @@ class EditarPresupuesto extends StatefulWidget {
 class _EditarPresupuestoState extends State<EditarPresupuesto> {
   late TextEditingController _nombreController;
   late TextEditingController _montoController;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -22,54 +28,80 @@ class _EditarPresupuestoState extends State<EditarPresupuesto> {
     _montoController = TextEditingController(text: widget.presupuesto['monto_total'].toString());
   }
 
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _montoController.dispose();
+    super.dispose();
+  }
+
   Future<void> _actualizarPresupuesto() async {
-    final String nombre = _nombreController.text;
-    final String monto = _montoController.text;
+    final nombre = _nombreController.text.trim();
+    final monto = double.tryParse(_montoController.text);
 
-    final url = Uri.parse('https://presupuestos-backend-h3l6.onrender.com/presupuestos/${widget.presupuesto['id']}');
-    final response = await http.put(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'nombre': nombre,
-        'monto_total': double.parse(monto),
-      }),
-    );
+    if (nombre.isEmpty || monto == null || monto <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nombre y monto válidos son obligatorios')),
+      );
+      return;
+    }
 
-    if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Presupuesto actualizado con éxito'),
-      ));
-      Navigator.pop(context); // Volver a la pantalla anterior
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error al actualizar el presupuesto'),
-      ));
+    setState(() => _loading = true);
+
+    try {
+      final response = await ApiClient.put(
+        '/presupuestos/${widget.presupuesto['id']}',
+        {'nombre': nombre, 'monto_total': monto, 'firebase_uid': widget.firebaseUid},
+      );
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Presupuesto actualizado')),
+        );
+        Navigator.pop(context, true);
+      } else {
+        final err = json.decode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err['error'] ?? 'Error al actualizar')),
+        );
+      }
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error de conexión')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Editar Presupuesto')),
+      appBar: AppBar(
+        title: const Text('Editar Presupuesto'),
+        backgroundColor: const Color(0xFF6ABF69),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             TextField(
               controller: _nombreController,
-              decoration: InputDecoration(labelText: 'Nombre del Presupuesto'),
+              decoration: const InputDecoration(labelText: 'Nombre del Presupuesto'),
             ),
             TextField(
               controller: _montoController,
-              decoration: InputDecoration(labelText: 'Monto Total'),
+              decoration: const InputDecoration(labelText: 'Monto Total'),
               keyboardType: TextInputType.number,
             ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _actualizarPresupuesto,
-              child: Text('Guardar Cambios'),
-            ),
+            const SizedBox(height: 20),
+            _loading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _actualizarPresupuesto,
+                    child: const Text('Guardar Cambios'),
+                  ),
           ],
         ),
       ),
