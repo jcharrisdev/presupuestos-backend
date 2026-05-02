@@ -564,6 +564,36 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
         title: Text(widget.presupuesto['nombre'], overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Detalle del presupuesto',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Muestra el estado del período activo de este presupuesto.\n\n'
+                  '• Barra de progreso — compara lo gastado vs el límite. '
+                  'Se vuelve amarilla al 85% y roja si se excede.\n'
+                  '• Movimientos — cada gasto registrado en el período. '
+                  'Toca "Pagar" para registrar el monto real pagado.\n'
+                  '• Agregar — selecciona gastos existentes o crea uno nuevo.\n'
+                  '• Reanudar fijos — restaura los gastos fijos que ya marcaste como pagados.\n\n'
+                  'Tipos de gasto:\n'
+                  '  Fijo → se repite cada período (ej: alquiler)\n'
+                  '  Variable → lo agregas cuando quieras (ej: supermercado)\n'
+                  '  Ahorro → cuota de una meta de ahorro',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.edit_outlined, size: 20),
             onPressed: () async {
               await Navigator.push(context, MaterialPageRoute(
@@ -572,7 +602,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
                   firebaseUid: widget.firebaseUid,
                 ),
               ));
-              _cargar(); // recargar por si cambió el monto total
+              _cargar();
             },
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
