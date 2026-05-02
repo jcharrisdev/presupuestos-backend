@@ -72,86 +72,331 @@ class _VentaDetalleState extends State<VentaDetalle> {
 
   /// Abre el bottom sheet para agregar un nuevo cliente a la venta.
   ///
-  /// Campos:
-  ///   - Nombre del cliente
-  ///   - Monto acordado
-  ///   - Condición de pago: `contra_entrega` o `plazo`
-  ///   - Días de plazo (slider 1–60, solo si condición = 'plazo')
+  /// Dos modos:
+  ///   - **Simple** (default): nombre + monto manual (compatible con flujo anterior).
+  ///   - **Catálogo**: selecciona variantes del catálogo de productos; el total
+  ///     se calcula automáticamente. El backend crea los pedido_items y recalcula
+  ///     cobros_clientes.monto con monto_manual=0.
   ///
-  /// Si la condición es 'plazo', el backend calcula `fecha_cobro = hoy + dias_plazo`
-  /// y crea un evento en `calendario_eventos` automáticamente.
+  /// Condición de pago (Fase 3):
+  ///   - Contra entrega → sin fecha
+  ///   - A plazo        → fecha = hoy + días (slider)
+  ///   - Fecha exacta   → date picker → crea evento en calendario
   void _modalAgregarCliente() {
     final nombreCtrl = TextEditingController();
     final montoCtrl  = TextEditingController();
     String condicion = 'contra_entrega';
-    int diasPlazo    = 7;
+    int diasPlazo = 7;
+    DateTime? fechaEspecifica;
+    bool usarCatalogo = false;
+
+    // Estado del catálogo (carga lazy cuando el usuario activa el toggle)
+    List<Map<String, dynamic>> productos = [];
+    bool loadingCatalogo = false;
+    // Items seleccionados: { variante_id, descripcion, precio, cantidad }
+    final List<Map<String, dynamic>> itemsSel = [];
+
+    Future<void> cargarCatalogo(Function setS) async {
+      setS(() => loadingCatalogo = true);
+      try {
+        final res = await ApiClient.get('/productos?firebase_uid=${widget.firebaseUid}');
+        if (res.statusCode == 200) {
+          final prods = List<Map<String, dynamic>>.from(json.decode(res.body));
+          // Cargar variantes de cada producto en paralelo
+          await Future.wait(prods.map((p) async {
+            final vRes = await ApiClient.get(
+              '/productos/${p['id']}/variantes?firebase_uid=${widget.firebaseUid}',
+            );
+            p['variantes'] = vRes.statusCode == 200
+                ? (json.decode(vRes.body) as List)
+                    .where((v) => v['activo'] == 1 || v['activo'] == true)
+                    .toList()
+                : <dynamic>[];
+          }));
+          setS(() { productos = prods.where((p) => (p['variantes'] as List).isNotEmpty).toList(); loadingCatalogo = false; });
+        } else { setS(() => loadingCatalogo = false); }
+      } catch (_) { setS(() => loadingCatalogo = false); }
+    }
+
+    double calcTotal() => itemsSel.fold(0.0, (s, i) =>
+        s + (double.tryParse(i['precio'].toString()) ?? 0) * (double.tryParse(i['cantidad'].toString()) ?? 0));
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => StatefulBuilder(builder: (ctx, setS) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Handle decorativo
-          Center(child: Container(width: 36, height: 4,
-              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          const Text('Agregar cliente',
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
-          // Nombre del cliente
-          TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(hintText: 'Nombre del cliente')),
-          const SizedBox(height: 12),
-          // Monto acordado
-          TextField(controller: montoCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
-              decoration: const InputDecoration(
-                prefixText: '\$ ',
-                prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 18, fontWeight: FontWeight.w700),
-              )),
-          const SizedBox(height: 16),
-          const Text('Condición de pago', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          const SizedBox(height: 8),
-          // Toggle Contra entrega / A plazo
-          Row(children: [
-            _condBtn('contra_entrega', 'Contra entrega', condicion, (v) => setS(() => condicion = v)),
-            const SizedBox(width: 10),
-            _condBtn('plazo', 'A plazo (días)', condicion, (v) => setS(() => condicion = v)),
-          ]),
-          // Slider de días solo visible cuando condición = 'plazo'
-          if (condicion == 'plazo') ...[
+      builder: (_) => StatefulBuilder(builder: (ctx, setS) => DraggableScrollableSheet(
+        initialChildSize: 0.65, maxChildSize: 0.95, minChildSize: 0.5,
+        expand: false,
+        builder: (_, sc) => SingleChildScrollView(
+          controller: sc,
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Handle
+            Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Días para cobrar', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-              Text('$diasPlazo días', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700)),
-            ]),
-            Slider(
-              value: diasPlazo.toDouble(), min: 1, max: 60, divisions: 59,
-              label: '$diasPlazo días',
-              onChanged: (v) => setS(() => diasPlazo = v.toInt()),
+            const Text('Agregar cliente', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
+
+            // Nombre del cliente
+            TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(hintText: 'Nombre del cliente')),
+            const SizedBox(height: 16),
+
+            // Toggle modo catálogo
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: usarCatalogo ? AppTheme.primary.withOpacity(0.08) : AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: usarCatalogo ? AppTheme.primary.withOpacity(0.3) : AppTheme.border),
+              ),
+              child: Row(children: [
+                const Icon(Icons.storefront_outlined, size: 18, color: AppTheme.textSecondary),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('Usar catálogo de productos',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                Switch(
+                  value: usarCatalogo,
+                  activeColor: AppTheme.primary,
+                  onChanged: (v) {
+                    setS(() => usarCatalogo = v);
+                    if (v && productos.isEmpty) cargarCatalogo(setS);
+                  },
+                ),
+              ]),
             ),
-          ],
-          const SizedBox(height: 24),
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () async {
-              final nombre = nombreCtrl.text.trim();
-              final monto  = double.tryParse(montoCtrl.text) ?? 0;
-              if (nombre.isEmpty || monto <= 0) return;
-              Navigator.pop(context);
-              final body = <String, dynamic>{
-                'nombre_cliente': nombre, 'monto': monto,
-                'condicion_pago': condicion, 'firebase_uid': widget.firebaseUid,
-              };
-              if (condicion == 'plazo') body['dias_plazo'] = diasPlazo;
-              final res = await ApiClient.post('/ventas/${widget.ventaId}/cobros', body);
-              if (res.statusCode == 201) _cargar();
-            },
-            child: const Text('Agregar cliente'),
-          )),
-        ]),
+            const SizedBox(height: 14),
+
+            // ── MODO SIMPLE: monto manual ─────────────────────────────────────
+            if (!usarCatalogo)
+              TextField(
+                controller: montoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+                decoration: const InputDecoration(
+                  prefixText: '\$ ', hintText: '0.00',
+                  prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+              ),
+
+            // ── MODO CATÁLOGO: selección de variantes ─────────────────────────
+            if (usarCatalogo) ...[
+              if (loadingCatalogo)
+                const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+              else if (productos.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                  child: const Text('Sin productos en el catálogo. Ve a Cobros → Productos para agregar.',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12), textAlign: TextAlign.center),
+                )
+              else ...[
+                // Lista de variantes agrupadas por producto
+                ...productos.map((prod) {
+                  final variantes = (prod['variantes'] as List).cast<Map<String, dynamic>>();
+                  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(prod['nombre']?.toString() ?? '', style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
+                    ),
+                    ...variantes.map((v) {
+                      final varId = v['id'] is int ? v['id'] as int : int.tryParse(v['id'].toString()) ?? 0;
+                      final precio = double.tryParse(v['precio']?.toString() ?? '0') ?? 0;
+                      final idx = itemsSel.indexWhere((i) => i['variante_id'] == varId);
+                      final cantidad = idx >= 0 ? (double.tryParse(itemsSel[idx]['cantidad'].toString()) ?? 0) : 0.0;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: cantidad > 0 ? AppTheme.primary.withOpacity(0.07) : AppTheme.surfaceAlt,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: cantidad > 0 ? AppTheme.primary.withOpacity(0.3) : AppTheme.border),
+                        ),
+                        child: Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(v['nombre']?.toString() ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                            Text('\$${precio.toStringAsFixed(2)} / ${v['unidad'] ?? 'unidad'}',
+                                style: const TextStyle(color: AppTheme.primary, fontSize: 12)),
+                          ])),
+                          // Controles +/-
+                          Row(children: [
+                            GestureDetector(
+                              onTap: () => setS(() {
+                                if (idx >= 0 && (itemsSel[idx]['cantidad'] as double) > 1) {
+                                  itemsSel[idx]['cantidad'] = (itemsSel[idx]['cantidad'] as double) - 1;
+                                } else if (idx >= 0) {
+                                  itemsSel.removeAt(idx);
+                                }
+                              }),
+                              child: Container(
+                                width: 28, height: 28,
+                                decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6), border: Border.all(color: AppTheme.border)),
+                                child: const Icon(Icons.remove, size: 14, color: AppTheme.textSecondary),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('${cantidad.toInt()}', style: TextStyle(
+                                color: cantidad > 0 ? AppTheme.primary : AppTheme.textMuted,
+                                fontWeight: FontWeight.w700, fontSize: 14)),
+                            ),
+                            GestureDetector(
+                              onTap: () => setS(() {
+                                if (idx >= 0) {
+                                  itemsSel[idx]['cantidad'] = (itemsSel[idx]['cantidad'] as double) + 1;
+                                } else {
+                                  itemsSel.add({
+                                    'variante_id': varId,
+                                    'descripcion': '${prod['nombre']} - ${v['nombre']}',
+                                    'precio': precio,
+                                    'cantidad': 1.0,
+                                  });
+                                }
+                              }),
+                              child: Container(
+                                width: 28, height: 28,
+                                decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(6), border: Border.all(color: AppTheme.primary.withOpacity(0.3))),
+                                child: const Icon(Icons.add, size: 14, color: AppTheme.primary),
+                              ),
+                            ),
+                          ]),
+                        ]),
+                      );
+                    }),
+                  ]);
+                }),
+                // Total en tiempo real
+                if (itemsSel.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(color: AppTheme.colorAhorro.withOpacity(0.08), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.colorAhorro.withOpacity(0.25))),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Text('Total del pedido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                      Text('\$${calcTotal().toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16)),
+                    ]),
+                  ),
+              ],
+            ],
+
+            // ── CONDICIÓN DE PAGO ─────────────────────────────────────────────
+            const SizedBox(height: 20),
+            const Divider(color: AppTheme.border),
+            const SizedBox(height: 12),
+            const Text('Condición de pago', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              _condBtn('contra_entrega', 'Contra entrega', condicion, (v) => setS(() => condicion = v)),
+              _condBtn('plazo', 'A plazo', condicion, (v) => setS(() => condicion = v)),
+              _condBtn('fecha_especifica', 'Fecha exacta', condicion, (v) => setS(() => condicion = v)),
+            ]),
+            // A plazo: slider de días
+            if (condicion == 'plazo') ...[
+              const SizedBox(height: 14),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Días para cobrar', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                Text('$diasPlazo días', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700)),
+              ]),
+              Slider(value: diasPlazo.toDouble(), min: 1, max: 60, divisions: 59,
+                  label: '$diasPlazo días', onChanged: (v) => setS(() => diasPlazo = v.toInt())),
+            ],
+            // Fecha exacta: date picker (Fase 3)
+            if (condicion == 'fecha_especifica') ...[
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: DateTime.now().add(const Duration(days: 1)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    builder: (ctx, child) => Theme(
+                      data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.dark(primary: AppTheme.primary, surface: AppTheme.surfaceAlt)),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null) setS(() => fechaEspecifica = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6), border: Border.all(color: fechaEspecifica != null ? AppTheme.primary : AppTheme.border)),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                    const SizedBox(width: 10),
+                    Text(
+                      fechaEspecifica != null
+                          ? '${fechaEspecifica!.year}-${fechaEspecifica!.month.toString().padLeft(2, '0')}-${fechaEspecifica!.day.toString().padLeft(2, '0')}'
+                          : 'Seleccionar fecha de cobro',
+                      style: TextStyle(color: fechaEspecifica != null ? AppTheme.textPrimary : AppTheme.textMuted),
+                    ),
+                    if (fechaEspecifica != null) ...[
+                      const Spacer(),
+                      const Icon(Icons.event_available, color: AppTheme.primary, size: 16),
+                    ],
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text('Se creará un recordatorio automático en el Calendario.',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            ],
+
+            // ── BOTÓN CONFIRMAR ───────────────────────────────────────────────
+            const SizedBox(height: 24),
+            SizedBox(width: double.infinity, child: ElevatedButton(
+              onPressed: () async {
+                final nombre = nombreCtrl.text.trim();
+                if (nombre.isEmpty) return;
+
+                // Validación según modo
+                if (!usarCatalogo) {
+                  final monto = double.tryParse(montoCtrl.text) ?? 0;
+                  if (monto <= 0) return;
+                } else {
+                  if (itemsSel.isEmpty) return;
+                }
+                if (condicion == 'fecha_especifica' && fechaEspecifica == null) return;
+
+                Navigator.pop(context);
+
+                // Monto inicial: 0 si usa catálogo (se recalculará desde los items)
+                final montoInicial = usarCatalogo ? 0.0 : (double.tryParse(montoCtrl.text) ?? 0);
+                final body = <String, dynamic>{
+                  'nombre_cliente': nombre,
+                  'monto': montoInicial,
+                  'condicion_pago': condicion,
+                  'firebase_uid': widget.firebaseUid,
+                };
+                if (condicion == 'plazo') body['dias_plazo'] = diasPlazo;
+                if (condicion == 'fecha_especifica' && fechaEspecifica != null) {
+                  body['fecha_pago_especifica'] =
+                      '${fechaEspecifica!.year}-${fechaEspecifica!.month.toString().padLeft(2, '0')}-${fechaEspecifica!.day.toString().padLeft(2, '0')}';
+                }
+
+                final res = await ApiClient.post('/ventas/${widget.ventaId}/cobros', body);
+                if (res.statusCode != 201) { _cargar(); return; }
+
+                // Si usa catálogo: agregar items al cobro recién creado
+                if (usarCatalogo && itemsSel.isNotEmpty) {
+                  final cobroId = json.decode(res.body)['id'] as int?;
+                  if (cobroId != null) {
+                    await Future.wait(itemsSel.map((item) => ApiClient.post('/cobros/$cobroId/items', {
+                      'variante_id': item['variante_id'],
+                      'descripcion': item['descripcion'],
+                      'cantidad': item['cantidad'],
+                      'precio_unitario': item['precio'],
+                      'firebase_uid': widget.firebaseUid,
+                    })));
+                  }
+                }
+                _cargar();
+              },
+              child: const Text('Agregar cliente'),
+            )),
+          ]),
+        ),
       )),
     );
   }
@@ -474,11 +719,12 @@ class _VentaDetalleState extends State<VentaDetalle> {
   );
 
   /// Botón de toggle para seleccionar condición de pago en el modal de cliente.
-  Widget _condBtn(String value, String label, String selected, void Function(String) onTap) => Expanded(
-    child: GestureDetector(
+  /// Ahora devuelve un widget flexible (no Expanded) para usarse en Wrap.
+  Widget _condBtn(String value, String label, String selected, void Function(String) onTap) =>
+    GestureDetector(
       onTap: () => onTap(value),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
         decoration: BoxDecoration(
           color: selected == value ? AppTheme.primary.withOpacity(0.1) : AppTheme.surfaceAlt,
           borderRadius: BorderRadius.circular(6),
@@ -487,20 +733,20 @@ class _VentaDetalleState extends State<VentaDetalle> {
             width: selected == value ? 1.5 : 1,
           ),
         ),
-        child: Text(label, textAlign: TextAlign.center, style: TextStyle(
+        child: Text(label, style: TextStyle(
           color: selected == value ? AppTheme.primary : AppTheme.textSecondary,
           fontSize: 12, fontWeight: selected == value ? FontWeight.w700 : FontWeight.normal,
         )),
       ),
-    ),
-  );
+    );
 }
 
-/// Fila de un cliente dentro de la lista de cobros de una venta.
+/// Tarjeta de un cliente dentro de la lista de cobros de una venta.
 ///
-/// Muestra el nombre del cliente, condición de pago y monto acordado.
-/// Si ya está cobrado: fondo verde suave, ícono check, sin botones de acción.
-/// Si está pendiente: botones "Cobrar" y "Eliminar".
+/// Si el cobro tiene `items[]` (pedido con catálogo), muestra el detalle de
+/// productos debajo del nombre. Si no, muestra solo el monto manual.
+///
+/// Compatibilidad: cobros sin items[] funcionan igual que antes.
 class _ClienteTile extends StatelessWidget {
   final Map<String, dynamic> cobro;
   final VoidCallback onCobrar, onEliminar;
@@ -512,9 +758,15 @@ class _ClienteTile extends StatelessWidget {
     final monto        = double.tryParse(cobro['monto']?.toString() ?? '0') ?? 0;
     final montoCobrado = cobro['monto_cobrado'] != null
         ? double.tryParse(cobro['monto_cobrado'].toString()) : null;
-    // Etiqueta de condición de pago formateada
-    final condicion = cobro['condicion_pago'] == 'plazo'
-        ? 'A plazo · ${cobro['dias_plazo']}d' : 'Contra entrega';
+    final items = (cobro['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    // Etiqueta de condición de pago
+    String condicion;
+    switch (cobro['condicion_pago']) {
+      case 'plazo':            condicion = 'A plazo · ${cobro['dias_plazo']}d'; break;
+      case 'fecha_especifica': condicion = 'Fecha exacta'; break;
+      default:                 condicion = 'Contra entrega';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -524,7 +776,9 @@ class _ClienteTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: cobrado ? AppTheme.success.withOpacity(0.25) : AppTheme.border),
       ),
-      child: Row(children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── FILA PRINCIPAL ─────────────────────────────────────────────────
+        Row(children: [
         // Avatar con la inicial del nombre del cliente
         CircleAvatar(
           backgroundColor: cobrado
@@ -549,13 +803,11 @@ class _ClienteTile extends StatelessWidget {
           )),
           const SizedBox(height: 3),
           Row(children: [
-            // Badge de condición de pago
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(4)),
               child: Text(condicion, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             ),
-            // Monto cobrado real (si ya fue cobrado y el monto es conocido)
             if (cobrado && montoCobrado != null) ...[
               const SizedBox(width: 6),
               Text('\$${montoCobrado.toStringAsFixed(2)} cobrado',
@@ -572,7 +824,6 @@ class _ClienteTile extends StatelessWidget {
           )),
           const SizedBox(height: 6),
           if (!cobrado)
-            // Botones de acción solo para cobros pendientes
             Row(children: [
               GestureDetector(onTap: onEliminar,
                   child: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16)),
@@ -594,7 +845,33 @@ class _ClienteTile extends StatelessWidget {
           else
             const Icon(Icons.check_circle, color: AppTheme.success, size: 18),
         ]),
-      ]),
+      ]),  // cierra Row principal
+
+        // ── DETALLE DE ITEMS (solo si hay pedido con catálogo) ───────────────
+        if (items.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Divider(color: AppTheme.border, height: 1),
+          const SizedBox(height: 8),
+          ...items.map((item) {
+            final cant   = double.tryParse(item['cantidad']?.toString() ?? '1') ?? 1;
+            final precio = double.tryParse(item['precio_unitario']?.toString() ?? '0') ?? 0;
+            final sub    = double.tryParse(item['subtotal']?.toString() ?? '0') ?? (cant * precio);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4, left: 4),
+              child: Row(children: [
+                const Icon(Icons.circle, size: 5, color: AppTheme.textMuted),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  '${cant % 1 == 0 ? cant.toInt() : cant} × ${item['descripcion'] ?? ''}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                )),
+                Text('\$${sub.toStringAsFixed(2)}',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+            );
+          }),
+        ],
+      ]),  // cierra Column principal
     );
   }
 }
