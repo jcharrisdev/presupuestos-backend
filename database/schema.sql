@@ -159,6 +159,9 @@ CREATE TABLE IF NOT EXISTS calendario_eventos (
   notificacion_enviada TINYINT(1) NOT NULL DEFAULT 0, -- Evita enviar la misma notificación dos veces
   google_event_id     VARCHAR(255) NULL,             -- Futuro: ID del evento en Google Calendar
   periodo_id          INT NULL,                      -- Período relacionado (si aplica)
+  -- FIX: cobro_id faltaba — permite que Flutter acceda al cobro desde el evento del calendario
+  -- Necesario para que _marcarPagado() en calendario.dart pueda llamar PUT /cobros/:id/cobrar
+  cobro_id            INT NULL,                      -- cobros_clientes.id que generó este evento
   created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
