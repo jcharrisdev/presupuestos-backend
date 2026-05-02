@@ -5,10 +5,11 @@
 ///   1. La URL base del backend siempre sea la misma.
 ///   2. El token de autenticación se inyecte automáticamente en cada petición.
 ///   3. Cuando se integre Firebase Auth, solo habrá UN lugar donde cambiar.
+///   4. El timeout de red se aplica globalmente (evita pantallas colgadas).
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// Cliente HTTP estático con soporte para autenticación Bearer.
+/// Cliente HTTP estático con soporte para autenticación Bearer y timeout global.
 ///
 /// Todos los métodos son estáticos (no necesitas instanciar la clase).
 /// Ejemplo de uso:
@@ -18,45 +19,46 @@ import 'package:http/http.dart' as http;
 /// ```
 class ApiClient {
   /// URL base del backend desplegado en Render.
-  /// Cambiar aquí si el backend se mueve a otra plataforma.
   static const String baseUrl = 'https://presupuestos-backend-h3l6.onrender.com';
 
+  /// Timeout global para todas las peticiones.
+  ///
+  /// Render (plan gratuito) duerme tras 15 minutos sin tráfico y tarda
+  /// hasta 50 segundos en despertar. Sin timeout, la app se queda colgada
+  /// mostrando solo el spinner. Con 55s el primer request tras una pausa
+  /// larga tiene oportunidad de completar; los demás son instantáneos.
+  static const Duration _timeout = Duration(seconds: 55);
+
   /// Token de autenticación Bearer (Firebase Auth en sprint futuro).
-  /// Por ahora queda null — no se envía header Authorization.
   static String? _token;
 
   /// Guarda el token recibido tras el login con Firebase Auth.
-  /// Una vez asignado, se incluirá automáticamente en todas las peticiones.
   static void setToken(String token) => _token = token;
 
-  /// Limpia el token al hacer logout (llamar desde la pantalla de cierre de sesión).
+  /// Limpia el token al hacer logout.
   static void clearToken() => _token = null;
 
-  /// Construye los headers comunes para todas las peticiones.
-  /// Si hay token activo, agrega `Authorization: Bearer <token>`.
+  /// Headers comunes. Incluye Authorization si hay token activo.
   static Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     if (_token != null) 'Authorization': 'Bearer $_token',
   };
 
-  /// GET a `baseUrl + path`.
-  /// [path] debe comenzar con `/`, p.ej. `/presupuestos?firebase_uid=xxx`.
+  /// GET con timeout. Lanza [TimeoutException] si el servidor no responde.
   static Future<http.Response> get(String path) =>
-      http.get(Uri.parse('$baseUrl$path'), headers: _headers);
+      http.get(Uri.parse('$baseUrl$path'), headers: _headers).timeout(_timeout);
 
-  /// POST a `baseUrl + path` con cuerpo JSON codificado.
-  /// [body] se serializa automáticamente con `jsonEncode`.
+  /// POST con timeout.
   static Future<http.Response> post(String path, Map<String, dynamic> body) =>
-      http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+      http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+          .timeout(_timeout);
 
-  /// PUT a `baseUrl + path` con cuerpo JSON codificado.
-  /// Usado para actualizar recursos existentes (presupuestos, movimientos, etc.).
+  /// PUT con timeout.
   static Future<http.Response> put(String path, Map<String, dynamic> body) =>
-      http.put(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+      http.put(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+          .timeout(_timeout);
 
-  /// DELETE a `baseUrl + path`.
-  /// Algunos DELETE llevan parámetros en la query string, p.ej.
-  /// `/produccion/items/5?firebase_uid=xxx`.
+  /// DELETE con timeout.
   static Future<http.Response> delete(String path) =>
-      http.delete(Uri.parse('$baseUrl$path'), headers: _headers);
+      http.delete(Uri.parse('$baseUrl$path'), headers: _headers).timeout(_timeout);
 }
