@@ -56,8 +56,18 @@ class _VentaDetalleState extends State<VentaDetalle> {
           _resumen = data['resumen'] ?? {};
           _loading = false;
         });
-      } else setState(() => _loading = false);
-    } catch (_) { setState(() => _loading = false); }
+      } else {
+        setState(() => _loading = false);
+      }
+    } catch (e) {
+      // FIX: catch silencioso dejaba pantalla en blanco sin avisar al usuario.
+      // Ahora muestra SnackBar con el error de red o de parseo.
+      setState(() => _loading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar venta: $e')),
+      );
+    }
   }
 
   /// Abre el bottom sheet para agregar un nuevo cliente a la venta.

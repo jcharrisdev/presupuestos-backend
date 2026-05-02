@@ -141,7 +141,10 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
 
     // Para gastos recurrentes, crear también el movimiento del período actual
     if (tipo == 'fijo' || tipo == 'fijo_x_periodo' || tipo == 'ahorro') {
-      final id = json.decode(res.body)['id'];
+      // FIX: validar que el servidor retornó el id antes de crear el movimiento.
+      // Sin este check, id podía ser null y el movimiento quedaba sin gasto_id vinculado.
+      final id = json.decode(res.body)['id'] as int?;
+      if (id == null) { _cargar(); return; }
       await ApiClient.post('/presupuestos/${widget.presupuesto['id']}/movimientos', {
         'firebase_uid': widget.firebaseUid,
         'items': [{'gasto_id': id, 'monto': monto}],

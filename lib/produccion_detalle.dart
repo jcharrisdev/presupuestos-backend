@@ -55,8 +55,17 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
           _total = double.tryParse(data['total_invertido']?.toString() ?? '0') ?? 0;
           _loading = false;
         });
-      } else setState(() => _loading = false);
-    } catch (_) { setState(() => _loading = false); }
+      } else {
+        setState(() => _loading = false);
+      }
+    } catch (e) {
+      // FIX: catch silencioso ocultaba errores de red; ahora muestra SnackBar.
+      setState(() => _loading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar producción: $e')),
+      );
+    }
   }
 
   /// Abre el modal para agregar un nuevo ítem de insumo.

@@ -44,8 +44,13 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
         ahorros = res.statusCode == 200 ? json.decode(res.body) : [];
         isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      // FIX: catch silencioso mostraba lista vacía sin avisar al usuario.
       setState(() => isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar ahorros: $e')),
+      );
     }
   }
 
@@ -71,7 +76,8 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
       ),
     );
     if (ok != true) return;
-    final res = await ApiClient.delete('/ahorros/$id');
+    // FIX: se agrega firebase_uid al query para que el backend valide propiedad del recurso
+    final res = await ApiClient.delete('/ahorros/$id?firebase_uid=${widget.firebaseUid}');
     if (res.statusCode == 200) _cargar();
   }
 

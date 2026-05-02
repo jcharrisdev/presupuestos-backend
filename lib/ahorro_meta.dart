@@ -95,8 +95,12 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
           _cargando = false;
         });
       } else throw Exception();
-    } catch (_) {
+    } catch (e) {
+      // FIX: catch silencioso dejaba el dropdown vacío sin feedback al usuario.
       setState(() => _cargando = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar presupuestos: $e')),
+      );
     }
   }
 

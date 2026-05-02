@@ -39,6 +39,9 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
+    // FIX: listener para que el FAB actualice su etiqueta al cambiar de pestaña.
+    // Sin esto, el label del FAB no cambia visualmente hasta el próximo setState.
+    _tab.addListener(() { if (mounted) setState(() {}); });
     // Carga ambas listas en paralelo al inicializar la pantalla
     _cargarProducciones();
     _cargarVentas();
@@ -52,9 +55,18 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
     setState(() => _loadProd = true);
     try {
       final res = await ApiClient.get('/produccion?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode == 200) setState(() { _producciones = json.decode(res.body); _loadProd = false; });
-      else setState(() => _loadProd = false);
-    } catch (_) { setState(() => _loadProd = false); }
+      if (res.statusCode == 200) {
+        setState(() { _producciones = json.decode(res.body); _loadProd = false; });
+      } else {
+        setState(() => _loadProd = false);
+      }
+    } catch (e) {
+      // FIX: catch silencioso mostraba lista vacía sin avisar al usuario.
+      setState(() => _loadProd = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar producción: $e')),
+      );
+    }
   }
 
   /// Carga las ventas del usuario con resumen de cobros.
@@ -62,9 +74,18 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
     setState(() => _loadVentas = true);
     try {
       final res = await ApiClient.get('/ventas?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode == 200) setState(() { _ventas = json.decode(res.body); _loadVentas = false; });
-      else setState(() => _loadVentas = false);
-    } catch (_) { setState(() => _loadVentas = false); }
+      if (res.statusCode == 200) {
+        setState(() { _ventas = json.decode(res.body); _loadVentas = false; });
+      } else {
+        setState(() => _loadVentas = false);
+      }
+    } catch (e) {
+      // FIX: igual que arriba — ahora notifica al usuario en lugar de silenciar el error.
+      setState(() => _loadVentas = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar ventas: $e')),
+      );
+    }
   }
 
   /// Abre el bottom sheet para crear un nuevo presupuesto de producción.
