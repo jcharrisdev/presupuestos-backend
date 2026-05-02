@@ -261,123 +261,147 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
 
   /// Pestaña de presupuestos de producción.
   Widget _tabProducciones() {
-    if (_loadProd) return const Center(child: CircularProgressIndicator());
-    if (_producciones.isEmpty) return _empty(
-      'Sin presupuestos de producción',
-      'Crea uno para registrar tus insumos',
-      Icons.inventory_2_outlined,
+    // FIX: fondo explícito en todos los estados para evitar fondo gris de Android
+    if (_loadProd) return Container(
+      color: AppTheme.background,
+      child: const Center(child: CircularProgressIndicator()),
     );
-    return RefreshIndicator(
-      color: AppTheme.primary, backgroundColor: AppTheme.surface,
-      onRefresh: _cargarProducciones,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _producciones.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) {
-          final p     = _producciones[i];
-          final total = double.tryParse(p['total_invertido']?.toString() ?? '0') ?? 0;
-          return GestureDetector(
-            onTap: () async {
-              // Navega al detalle y recarga al regresar (puede haber cambiado el total)
-              await Navigator.push(context, MaterialPageRoute(
-                builder: (_) => ProduccionDetalle(
-                  presupuestoId: p['id'],
-                  nombre: p['nombre'],
-                  firebaseUid: widget.firebaseUid,
-                ),
-              ));
-              _cargarProducciones();
-            },
-            child: _card(
-              icon: Icons.inventory_2_outlined,
-              color: AppTheme.colorFijo,
-              title: p['nombre'],
-              subtitle: p['descripcion'] ?? '',
-              trailing: '\$${total.toStringAsFixed(2)}',
-              trailingLabel: 'Costo total',
-            ),
-          );
-        },
+    if (_producciones.isEmpty) return Container(
+      color: AppTheme.background,
+      child: _empty('Sin presupuestos de producción', 'Crea uno para registrar tus insumos', Icons.inventory_2_outlined),
+    );
+    return Container(
+      color: AppTheme.background,
+      child: RefreshIndicator(
+        color: AppTheme.primary,
+        backgroundColor: AppTheme.surface,
+        onRefresh: _cargarProducciones,
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: _producciones.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (_, i) {
+            final p     = _producciones[i] as Map<String, dynamic>? ?? {};
+            final total = double.tryParse(p['total_invertido']?.toString() ?? '0') ?? 0.0;
+            final nombre = p['nombre']?.toString() ?? 'Sin nombre';
+            return GestureDetector(
+              onTap: () async {
+                final prodId = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '') ?? 0;
+                if (prodId == 0) return;
+                await Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ProduccionDetalle(
+                    presupuestoId: prodId,
+                    nombre: nombre,
+                    firebaseUid: widget.firebaseUid,
+                  ),
+                ));
+                _cargarProducciones();
+              },
+              child: _card(
+                icon: Icons.inventory_2_outlined,
+                color: AppTheme.colorFijo,
+                title: nombre,
+                subtitle: p['descripcion']?.toString() ?? '',
+                trailing: '\$${total.toStringAsFixed(2)}',
+                trailingLabel: 'Costo total',
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 
   /// Pestaña de ventas con barra de progreso de cobros.
   Widget _tabVentas() {
-    if (_loadVentas) return const Center(child: CircularProgressIndicator());
-    if (_ventas.isEmpty) return _empty(
-      'Sin ventas registradas',
-      'Crea una venta para gestionar cobros',
-      Icons.receipt_long_outlined,
+    // FIX: todos los estados tienen fondo explícito (AppTheme.background).
+    // Sin esto, en release mode un error en el itemBuilder deja el tab gris
+    // (Android background visible a través del ErrorWidget de tamaño cero).
+    if (_loadVentas) return Container(
+      color: AppTheme.background,
+      child: const Center(child: CircularProgressIndicator()),
     );
-    return RefreshIndicator(
-      color: AppTheme.primary, backgroundColor: AppTheme.surface,
-      onRefresh: _cargarVentas,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _ventas.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) {
-          final v         = _ventas[i];
-          final cobrado   = double.tryParse(v['total_cobrado']?.toString() ?? '0') ?? 0;
-          final esperado  = double.tryParse(v['total_esperado']?.toString() ?? '0') ?? 0;
-          final pendientes = v['cobros_pendientes'] ?? 0;
-          return GestureDetector(
-            onTap: () async {
-              await Navigator.push(context, MaterialPageRoute(
-                builder: (_) => VentaDetalle(ventaId: v['id'], firebaseUid: widget.firebaseUid),
-              ));
-              _cargarVentas();
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.surface, borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.border),
+    if (_ventas.isEmpty) return Container(
+      color: AppTheme.background,
+      child: _empty('Sin ventas registradas', 'Crea una venta para gestionar cobros', Icons.receipt_long_outlined),
+    );
+    return Container(
+      color: AppTheme.background,
+      child: RefreshIndicator(
+        color: AppTheme.primary, backgroundColor: AppTheme.surface,
+        onRefresh: _cargarVentas,
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: _ventas.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (_, i) {
+            final v = _ventas[i] as Map<String, dynamic>? ?? {};
+
+            // FIX: parsear todos los campos numéricos de forma robusta.
+            // MySQL puede retornar DECIMAL como String y SUM como null en LEFT JOIN sin COALESCE.
+            // Antes: `v['cobros_pendientes'] ?? 0` era dynamic y `pendientes > 0`
+            //        lanzaba NoSuchMethodError en release si el valor era null o String.
+            final cobrado    = double.tryParse(v['total_cobrado']?.toString()   ?? '0') ?? 0.0;
+            final esperado   = double.tryParse(v['total_esperado']?.toString()  ?? '0') ?? 0.0;
+            final pendientes = int.tryParse(v['cobros_pendientes']?.toString()  ?? '0') ?? 0;
+            final nombre     = v['nombre']?.toString() ?? 'Venta sin nombre';
+            final ventaId    = v['id'] is int ? v['id'] as int : int.tryParse(v['id']?.toString() ?? '') ?? 0;
+
+            return GestureDetector(
+              onTap: () async {
+                if (ventaId == 0) return; // guardia por si id es inválido
+                await Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => VentaDetalle(ventaId: ventaId, firebaseUid: widget.firebaseUid),
+                ));
+                _cargarVentas();
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface, borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Container(width: 36, height: 36,
+                      decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.receipt_long_outlined, color: AppTheme.primary, size: 18)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(nombre,
+                        style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15))),
+                    if (pendientes > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                        child: Text('$pendientes pendientes',
+                            style: const TextStyle(color: AppTheme.warning, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ),
+                  ]),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('Cobrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      Text('\$${cobrado.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.w800, fontSize: 16)),
+                    ])),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      const Text('Total esperado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      Text('\$${esperado.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 14)),
+                    ])),
+                  ]),
+                  if (esperado > 0.0) ...[
+                    const SizedBox(height: 10),
+                    ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(
+                      value: (cobrado / esperado).clamp(0.0, 1.0), minHeight: 4,
+                      backgroundColor: AppTheme.surfaceAlt, color: AppTheme.success,
+                    )),
+                  ],
+                ]),
               ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Container(width: 36, height: 36,
-                    decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.receipt_long_outlined, color: AppTheme.primary, size: 18)),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(v['nombre'],
-                      style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15))),
-                  // Badge de cobros pendientes (solo si hay alguno)
-                  if (pendientes > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                      child: Text('$pendientes pendientes',
-                          style: const TextStyle(color: AppTheme.warning, fontSize: 11, fontWeight: FontWeight.w600)),
-                    ),
-                ]),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Cobrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                    Text('\$${cobrado.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.w800, fontSize: 16)),
-                  ])),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    const Text('Total esperado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                    Text('\$${esperado.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 14)),
-                  ])),
-                ]),
-                // Barra de progreso de cobros (solo si hay montos)
-                if (esperado > 0) ...[
-                  const SizedBox(height: 10),
-                  ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(
-                    value: (cobrado / esperado).clamp(0.0, 1.0), minHeight: 4,
-                    backgroundColor: AppTheme.surfaceAlt, color: AppTheme.success,
-                  )),
-                ],
-              ]),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
