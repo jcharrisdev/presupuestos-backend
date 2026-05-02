@@ -1239,24 +1239,33 @@ app.get('/ventas/:id', async (req, res) => {
 /**
  * POST /ventas/:id/cobros
  * Agrega un cliente a una venta con su monto y condición de pago.
- * Si condicion_pago = 'plazo': crea automáticamente un evento en calendario_eventos
- * para recordar la fecha de cobro (fecha = hoy + dias_plazo).
- * El evento aparece en el calendario del usuario junto con los pagos normales,
- * pero con tipo='cobro' para diferenciarse visualmente.
+ *
+ * condicion_pago puede ser:
+ *   'contra_entrega'  → sin fecha, sin evento en calendario
+ *   'plazo'           → fecha = hoy + dias_plazo → crea evento en calendario
+ *   'fecha_especifica'→ fecha exacta del body (fecha_pago_especifica) → crea evento en calendario
+ *
+ * Cuando se crea evento en calendario:
+ *   - tipo = 'cobro'
+ *   - cobro_id vinculado para sincronizar estado al cobrar
+ *   - recordatorio implícito (el cron de vencidos lo detectará)
  */
 app.post('/ventas/:id/cobros', async (req, res) => {
   const { id } = req.params;
-  const { nombre_cliente, monto, condicion_pago, dias_plazo, firebase_uid } = req.body;
-  if (!nombre_cliente || !monto || !condicion_pago || !firebase_uid)
+  const { nombre_cliente, monto, condicion_pago, dias_plazo,
+          fecha_pago_especifica, firebase_uid } = req.body;
+  if (!nombre_cliente || monto == null || !condicion_pago || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
 
   try {
-    // Calculamos la fecha de cobro (solo si es a plazo)
+    // Calcular la fecha de cobro según el tipo de condición
     let fechaCobro = null;
     if (condicion_pago === 'plazo' && dias_plazo) {
       const f = new Date();
       f.setDate(f.getDate() + Number(dias_plazo));
       fechaCobro = f.toISOString().split('T')[0];
+    } else if (condicion_pago === 'fecha_especifica' && fecha_pago_especifica) {
+      fechaCobro = fecha_pago_especifica; // ya viene en formato YYYY-MM-DD
     }
 
     const [result] = await db.execute(
@@ -1267,19 +1276,17 @@ app.post('/ventas/:id/cobros', async (req, res) => {
     );
     const cobroId = result.insertId;
 
-    // Si es a plazo, crear evento en el calendario para recordar el cobro
-    if (condicion_pago === 'plazo' && fechaCobro) {
+    // Crear evento en calendario cuando hay fecha definida (plazo O fecha_especifica)
+    const necesitaEvento = (condicion_pago === 'plazo' || condicion_pago === 'fecha_especifica') && fechaCobro;
+    if (necesitaEvento) {
       const [[venta]] = await db.execute(`SELECT nombre FROM ventas WHERE id = ?`, [id]);
       const titulo = `Cobro: ${nombre_cliente} (${venta?.nombre || 'Venta'})`;
 
-      // FIX: se agrega cobro_id al evento para que Flutter pueda acceder al cobro desde el calendario.
-      // Sin este campo, calendario.dart no podía llamar PUT /cobros/:id/cobrar al marcar el evento.
       const [evResult] = await db.execute(
         `INSERT INTO calendario_eventos (firebase_uid, titulo, tipo, fecha_evento, monto_esperado, estado, cobro_id)
          VALUES (?, ?, 'cobro', ?, ?, 'pendiente', ?)`,
         [firebase_uid, titulo, fechaCobro, monto, cobroId]
       );
-      // Vínculo inverso: cobros_clientes también guarda el id del evento del calendario
       await db.execute(
         `UPDATE cobros_clientes SET calendario_evento_id = ? WHERE id = ?`,
         [evResult.insertId, cobroId]
