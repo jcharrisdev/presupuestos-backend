@@ -215,7 +215,42 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
     return Scaffold(
       appBar: AppBar(
         title: const Text('Calendario'),
-        actions: [IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargarEventos)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Calendario de pagos',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Muestra todos tus pagos y cobros programados en el mes.\n\n'
+                  'Vista Calendario:\n'
+                  '  • Los puntitos de colores indican eventos en ese día.\n'
+                  '  • Toca un día para ver sus eventos y marcarlos como pagados.\n\n'
+                  'Vista Lista:\n'
+                  '  • Filtra por estado: Todos / Pendientes / Pagados / Vencidos.\n'
+                  '  • Toca "Pagar" o "Cobrar" para registrar el pago.\n\n'
+                  'Colores:\n'
+                  '  🔵 Azul → pago pendiente\n'
+                  '  🟡 Amarillo → cobro pendiente\n'
+                  '  🟢 Verde → pagado/cobrado\n'
+                  '  🔴 Rojo → vencido\n\n'
+                  'Los eventos se crean automáticamente al agregar gastos con "Fecha fija" '
+                  'o al registrar cobros a plazo en el módulo de Ventas.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargarEventos),
+        ],
         bottom: TabBar(
           controller: _tabCtrl,
           indicatorColor: AppTheme.primary,
