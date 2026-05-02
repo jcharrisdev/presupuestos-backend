@@ -210,9 +210,36 @@ class _VentaDetalleState extends State<VentaDetalle> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    // Spinner mientras carga — incluye texto para que no parezca pantalla en blanco
+    if (_loading) return Scaffold(
+      body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const CircularProgressIndicator(color: AppTheme.primary),
+        const SizedBox(height: 16),
+        const Text('Cargando venta...', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+      ])),
+    );
 
-    final nombre    = _venta?['nombre'] ?? 'Venta';
+    // FIX: si _venta es null tras cargar (error de red, 404, timeout),
+    // mostrar pantalla de error con botón Reintentar en lugar de renderizar
+    // datos vacíos que parecen una pantalla en blanco.
+    if (_venta == null) return Scaffold(
+      appBar: AppBar(title: const Text('Venta')),
+      body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.cloud_off_outlined, size: 48, color: AppTheme.textMuted),
+        const SizedBox(height: 16),
+        const Text('No se pudo cargar la venta', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        const Text('Verifica tu conexión e intenta de nuevo', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          onPressed: _cargar,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Reintentar'),
+        ),
+      ])),
+    );
+
+    final nombre    = _venta!['nombre'] ?? 'Venta';
     final invertido = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
     final cobrado   = double.tryParse(_resumen['total_cobrado']?.toString() ?? '0') ?? 0;
     final esperado  = double.tryParse(_resumen['total_esperado']?.toString() ?? '0') ?? 0;
