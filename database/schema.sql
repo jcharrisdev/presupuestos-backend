@@ -260,3 +260,84 @@ CREATE TABLE IF NOT EXISTS cobros_clientes (
   INDEX idx_firebase_uid (firebase_uid),
   INDEX idx_venta (venta_id)
 );
+
+
+-- =============================================================================
+-- MÓDULO DE CATÁLOGO DE PRODUCTOS (Fase 1)
+-- Permite gestionar un catálogo de lo que se vende, con variantes por
+-- sabor, tamaño, presentación o unidad. Alimenta el detalle de pedidos
+-- de clientes para calcular totales automáticamente.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- TABLA: productos
+-- Representa lo que se vende (cheesecake, tornillo, camisa, servicio).
+-- Un producto puede tener N variantes vendibles.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS productos (
+  id           INT PRIMARY KEY AUTO_INCREMENT,
+  firebase_uid VARCHAR(255) NOT NULL,
+  nombre       VARCHAR(255) NOT NULL,       -- Ej: "Cheesecake", "Tornillo"
+  descripcion  TEXT NULL,
+  activo       TINYINT(1) NOT NULL DEFAULT 1,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_uid (firebase_uid)
+);
+
+-- -----------------------------------------------------------------------------
+-- TABLA: variantes_producto
+-- Cada variante es una versión vendible de un producto con precio propio.
+-- Ejemplos: "Cheesecake fresa regular $3.75", "Cheesecake fresa grande $5.50"
+-- Una variante puede estar inactiva sin eliminarla (conserva el historial).
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS variantes_producto (
+  id          INT PRIMARY KEY AUTO_INCREMENT,
+  producto_id INT NOT NULL,
+  nombre      VARCHAR(255) NOT NULL,         -- Ej: "Fresa regular"
+  precio      DECIMAL(10,2) NOT NULL,        -- Precio de venta unitario
+  unidad      VARCHAR(50)   NOT NULL DEFAULT 'unidad',  -- Ej: "kg", "docena", "unidad"
+  activo      TINYINT(1)    NOT NULL DEFAULT 1,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE,
+  INDEX idx_producto (producto_id)
+);
+
+-- -----------------------------------------------------------------------------
+-- TABLA: pedido_items
+-- Detalle de los productos que pidió un cliente dentro de una venta.
+-- Reemplaza el campo `monto` manual de cobros_clientes cuando el cliente
+-- pide productos del catálogo.
+--
+-- Compatibilidad: los cobros creados antes de esta tabla siguen usando
+-- cobros_clientes.monto (monto_manual=1). Solo los nuevos cobros con
+-- productos usan esta tabla para calcular el total automáticamente.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pedido_items (
+  id               INT PRIMARY KEY AUTO_INCREMENT,
+  cobro_cliente_id INT NOT NULL,
+  variante_id      INT NULL,               -- NULL = ítem libre (sin catálogo)
+  descripcion      VARCHAR(255) NOT NULL,  -- Nombre del producto/variante en el momento del pedido
+  cantidad         DECIMAL(10,3) NOT NULL DEFAULT 1,
+  precio_unitario  DECIMAL(10,2) NOT NULL,
+  subtotal         DECIMAL(10,2) NOT NULL, -- calculado: cantidad × precio_unitario
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (cobro_cliente_id) REFERENCES cobros_clientes(id) ON DELETE CASCADE,
+  FOREIGN KEY (variante_id) REFERENCES variantes_producto(id) ON DELETE SET NULL,
+  INDEX idx_cobro (cobro_cliente_id)
+);
+
+
+-- =============================================================================
+-- MIGRACIONES — Ejecutar UNA SOLA VEZ sobre la BD en producción (Clever Cloud)
+-- Estas sentencias adaptan tablas existentes sin perder datos.
+--
+-- ALTER TABLE cobros_clientes
+--   ADD COLUMN monto_manual TINYINT(1) NOT NULL DEFAULT 1 AFTER monto,
+--   ADD COLUMN fecha_pago_especifica DATE NULL AFTER fecha_cobro,
+--   MODIFY COLUMN condicion_pago
+--     ENUM('contra_entrega','plazo','fecha_especifica') NOT NULL DEFAULT 'contra_entrega';
+--
+-- Efecto de monto_manual:
+--   1 (DEFAULT) → el monto fue ingresado manualmente (todos los registros viejos)
+--   0           → el monto se calcula desde pedido_items automáticamente
+-- =============================================================================
