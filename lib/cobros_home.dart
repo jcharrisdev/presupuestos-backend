@@ -202,6 +202,39 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cobros'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Módulo de Cobros',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Gestiona la rentabilidad de tu negocio en dos pasos:\n\n'
+                  'Pestaña Producción:\n'
+                  '  Registra los insumos que usas para producir (ej: ingredientes). '
+                  'El sistema calcula automáticamente el costo total invertido.\n\n'
+                  'Pestaña Ventas:\n'
+                  '  Crea ventas y agrega los clientes con su monto acordado. '
+                  'Puedes vincular un presupuesto de producción para ver la ganancia neta.\n\n'
+                  'Flujo recomendado:\n'
+                  '  1. Crea un presupuesto de producción y agrega los insumos.\n'
+                  '  2. Crea una venta y vincúlala a ese presupuesto.\n'
+                  '  3. Agrega clientes y marca los cobros cuando los recibas.\n\n'
+                  'Los cobros a plazo aparecen automáticamente en el Calendario.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           indicatorColor: AppTheme.primary,
