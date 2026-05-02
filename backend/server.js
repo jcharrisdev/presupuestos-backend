@@ -1334,6 +1334,315 @@ app.delete('/cobros/:id', async (req, res) => {
 
 
 // =============================================================================
+// MÓDULO: CATÁLOGO DE PRODUCTOS Y VARIANTES (Fase 1)
+// Permite al usuario mantener un catálogo reutilizable de lo que vende.
+// Flujo: producto → variante → pedido_item → cobro_cliente → venta
+// =============================================================================
+
+/**
+ * GET /productos?firebase_uid=
+ * Lista todos los productos del usuario con el conteo de variantes activas.
+ */
+app.get('/productos', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT p.*,
+              COUNT(CASE WHEN v.activo = 1 THEN 1 END) AS variantes_activas
+       FROM productos p
+       LEFT JOIN variantes_producto v ON v.producto_id = p.id
+       WHERE p.firebase_uid = ?
+       GROUP BY p.id
+       ORDER BY p.nombre ASC`,
+      [firebase_uid]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /productos
+ * Crea un producto en el catálogo.
+ */
+app.post('/productos', async (req, res) => {
+  const { nombre, descripcion, firebase_uid } = req.body;
+  if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO productos (firebase_uid, nombre, descripcion) VALUES (?, ?, ?)`,
+      [firebase_uid, nombre, descripcion || null]
+    );
+    res.status(201).json({ id: result.insertId, nombre });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /productos/:id
+ * Edita nombre, descripción o estado activo de un producto.
+ */
+app.put('/productos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, descripcion, activo, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `UPDATE productos SET nombre = COALESCE(?, nombre),
+                            descripcion = COALESCE(?, descripcion),
+                            activo = COALESCE(?, activo)
+       WHERE id = ? AND firebase_uid = ?`,
+      [nombre || null, descripcion !== undefined ? descripcion : null, activo !== undefined ? activo : null, id, firebase_uid]
+    );
+    res.json({ message: 'Producto actualizado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /productos/:id?firebase_uid=
+ * Elimina un producto y sus variantes (CASCADE).
+ */
+app.delete('/productos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [result] = await db.execute(
+      `DELETE FROM productos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Producto no encontrado' });
+    res.json({ message: 'Producto eliminado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /productos/:id/variantes?firebase_uid=
+ * Lista las variantes de un producto (incluye inactivas para gestión).
+ */
+app.get('/productos/:id/variantes', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT v.* FROM variantes_producto v
+       JOIN productos p ON p.id = v.producto_id
+       WHERE v.producto_id = ? AND p.firebase_uid = ?
+       ORDER BY v.nombre ASC`,
+      [id, firebase_uid]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /productos/:id/variantes
+ * Crea una variante (sabor, tamaño, presentación) para un producto.
+ */
+app.post('/productos/:id/variantes', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, precio, unidad, firebase_uid } = req.body;
+  if (!nombre || precio == null || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [[producto]] = await db.execute(
+      `SELECT id FROM productos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
+    const [result] = await db.execute(
+      `INSERT INTO variantes_producto (producto_id, nombre, precio, unidad) VALUES (?, ?, ?, ?)`,
+      [id, nombre, precio, unidad || 'unidad']
+    );
+    res.status(201).json({ id: result.insertId, nombre, precio, unidad: unidad || 'unidad' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /variantes/:id
+ * Edita nombre, precio, unidad o estado activo de una variante.
+ */
+app.put('/variantes/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, precio, unidad, activo, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Verificar propiedad vía JOIN con productos
+    await db.execute(
+      `UPDATE variantes_producto v
+       JOIN productos p ON p.id = v.producto_id
+       SET v.nombre  = COALESCE(?, v.nombre),
+           v.precio  = COALESCE(?, v.precio),
+           v.unidad  = COALESCE(?, v.unidad),
+           v.activo  = COALESCE(?, v.activo)
+       WHERE v.id = ? AND p.firebase_uid = ?`,
+      [nombre || null, precio !== undefined ? precio : null,
+       unidad || null, activo !== undefined ? activo : null,
+       id, firebase_uid]
+    );
+    res.json({ message: 'Variante actualizada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /variantes/:id?firebase_uid=
+ * Elimina una variante. Si tiene pedido_items, los desvincula (SET NULL en variante_id).
+ */
+app.delete('/variantes/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [result] = await db.execute(
+      `DELETE v FROM variantes_producto v
+       JOIN productos p ON p.id = v.producto_id
+       WHERE v.id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Variante no encontrada' });
+    res.json({ message: 'Variante eliminada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================================================
+// MÓDULO: PEDIDO ITEMS (Fase 1)
+// Detalle de productos por cliente. Permite calcular el total del cliente
+// automáticamente desde los productos pedidos.
+// =============================================================================
+
+/**
+ * GET /cobros/:id/items
+ * Lista los ítems del pedido de un cliente con subtotales.
+ */
+app.get('/cobros/:id/items', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT pi.*, vp.nombre AS variante_nombre, pr.nombre AS producto_nombre
+       FROM pedido_items pi
+       LEFT JOIN variantes_producto vp ON vp.id = pi.variante_id
+       LEFT JOIN productos pr ON pr.id = vp.producto_id
+       WHERE pi.cobro_cliente_id = ?
+       ORDER BY pi.id ASC`,
+      [id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /cobros/:id/items
+ * Agrega un ítem al pedido de un cliente y actualiza el monto total del cobro.
+ * Si variante_id viene, copia nombre y precio de la variante (snapshot del precio).
+ * Si no viene (ítem libre), usa descripcion y precio_unitario del body.
+ *
+ * Después de insertar, recalcula cobros_clientes.monto como SUM(pedido_items.subtotal)
+ * y pone monto_manual=0 para indicar que el total es calculado.
+ */
+app.post('/cobros/:id/items', async (req, res) => {
+  const { id } = req.params;
+  const { variante_id, descripcion, cantidad, precio_unitario, firebase_uid } = req.body;
+  if (!firebase_uid || (!variante_id && !descripcion) || !cantidad || precio_unitario == null)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    let desc = descripcion;
+    let precio = Number(precio_unitario);
+
+    // Si viene variante_id, usar su nombre y precio actual como snapshot
+    if (variante_id) {
+      const [[variante]] = await db.execute(
+        `SELECT nombre, precio FROM variantes_producto WHERE id = ?`, [variante_id]
+      );
+      if (!variante) return res.status(404).json({ error: 'Variante no encontrada' });
+      desc = desc || variante.nombre;
+      precio = precio || Number(variante.precio);
+    }
+
+    const cant = Number(cantidad);
+    const subtotal = parseFloat((cant * precio).toFixed(2));
+
+    const [result] = await db.execute(
+      `INSERT INTO pedido_items (cobro_cliente_id, variante_id, descripcion, cantidad, precio_unitario, subtotal)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, variante_id || null, desc, cant, precio, subtotal]
+    );
+
+    // Recalcular el monto del cobro desde los ítems y marcar como calculado
+    await db.execute(
+      `UPDATE cobros_clientes
+       SET monto = (SELECT COALESCE(SUM(subtotal), 0) FROM pedido_items WHERE cobro_cliente_id = ?),
+           monto_manual = 0
+       WHERE id = ?`,
+      [id, id]
+    );
+
+    res.status(201).json({ id: result.insertId, descripcion: desc, cantidad: cant, precio_unitario: precio, subtotal });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /pedido-items/:id?firebase_uid=
+ * Elimina un ítem del pedido y recalcula el monto del cobro.
+ */
+app.delete('/pedido-items/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Obtener el cobro_cliente_id antes de eliminar
+    const [[item]] = await db.execute(
+      `SELECT cobro_cliente_id FROM pedido_items WHERE id = ?`, [id]
+    );
+    if (!item) return res.status(404).json({ error: 'Ítem no encontrado' });
+
+    await db.execute(`DELETE FROM pedido_items WHERE id = ?`, [id]);
+
+    // Recalcular monto del cobro
+    await db.execute(
+      `UPDATE cobros_clientes
+       SET monto = (SELECT COALESCE(SUM(subtotal), 0) FROM pedido_items WHERE cobro_cliente_id = ?)
+       WHERE id = ?`,
+      [item.cobro_cliente_id, item.cobro_cliente_id]
+    );
+
+    res.json({ message: 'Ítem eliminado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
 // CRON JOB — DETECCIÓN DE EVENTOS VENCIDOS
 // Corre cada día a medianoche (hora de Panamá UTC-5).
 // Busca eventos del calendario que hayan vencido sin ser pagados y los marca.
