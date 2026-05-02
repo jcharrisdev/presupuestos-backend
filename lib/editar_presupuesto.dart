@@ -72,7 +72,36 @@ class _EditarPresupuestoState extends State<EditarPresupuesto> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Editar Presupuesto')),
+      appBar: AppBar(
+        title: const Text('Editar Presupuesto'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Editar presupuesto',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Aquí puedes cambiar el nombre o el monto total del presupuesto.\n\n'
+                  '• El nombre es solo para identificarlo en la lista.\n'
+                  '• El monto total es el límite de gasto por período. '
+                  'Cambiarlo afecta el período actual y todos los futuros.\n\n'
+                  'El tipo de período y el día de inicio no se pueden cambiar una vez creado '
+                  'el presupuesto para mantener el historial de períodos consistente.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
