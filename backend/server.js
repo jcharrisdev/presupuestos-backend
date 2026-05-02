@@ -51,7 +51,11 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
 async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) {
   const [gastos] = await db.execute(
     `SELECT * FROM gastos WHERE presupuesto_id = ? AND firebase_uid = ?
-     AND (tipo = 'fijo' OR tipo = 'ahorro' OR (tipo = 'fijo_x_periodo' AND numero_quincena > 0))`,
+     AND (
+       tipo = 'fijo'
+       OR (tipo = 'ahorro' AND (numero_quincena IS NULL OR numero_quincena > 0))
+       OR (tipo = 'fijo_x_periodo' AND numero_quincena > 0)
+     )`,
     [presupuestoId, firebaseUid]
   );
   for (const gasto of gastos) {
@@ -59,7 +63,7 @@ async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) 
       `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
       [presupuestoId, periodoId, gasto.id, gasto.descripcion, gasto.monto, gasto.tipo, firebaseUid]
     );
-    if (gasto.tipo === 'fijo_x_periodo') {
+    if (gasto.tipo === 'fijo_x_periodo' || (gasto.tipo === 'ahorro' && gasto.numero_quincena !== null)) {
       await db.execute(`UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`, [gasto.id]);
     }
   }
@@ -155,7 +159,7 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
 /* =========================
    HEALTHCHECK
 ========================= */
-app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente', version: '2.2' }));
+app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente', version: '2.3' }));
 
 /* =========================
    PRESUPUESTOS
@@ -198,24 +202,50 @@ app.put('/presupuestos/:id', async (req, res) => {
    GASTOS
 ========================= */
 app.post('/gastos/ahorroMeta', async (req, res) => {
-  const { presupuesto_id, descripcion, monto, fecha, firebase_uid } = req.body;
+  const { presupuesto_id, descripcion, monto, fecha, firebase_uid, tiempo_meses = 12 } = req.body;
   if (!presupuesto_id || !descripcion || monto == null || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
+
   const fechaStr = fecha ? fecha.split('T')[0] : new Date().toISOString().split('T')[0];
+
   try {
+    // Obtener tipo_periodo del presupuesto para calcular cuota correcta
+    const [[presupuesto]] = await db.execute(
+      `SELECT tipo_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [presupuesto_id, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    const periodos_total = presupuesto.tipo_periodo === 'quincenal'
+      ? Number(tiempo_meses) * 2
+      : Number(tiempo_meses);
+
+    // Cuota por período (redondeando hacia arriba para no perder centavos)
+    const monto_periodo = Math.ceil((monto / periodos_total) * 100) / 100;
+
     const [result] = await db.execute(
-      `INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid) VALUES (?, ?, ?, 'ahorro', ?, 0, ?)`,
-      [presupuesto_id, descripcion, monto, fechaStr, firebase_uid]
+      `INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid, numero_quincena)
+       VALUES (?, ?, ?, 'ahorro', ?, 0, ?, ?)`,
+      [presupuesto_id, descripcion, monto_periodo, fechaStr, firebase_uid, periodos_total]
     );
     const gastoId = result.insertId;
+
     try {
       const periodo = await getPeriodoActivo(presupuesto_id, firebase_uid);
       await db.execute(
-        `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at) VALUES (?, ?, ?, ?, ?, 'ahorro', 0, ?, NOW())`,
-        [presupuesto_id, periodo.id, gastoId, descripcion, monto, firebase_uid]
+        `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
+         VALUES (?, ?, ?, ?, ?, 'ahorro', 0, ?, NOW())`,
+        [presupuesto_id, periodo.id, gastoId, descripcion, monto_periodo, firebase_uid]
       );
+      // Ya se usó un período
+      await db.execute(`UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`, [gastoId]);
     } catch (err) { console.error('⚠️ No se pudo auto-crear movimiento para ahorro:', err.message); }
-    res.status(201).json({ id: gastoId, message: 'Ahorro/Meta creado' });
+
+    res.status(201).json({
+      id: gastoId, monto_periodo, periodos_total,
+      tipo_periodo: presupuesto.tipo_periodo,
+      message: 'Ahorro/Meta creado'
+    });
   } catch (error) { console.error(error); res.status(500).json({ error: 'Error al crear ahorro/meta' }); }
 });
 
@@ -286,8 +316,16 @@ app.put('/gastos/:id', async (req, res) => {
 
 app.put('/presupuestos/:id/gastos/reanudar-fijos', async (req, res) => {
   const { id } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    const [result] = await db.execute(`UPDATE gastos SET pagado = 0 WHERE presupuesto_id = ? AND tipo = 'fijo'`, [id]);
+    const periodo = await getPeriodoActivo(id, firebase_uid);
+    const [result] = await db.execute(
+      `UPDATE movimientos
+       SET pagado = 0, monto_pagado_real = NULL, pagado_por_uid = NULL, fecha_pagado = NULL
+       WHERE presupuesto_id = ? AND periodo_id = ? AND firebase_uid = ? AND tipo IN ('fijo','fijo_x_periodo')`,
+      [id, periodo.id, firebase_uid]
+    );
     res.json({ message: 'Gastos fijos reanudados', afectados: result.affectedRows });
   } catch (error) { console.error(error); res.status(500).json({ error: 'Error al reanudar gastos fijos' }); }
 });
@@ -360,8 +398,11 @@ app.post('/presupuestos/:id/movimientos', async (req, res) => {
       if (!gasto_id || monto == null || monto <= 0) continue;
       const [[gasto]] = await db.execute(`SELECT * FROM gastos WHERE id = ? AND presupuesto_id = ? AND firebase_uid = ?`, [gasto_id, id, firebase_uid]);
       if (!gasto) continue;
-      const [[existing]] = await db.execute(`SELECT id FROM movimientos WHERE gasto_id = ? AND periodo_id = ? AND firebase_uid = ?`, [gasto_id, periodo.id, firebase_uid]);
-      if (existing) continue;
+      // Para gastos no fijos se permiten múltiples movimientos por período (ej: varias visitas al supermercado)
+      if (gasto.tipo !== 'no fijo') {
+        const [[existing]] = await db.execute(`SELECT id FROM movimientos WHERE gasto_id = ? AND periodo_id = ? AND firebase_uid = ?`, [gasto_id, periodo.id, firebase_uid]);
+        if (existing) continue;
+      }
       await db.execute(
         `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
         [id, periodo.id, gasto.id, gasto.descripcion, monto, gasto.tipo, firebase_uid]

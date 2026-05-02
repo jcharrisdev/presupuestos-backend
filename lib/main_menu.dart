@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'lista_presupuestos.dart';
 import 'ahorro_meta.dart';
 import 'calendario.dart';
+import 'login_screen.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -19,9 +20,9 @@ class MainMenu extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, size: 20),
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const _LogoutPlaceholder()),
+            onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (_) => false,
             ),
             tooltip: 'Cerrar sesión',
           ),
@@ -179,13 +180,3 @@ class _NavCard extends StatelessWidget {
   }
 }
 
-class _LogoutPlaceholder extends StatelessWidget {
-  const _LogoutPlaceholder();
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
-    });
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-  }
-}

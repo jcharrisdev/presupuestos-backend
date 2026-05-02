@@ -21,7 +21,32 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
   bool _cargando = true, _guardando = false;
 
   @override
-  void initState() { super.initState(); _cargarPresupuestos(); }
+  void initState() {
+    super.initState();
+    _cargarPresupuestos();
+    _montoCtrl.addListener(() => setState(() {}));
+  }
+
+  Map<String, dynamic>? get _presupuestoSeleccionado =>
+      _presupuestos.where((p) => p['id'] == _presupuestoId).isNotEmpty
+          ? _presupuestos.firstWhere((p) => p['id'] == _presupuestoId)
+          : null;
+
+  int get _periodosTotales {
+    final tipo = _presupuestoSeleccionado?['tipo_periodo'] ?? 'mensual';
+    return tipo == 'quincenal' ? _meses * 2 : _meses;
+  }
+
+  double get _cuotaPorPeriodo {
+    final monto = double.tryParse(_montoCtrl.text) ?? 0;
+    if (monto <= 0 || _periodosTotales <= 0) return 0;
+    return (monto / _periodosTotales * 100).ceil() / 100;
+  }
+
+  String get _tipoPeriodoLabel {
+    final tipo = _presupuestoSeleccionado?['tipo_periodo'] ?? 'mensual';
+    return tipo == 'quincenal' ? 'quincena' : 'mes';
+  }
 
   Future<void> _cargarPresupuestos() async {
     try {
@@ -52,16 +77,22 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
       final res = await ApiClient.post('/gastos/ahorroMeta', {
         'presupuesto_id': _presupuestoId,
         'descripcion': _nombreCtrl.text.trim(),
-        'monto': monto, 'tipo': 'ahorro',
+        'monto': monto,
         'fecha': DateTime.now().toIso8601String().split('T')[0],
         'tiempo_meses': _meses,
         'firebase_uid': widget.firebaseUid,
       });
       if (!mounted) return;
       if (res.statusCode == 201) {
-        _nombreCtrl.clear(); _montoCtrl.clear();
+        final data = json.decode(res.body);
+        final cuota = data['monto_periodo'] ?? _cuotaPorPeriodo;
+        final periodos = data['periodos_total'] ?? _periodosTotales;
+        _nombreCtrl.clear();
+        _montoCtrl.clear();
         setState(() => _presupuestoId = null);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Meta creada correctamente')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Meta creada · \$${cuota.toStringAsFixed(2)} por período · $periodos períodos')),
+        );
       } else throw Exception();
     } catch (_) {
       if (!mounted) return;
@@ -76,6 +107,9 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final monto = double.tryParse(_montoCtrl.text) ?? 0;
+    final mostrarCalculo = monto > 0 && _presupuestoId != null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ahorro y Metas'),
@@ -103,13 +137,13 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.colorAhorro.withOpacity(0.2)),
                   ),
-                  child: Row(children: [
-                    const Icon(Icons.savings_outlined, color: AppTheme.colorAhorro, size: 28),
-                    const SizedBox(width: 14),
-                    const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  child: const Row(children: [
+                    Icon(Icons.savings_outlined, color: AppTheme.colorAhorro, size: 28),
+                    SizedBox(width: 14),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('Nueva meta de ahorro', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
                       SizedBox(height: 3),
-                      Text('Define un objetivo y vincúlalo a un presupuesto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      Text('El sistema calcula la cuota automáticamente según el tipo de período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                     ])),
                   ]),
                 ),
@@ -123,7 +157,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                _label('Monto objetivo'),
+                _label('Monto total a ahorrar'),
                 TextField(
                   controller: _montoCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -142,20 +176,21 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                   hint: const Text('Selecciona un presupuesto', style: TextStyle(color: AppTheme.textMuted)),
                   style: const TextStyle(color: AppTheme.textPrimary),
                   decoration: const InputDecoration(),
-                  items: _presupuestos.map((p) => DropdownMenuItem<int>(
-                    value: p['id'],
-                    child: Text(p['nombre'], style: const TextStyle(color: AppTheme.textPrimary)),
-                  )).toList(),
+                  items: _presupuestos.map((p) {
+                    final tipo = p['tipo_periodo'] == 'quincenal' ? 'Quincenal' : 'Mensual';
+                    return DropdownMenuItem<int>(
+                      value: p['id'],
+                      child: Text('${p['nombre']} · $tipo', style: const TextStyle(color: AppTheme.textPrimary)),
+                    );
+                  }).toList(),
                   onChanged: (v) => setState(() => _presupuestoId = v),
                 ),
 
                 const SizedBox(height: 24),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   _label('Plazo'),
-                  Text(
-                    '$_meses ${_meses == 1 ? "mes" : "meses"}',
-                    style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 16),
-                  ),
+                  Text('$_meses ${_meses == 1 ? "mes" : "meses"}',
+                      style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 16)),
                 ]),
                 Slider(
                   value: _meses.toDouble(), min: 1, max: 60, divisions: 59,
@@ -163,21 +198,47 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                   onChanged: (v) => setState(() => _meses = v.toInt()),
                 ),
 
-                // Cálculo mensual
-                if (_montoCtrl.text.isNotEmpty && double.tryParse(_montoCtrl.text) != null)
+                // Resumen de cuotas calculado
+                if (mostrarCalculo) ...[
+                  const SizedBox(height: 8),
                   Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
-                    child: Row(children: [
-                      const Icon(Icons.calculate_outlined, color: AppTheme.textSecondary, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ahorro mensual estimado: \$${((double.tryParse(_montoCtrl.text) ?? 0) / _meses).toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                      ),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.colorAhorro.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.colorAhorro.withOpacity(0.25)),
+                    ),
+                    child: Column(children: [
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        const Text('Cuota por período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text(
+                          '\$${_cuotaPorPeriodo.toStringAsFixed(2)} / $_tipoPeriodoLabel',
+                          style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16),
+                        ),
+                      ]),
+                      const SizedBox(height: 10),
+                      const Divider(color: AppTheme.border, height: 1),
+                      const SizedBox(height: 10),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        const Text('Total de períodos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('$_periodosTotales períodos', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                      ]),
+                      const SizedBox(height: 6),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        const Text('Tipo de período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text(
+                          _presupuestoSeleccionado?['tipo_periodo'] == 'quincenal' ? 'Quincenal (14 días)' : 'Mensual (30 días)',
+                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ]),
+                      const SizedBox(height: 6),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        const Text('Total a ahorrar', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('\$${monto.toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                      ]),
                     ]),
                   ),
+                ],
 
                 const SizedBox(height: 32),
                 SizedBox(

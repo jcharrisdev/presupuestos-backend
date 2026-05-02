@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'editar_presupuesto.dart';
@@ -52,14 +51,17 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
   }
 
   Future<void> _reanudar() async {
-    await ApiClient.put('/presupuestos/${widget.presupuesto['id']}/gastos/reanudar-fijos', {});
+    await ApiClient.put(
+      '/presupuestos/${widget.presupuesto['id']}/gastos/reanudar-fijos',
+      {'firebase_uid': widget.firebaseUid},
+    );
     _cargar();
   }
 
-  Future<List<dynamic>> _seleccionables() async {
-    final res = await ApiClient.get('/presupuestos/${widget.presupuesto['id']}/gastos-seleccionables?firebase_uid=${widget.firebaseUid}');
+  Future<List<dynamic>> _todosLosGastos() async {
+    final res = await ApiClient.get('/presupuestos/${widget.presupuesto['id']}/gastos?firebase_uid=${widget.firebaseUid}');
     if (res.statusCode != 200) throw Exception();
-    return json.decode(res.body)['gastos'];
+    return json.decode(res.body);
   }
 
   Future<void> _agregarGasto(String desc, double monto, String tipo, {
@@ -341,7 +343,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
 
   void _modalSeleccionar() async {
     List<dynamic> gastos = [];
-    try { gastos = await _seleccionables(); } catch (_) { return; }
+    try { gastos = await _todosLosGastos(); } catch (_) { return; }
 
     if (!mounted) return;
     if (gastos.isEmpty) { _modalNuevoGasto(); return; }
