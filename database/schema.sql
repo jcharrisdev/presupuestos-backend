@@ -40,10 +40,39 @@ CREATE TABLE IF NOT EXISTS gastos (
   firebase_uid VARCHAR(255) NOT NULL,
   numero_quincena INT NULL,
   periodos_restantes INT NULL,
+  tipo_fecha ENUM('flexible','fija') NOT NULL DEFAULT 'flexible',
+  dia_pago TINYINT NULL,
+  frecuencia_pago ENUM('unico','quincenal','mensual','anual') NULL,
+  fecha_pago_exacta DATE NULL,
+  genera_notificacion TINYINT(1) NOT NULL DEFAULT 0,
+  dias_anticipacion TINYINT NOT NULL DEFAULT 3,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE,
   INDEX idx_firebase_uid (firebase_uid),
   INDEX idx_presupuesto_tipo (presupuesto_id, tipo)
+);
+
+CREATE TABLE IF NOT EXISTS calendario_eventos (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  firebase_uid VARCHAR(255) NOT NULL,
+  gasto_id INT NULL,
+  titulo VARCHAR(255) NOT NULL,
+  tipo ENUM('pago','cobro') NOT NULL DEFAULT 'pago',
+  fecha_evento DATE NOT NULL,
+  monto_esperado DECIMAL(10,2) NULL,
+  estado ENUM('pendiente','pagado','vencido') NOT NULL DEFAULT 'pendiente',
+  notificacion_activa TINYINT(1) NOT NULL DEFAULT 0,
+  dias_anticipacion TINYINT NOT NULL DEFAULT 3,
+  notificacion_enviada TINYINT(1) NOT NULL DEFAULT 0,
+  google_event_id VARCHAR(255) NULL,
+  periodo_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (gasto_id) REFERENCES gastos(id) ON DELETE SET NULL,
+  INDEX idx_firebase_uid (firebase_uid),
+  INDEX idx_fecha_evento (fecha_evento),
+  INDEX idx_estado (estado),
+  INDEX idx_uid_mes (firebase_uid, fecha_evento)
 );
 
 CREATE TABLE IF NOT EXISTS movimientos (

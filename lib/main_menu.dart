@@ -89,7 +89,7 @@ class MainMenu extends StatelessWidget {
                 subtitle: 'Vista de pagos y vencimientos',
                 color: AppTheme.colorNoFijo,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CalendarioScreen(),
+                  builder: (_) => CalendarioScreen(firebaseUid: firebaseUid),
                 )),
               ),
 
