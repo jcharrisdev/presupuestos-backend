@@ -1,24 +1,21 @@
 /// Pantalla principal del módulo de Cobros.
 ///
-/// Organizada en 2 pestañas:
-///   - **Producción**: listado de presupuestos de insumos. Cada uno muestra el
-///     costo total invertido. Al tocar abre [ProduccionDetalle].
-///   - **Ventas**: listado de ventas con cobros pendientes. Muestra total cobrado
-///     vs esperado con barra de progreso. Al tocar abre [VentaDetalle].
+/// Organizada en 3 pestañas:
+///   - **Productos**: catálogo de productos y variantes vendibles.
+///   - **Producción**: presupuestos de insumos. Al tocar abre [ProduccionDetalle].
+///   - **Ventas**: ventas con cobros. Al tocar abre [VentaDetalle].
 ///
-/// El FAB es CONTEXTUAL: cambia su acción según la pestaña activa.
-///   - Pestaña "Producción" → abre modal para crear presupuesto de producción.
-///   - Pestaña "Ventas"     → abre modal para crear venta (opcionalmente vinculada
-///     a un presupuesto de producción para calcular rentabilidad).
-///
-/// Flujo completo del módulo:
-///   presupuesto_produccion (insumos) → venta → cobros_clientes → calendario
+/// El FAB es CONTEXTUAL: cambia según la pestaña activa.
+///   - Pestaña 0 (Productos) → navega a [ProductosScreen]
+///   - Pestaña 1 (Producción) → modal crear presupuesto de producción
+///   - Pestaña 2 (Ventas) → modal crear venta
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'produccion_detalle.dart';
 import 'venta_detalle.dart';
+import 'productos_screen.dart';
 
 /// Pantalla con tabs Producción / Ventas y FAB contextual.
 class CobrosHome extends StatefulWidget {
@@ -35,14 +32,18 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
   List<dynamic> _ventas = [];
   bool _loadProd = true, _loadVentas = true;
 
+  // Labels e íconos de las 3 pestañas
+  static const _tabs = [
+    Tab(icon: Icon(Icons.storefront_outlined, size: 18), text: 'Productos'),
+    Tab(icon: Icon(Icons.inventory_2_outlined, size: 18), text: 'Producción'),
+    Tab(icon: Icon(Icons.receipt_long_outlined, size: 18), text: 'Ventas'),
+  ];
+
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    // FIX: listener para que el FAB actualice su etiqueta al cambiar de pestaña.
-    // Sin esto, el label del FAB no cambia visualmente hasta el próximo setState.
+    _tab = TabController(length: 3, vsync: this);
     _tab.addListener(() { if (mounted) setState(() {}); });
-    // Carga ambas listas en paralelo al inicializar la pantalla
     _cargarProducciones();
     _cargarVentas();
   }
@@ -214,18 +215,21 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                 title: const Text('Módulo de Cobros',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
                 content: const Text(
-                  'Gestiona la rentabilidad de tu negocio en dos pasos:\n\n'
+                  'Gestiona tu negocio en tres pasos:\n\n'
+                  'Pestaña Productos:\n'
+                  '  Define tu catálogo: productos y variantes con precio. '
+                  'Ej: Cheesecake → Fresa regular \$3.75, Fresa grande \$5.50.\n\n'
                   'Pestaña Producción:\n'
                   '  Registra los insumos que usas para producir (ej: ingredientes). '
                   'El sistema calcula automáticamente el costo total invertido.\n\n'
                   'Pestaña Ventas:\n'
-                  '  Crea ventas y agrega los clientes con su monto acordado. '
-                  'Puedes vincular un presupuesto de producción para ver la ganancia neta.\n\n'
+                  '  Crea ventas, agrega clientes y selecciona productos del catálogo. '
+                  'El total se calcula automáticamente.\n\n'
                   'Flujo recomendado:\n'
-                  '  1. Crea un presupuesto de producción y agrega los insumos.\n'
-                  '  2. Crea una venta y vincúlala a ese presupuesto.\n'
-                  '  3. Agrega clientes y marca los cobros cuando los recibas.\n\n'
-                  'Los cobros a plazo aparecen automáticamente en el Calendario.',
+                  '  1. Define productos y variantes en Productos.\n'
+                  '  2. Crea un presupuesto de producción con tus insumos.\n'
+                  '  3. Crea una venta, agrega clientes y sus productos.\n'
+                  '  4. Marca los cobros cuando los recibas.',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
                 ),
                 actions: [
@@ -240,22 +244,66 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
           indicatorColor: AppTheme.primary,
           labelColor: AppTheme.primary,
           unselectedLabelColor: AppTheme.textSecondary,
-          tabs: const [
-            Tab(icon: Icon(Icons.inventory_2_outlined, size: 18), text: 'Producción'),
-            Tab(icon: Icon(Icons.receipt_long_outlined, size: 18), text: 'Ventas'),
-          ],
+          tabs: _tabs,
         ),
       ),
       body: TabBarView(
         controller: _tab,
-        children: [_tabProducciones(), _tabVentas()],
+        children: [_tabProductos(), _tabProducciones(), _tabVentas()],
       ),
-      // FAB contextual: acción cambia según la pestaña activa
+      // FAB contextual según pestaña: Productos navega, Producción/Ventas abren modal
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _tab.index == 0 ? _crearProduccion() : _crearVenta(),
+        onPressed: () {
+          if (_tab.index == 0) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ProductosScreen(firebaseUid: widget.firebaseUid),
+            ));
+          } else if (_tab.index == 1) {
+            _crearProduccion();
+          } else {
+            _crearVenta();
+          }
+        },
         icon: const Icon(Icons.add),
-        label: Text(_tab.index == 0 ? 'Producción' : 'Venta'),
+        label: Text(_tab.index == 0 ? 'Catálogo' : _tab.index == 1 ? 'Producción' : 'Venta'),
       ),
+    );
+  }
+
+  /// Pestaña de acceso directo al catálogo de productos.
+  Widget _tabProductos() {
+    return Container(
+      color: AppTheme.background,
+      child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 72, height: 72,
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Icon(Icons.storefront_outlined, color: AppTheme.primary, size: 36),
+        ),
+        const SizedBox(height: 20),
+        const Text('Catálogo de Productos',
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 40),
+          child: Text(
+            'Define productos y variantes con precio para usar en los pedidos de tus clientes.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 28),
+        ElevatedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => ProductosScreen(firebaseUid: widget.firebaseUid),
+          )),
+          icon: const Icon(Icons.storefront_outlined, size: 18),
+          label: const Text('Abrir catálogo'),
+        ),
+      ])),
     );
   }
 
