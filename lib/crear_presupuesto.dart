@@ -81,7 +81,36 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo Presupuesto')),
+      appBar: AppBar(
+        title: const Text('Nuevo Presupuesto'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Crear presupuesto',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Un presupuesto define cuánto puedes gastar en cada ciclo.\n\n'
+                  '• Nombre — ponle un nombre que identifique para qué es (ej: "Casa", "Trabajo").\n'
+                  '• Monto total — el límite de gasto por período.\n'
+                  '• Tipo de período — Quincenal (cada 14 días) o Mensual (cada 30 días).\n'
+                  '• Día de inicio — el día del mes en que comienza cada nuevo ciclo.\n\n'
+                  'Una vez creado, podrás agregar gastos fijos, variables y metas de ahorro dentro de él.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
