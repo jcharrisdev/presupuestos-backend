@@ -4,6 +4,7 @@ import 'lista_presupuestos.dart';
 import 'ahorro_meta.dart';
 import 'calendario.dart';
 import 'login_screen.dart';
+import 'cobros_home.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -91,6 +92,16 @@ class MainMenu extends StatelessWidget {
                 color: AppTheme.colorNoFijo,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CalendarioScreen(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
+              _NavCard(
+                icon: Icons.attach_money,
+                title: 'Cobros',
+                subtitle: 'Producción, ventas y cobros a clientes',
+                color: AppTheme.success,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => CobrosHome(firebaseUid: firebaseUid),
                 )),
               ),
 

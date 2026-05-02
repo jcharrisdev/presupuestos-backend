@@ -159,7 +159,7 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
 /* =========================
    HEALTHCHECK
 ========================= */
-app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente', version: '2.3' }));
+app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente', version: '2.4' }));
 
 /* =========================
    PRESUPUESTOS
@@ -495,6 +495,224 @@ app.delete('/calendario/eventos/:id', async (req, res) => {
     const [result] = await db.execute(sql, params);
     res.json({ message: `${result.affectedRows} evento(s) eliminado(s)` });
   } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+});
+
+/* =========================
+   PRODUCCIÓN DE INSUMOS
+========================= */
+app.get('/produccion', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT p.*, COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
+       FROM presupuestos_produccion p
+       LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = p.id
+       WHERE p.firebase_uid = ? GROUP BY p.id ORDER BY p.id DESC`,
+      [firebase_uid]
+    );
+    res.json(rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/produccion', async (req, res) => {
+  const { nombre, descripcion, firebase_uid } = req.body;
+  if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO presupuestos_produccion (firebase_uid, nombre, descripcion) VALUES (?, ?, ?)`,
+      [firebase_uid, nombre, descripcion || null]
+    );
+    res.status(201).json({ id: result.insertId, nombre });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/produccion/:id', async (req, res) => {
+  const { id } = req.params; const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[presupuesto]] = await db.execute(
+      `SELECT p.*, COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
+       FROM presupuestos_produccion p
+       LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = p.id
+       WHERE p.id = ? AND p.firebase_uid = ? GROUP BY p.id`,
+      [id, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'No encontrado' });
+    const [items] = await db.execute(
+      `SELECT * FROM items_produccion WHERE presupuesto_produccion_id = ? ORDER BY id ASC`, [id]
+    );
+    res.json({ ...presupuesto, items });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/produccion/:id/items', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, cantidad, precio_unitario, firebase_uid } = req.body;
+  if (!nombre || !cantidad || !precio_unitario || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO items_produccion (presupuesto_produccion_id, firebase_uid, nombre, cantidad, precio_unitario)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, firebase_uid, nombre, cantidad, precio_unitario]
+    );
+    res.status(201).json({ id: result.insertId, nombre, cantidad, precio_unitario });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/produccion/items/:id', async (req, res) => {
+  const { id } = req.params; const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(`DELETE FROM items_produccion WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    res.json({ message: 'Item eliminado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/produccion/:id', async (req, res) => {
+  const { id } = req.params; const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(`DELETE FROM presupuestos_produccion WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    res.json({ message: 'Presupuesto eliminado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/* =========================
+   VENTAS Y COBROS
+========================= */
+app.get('/ventas', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT v.*,
+              COALESCE(SUM(CASE WHEN c.estado='cobrado' THEN c.monto_cobrado ELSE 0 END), 0) AS total_cobrado,
+              COALESCE(SUM(c.monto), 0) AS total_esperado,
+              SUM(CASE WHEN c.estado='pendiente' THEN 1 ELSE 0 END) AS cobros_pendientes
+       FROM ventas v LEFT JOIN cobros_clientes c ON c.venta_id = v.id
+       WHERE v.firebase_uid = ? GROUP BY v.id ORDER BY v.id DESC`,
+      [firebase_uid]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/ventas', async (req, res) => {
+  const { nombre, presupuesto_produccion_id, firebase_uid } = req.body;
+  if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO ventas (firebase_uid, nombre, presupuesto_produccion_id) VALUES (?, ?, ?)`,
+      [firebase_uid, nombre, presupuesto_produccion_id || null]
+    );
+    res.status(201).json({ id: result.insertId, nombre });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/ventas/:id', async (req, res) => {
+  const { id } = req.params; const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[venta]] = await db.execute(
+      `SELECT v.*, p.nombre AS produccion_nombre,
+              COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
+       FROM ventas v
+       LEFT JOIN presupuestos_produccion p ON v.presupuesto_produccion_id = p.id
+       LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = v.presupuesto_produccion_id
+       WHERE v.id = ? AND v.firebase_uid = ? GROUP BY v.id`,
+      [id, firebase_uid]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+    const [cobros] = await db.execute(
+      `SELECT * FROM cobros_clientes WHERE venta_id = ? AND firebase_uid = ? ORDER BY id ASC`,
+      [id, firebase_uid]
+    );
+    const totalCobrado  = cobros.filter(c => c.estado === 'cobrado').reduce((s, c) => s + Number(c.monto_cobrado || c.monto), 0);
+    const totalEsperado = cobros.reduce((s, c) => s + Number(c.monto), 0);
+    const invertido     = Number(venta.total_invertido);
+    const ganancia      = totalCobrado - invertido;
+    const margen        = invertido > 0 ? (ganancia / invertido * 100) : 0;
+    res.json({
+      venta,
+      cobros,
+      resumen: {
+        total_invertido: invertido,
+        total_cobrado: totalCobrado,
+        total_esperado: totalEsperado,
+        ganancia,
+        margen,
+        cobros_realizados: cobros.filter(c => c.estado === 'cobrado').length,
+        cobros_pendientes: cobros.filter(c => c.estado === 'pendiente').length,
+      }
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/ventas/:id/cobros', async (req, res) => {
+  const { id } = req.params;
+  const { nombre_cliente, monto, condicion_pago, dias_plazo, firebase_uid } = req.body;
+  if (!nombre_cliente || !monto || !condicion_pago || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    let fechaCobro = null;
+    if (condicion_pago === 'plazo' && dias_plazo) {
+      const f = new Date();
+      f.setDate(f.getDate() + Number(dias_plazo));
+      fechaCobro = f.toISOString().split('T')[0];
+    }
+    const [result] = await db.execute(
+      `INSERT INTO cobros_clientes (venta_id, firebase_uid, nombre_cliente, monto, condicion_pago, dias_plazo, fecha_cobro)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, firebase_uid, nombre_cliente, monto, condicion_pago, dias_plazo || null, fechaCobro]
+    );
+    const cobroId = result.insertId;
+    // Auto-crear evento en calendario si es cobro a plazo
+    if (condicion_pago === 'plazo' && fechaCobro) {
+      const [[venta]] = await db.execute(`SELECT nombre FROM ventas WHERE id = ?`, [id]);
+      const titulo = `Cobro: ${nombre_cliente} (${venta?.nombre || 'Venta'})`;
+      const [evResult] = await db.execute(
+        `INSERT INTO calendario_eventos (firebase_uid, titulo, tipo, fecha_evento, monto_esperado, estado)
+         VALUES (?, ?, 'cobro', ?, ?, 'pendiente')`,
+        [firebase_uid, titulo, fechaCobro, monto]
+      );
+      await db.execute(`UPDATE cobros_clientes SET calendario_evento_id = ? WHERE id = ?`, [evResult.insertId, cobroId]);
+    }
+    res.status(201).json({ id: cobroId, message: 'Cliente agregado' });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+app.put('/cobros/:id/cobrar', async (req, res) => {
+  const { id } = req.params;
+  const { monto_cobrado, firebase_uid } = req.body;
+  if (!monto_cobrado || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    await db.execute(
+      `UPDATE cobros_clientes SET estado = 'cobrado', monto_cobrado = ?, fecha_cobrado = NOW()
+       WHERE id = ? AND firebase_uid = ?`,
+      [monto_cobrado, id, firebase_uid]
+    );
+    // Marcar evento de calendario como pagado si existe
+    const [[cobro]] = await db.execute(`SELECT calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]);
+    if (cobro?.calendario_evento_id) {
+      await db.execute(`UPDATE calendario_eventos SET estado = 'pagado' WHERE id = ?`, [cobro.calendario_evento_id]);
+    }
+    res.json({ message: 'Cobro registrado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/cobros/:id', async (req, res) => {
+  const { id } = req.params; const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[cobro]] = await db.execute(`SELECT calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]);
+    await db.execute(`DELETE FROM cobros_clientes WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    if (cobro?.calendario_evento_id) {
+      await db.execute(`DELETE FROM calendario_eventos WHERE id = ?`, [cobro.calendario_evento_id]);
+    }
+    res.json({ message: 'Cobro eliminado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 /* =========================

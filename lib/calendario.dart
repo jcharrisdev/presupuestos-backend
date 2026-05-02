@@ -22,58 +22,70 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
 
   List<Map<String, dynamic>> _eventos = [];
   bool _loading = true;
-
-  // Filtro para la vista lista
   String _filtro = 'todos';
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl  = TabController(length: 2, vsync: this);
-    _selectedDay = DateTime.now();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    _selectedDay = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
     _cargarEventos();
   }
 
   @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
+  void dispose() { _tabCtrl.dispose(); super.dispose(); }
+
+  // ─── FIX CLAVE: comparación por string (evita problemas de timezone) ────────
+  String _toDateStr(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _fechaEvStr(dynamic v) {
+    if (v == null) return '';
+    final s = v.toString();
+    return s.length >= 10 ? s.substring(0, 10) : s;
   }
+
+  List<Map<String, dynamic>> _eventosDelDia(DateTime day) {
+    final dayStr = _toDateStr(day);
+    return _eventos.where((e) => _fechaEvStr(e['fecha_evento']) == dayStr).toList();
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> _cargarEventos() async {
     setState(() => _loading = true);
     try {
-      final mes  = _focusedDay.month;
-      final anio = _focusedDay.year;
-      final res = await ApiClient.get('/calendario/eventos?firebase_uid=${widget.firebaseUid}&mes=$mes&anio=$anio');
+      final res = await ApiClient.get(
+        '/calendario/eventos?firebase_uid=${widget.firebaseUid}&mes=${_focusedDay.month}&anio=${_focusedDay.year}',
+      );
       if (res.statusCode == 200) {
         final data = List<Map<String, dynamic>>.from(json.decode(res.body));
         setState(() { _eventos = data; _loading = false; });
-        _verificarProximos(data);
+        _notificarProximos(data);
       } else {
         setState(() => _loading = false);
       }
-    } catch (_) {
-      setState(() => _loading = false);
-    }
+    } catch (_) { setState(() => _loading = false); }
   }
 
-  void _verificarProximos(List<Map<String, dynamic>> eventos) {
-    final hoy   = DateTime.now();
+  void _notificarProximos(List<Map<String, dynamic>> eventos) {
+    final hoy = DateTime.now();
     final limite = hoy.add(const Duration(days: 3));
     final proximos = eventos.where((e) {
       if (e['estado'] != 'pendiente') return false;
-      final f = _parseFecha(e['fecha_evento']);
-      return f != null && !f.isBefore(hoy) && !f.isAfter(limite);
+      final f = _parseFechaDt(e['fecha_evento']);
+      return f != null && !f.isBefore(DateTime(hoy.year, hoy.month, hoy.day)) && !f.isAfter(limite);
     }).toList();
     if (proximos.isNotEmpty) NotificationService.mostrarResumenDiario(proximos);
   }
 
-  List<Map<String, dynamic>> _eventosDelDia(DateTime day) {
-    return _eventos.where((e) {
-      final f = _parseFecha(e['fecha_evento']);
-      return f != null && isSameDay(f, day);
-    }).toList();
+  DateTime? _parseFechaDt(dynamic v) {
+    if (v == null) return null;
+    try {
+      final s = _fechaEvStr(v);
+      final parts = s.split('-');
+      if (parts.length != 3) return null;
+      return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    } catch (_) { return null; }
   }
 
   List<Map<String, dynamic>> get _eventosFiltrados {
@@ -81,31 +93,24 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
     return _eventos.where((e) => e['estado'] == _filtro).toList();
   }
 
-  DateTime? _parseFecha(dynamic v) {
-    if (v == null) return null;
-    try { return DateTime.parse(v.toString().split('T')[0]); } catch (_) { return null; }
-  }
-
-  Color _colorEstado(String? estado) {
-    switch (estado) {
-      case 'pagado':  return AppTheme.success;
-      case 'vencido': return AppTheme.danger;
-      default:        return AppTheme.colorFijo;
-    }
-  }
-
-  IconData _iconEstado(String? estado) {
-    switch (estado) {
-      case 'pagado':  return Icons.check_circle;
-      case 'vencido': return Icons.warning_amber_rounded;
-      default:        return Icons.radio_button_unchecked;
-    }
+  Color _colorEvento(Map<String, dynamic> e) {
+    final estado = e['estado'] as String? ?? 'pendiente';
+    final tipo   = e['tipo'] as String? ?? 'pago';
+    if (estado == 'pagado')  return AppTheme.success;
+    if (estado == 'vencido') return AppTheme.danger;
+    return tipo == 'cobro' ? AppTheme.primary : AppTheme.colorFijo;
   }
 
   Future<void> _marcarPagado(Map<String, dynamic> evento) async {
-    final res = await ApiClient.put('/calendario/eventos/${evento['id']}/estado',
-        {'estado': 'pagado', 'firebase_uid': widget.firebaseUid});
-    if (res.statusCode == 200) _cargarEventos();
+    final nuevoEstado = evento['tipo'] == 'cobro' ? 'cobrado' : 'pagado';
+    // For cobros, update via cobros endpoint; for pagos, use calendario
+    if (evento['tipo'] == 'cobro' && evento['cobro_id'] != null) {
+      await ApiClient.put('/cobros/${evento['cobro_id']}/cobrar',
+          {'monto_cobrado': evento['monto_esperado'], 'firebase_uid': widget.firebaseUid});
+    }
+    await ApiClient.put('/calendario/eventos/${evento['id']}/estado',
+        {'estado': nuevoEstado, 'firebase_uid': widget.firebaseUid});
+    _cargarEventos();
   }
 
   Future<void> _eliminarEvento(Map<String, dynamic> evento) async {
@@ -114,7 +119,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         title: const Text('Eliminar evento', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Eliminar solo este evento o todos los futuros de este gasto?', style: TextStyle(color: AppTheme.textSecondary)),
+        content: const Text('¿Eliminar solo este o todos los futuros?', style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Todos los futuros', style: TextStyle(color: AppTheme.danger))),
@@ -153,309 +158,304 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
     );
   }
 
+  // ─── VISTA CALENDARIO ────────────────────────────────────────────────────────
   Widget _vistaCalendario() {
-    final eventosSeleccionados = _selectedDay != null ? _eventosDelDia(_selectedDay!) : <Map<String, dynamic>>[];
+    final selStr = _selectedDay != null ? _toDateStr(_selectedDay!) : '';
+    final eventosHoy = _eventos.where((e) => _fechaEvStr(e['fecha_evento']) == selStr).toList();
 
     return Column(children: [
-      // Calendario
-      TableCalendar<Map<String, dynamic>>(
-        firstDay: DateTime(DateTime.now().year - 1),
-        lastDay: DateTime(DateTime.now().year + 2),
-        focusedDay: _focusedDay,
-        selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
-        eventLoader: _eventosDelDia,
-        onDaySelected: (selected, focused) => setState(() { _selectedDay = selected; _focusedDay = focused; }),
-        onPageChanged: (focused) {
-          _focusedDay = focused;
-          _cargarEventos();
-        },
-        calendarStyle: CalendarStyle(
-          outsideDaysVisible: false,
-          selectedDecoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
-          todayDecoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.25), shape: BoxShape.circle),
-          defaultTextStyle: const TextStyle(color: AppTheme.textPrimary),
-          weekendTextStyle: const TextStyle(color: AppTheme.textSecondary),
-          outsideTextStyle: const TextStyle(color: AppTheme.textMuted),
-          selectedTextStyle: const TextStyle(color: AppTheme.background, fontWeight: FontWeight.bold),
-          todayTextStyle: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
-          markersMaxCount: 3,
-          markerDecoration: const BoxDecoration(color: AppTheme.colorFijo, shape: BoxShape.circle),
-          markerSize: 5.5,
-          markerMargin: const EdgeInsets.symmetric(horizontal: 1),
-          cellMargin: const EdgeInsets.all(4),
-        ),
-        calendarBuilders: CalendarBuilders(
-          markerBuilder: (ctx, day, events) {
-            if (events.isEmpty) return const SizedBox();
-            return Positioned(
-              bottom: 2,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: events.take(3).map((e) => Container(
-                  width: 5, height: 5,
-                  margin: const EdgeInsets.symmetric(horizontal: 1),
-                  decoration: BoxDecoration(color: _colorEstado(e['estado']), shape: BoxShape.circle),
-                )).toList(),
-              ),
-            );
+      Container(
+        color: AppTheme.surface,
+        child: TableCalendar<Map<String, dynamic>>(
+          firstDay: DateTime(DateTime.now().year - 1),
+          lastDay: DateTime(DateTime.now().year + 2),
+          focusedDay: _focusedDay,
+          selectedDayPredicate: (d) => _toDateStr(d) == selStr,
+          eventLoader: _eventosDelDia,
+          onDaySelected: (selected, focused) => setState(() {
+            _selectedDay = DateTime(selected.year, selected.month, selected.day);
+            _focusedDay  = focused;
+          }),
+          onPageChanged: (focused) {
+            _focusedDay = focused;
+            _cargarEventos();
           },
+          calendarStyle: CalendarStyle(
+            outsideDaysVisible: false,
+            selectedDecoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
+            todayDecoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.2), shape: BoxShape.circle),
+            defaultTextStyle: const TextStyle(color: AppTheme.textPrimary),
+            weekendTextStyle: const TextStyle(color: AppTheme.textSecondary),
+            outsideTextStyle: const TextStyle(color: AppTheme.textMuted),
+            selectedTextStyle: const TextStyle(color: AppTheme.background, fontWeight: FontWeight.bold),
+            todayTextStyle: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+            markersMaxCount: 4,
+            cellMargin: const EdgeInsets.all(3),
+          ),
+          calendarBuilders: CalendarBuilders(
+            markerBuilder: (ctx, day, events) {
+              if (events.isEmpty) return const SizedBox();
+              return Positioned(
+                bottom: 2,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: events.take(4).map((e) => Container(
+                    width: 5, height: 5,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    decoration: BoxDecoration(color: _colorEvento(e), shape: BoxShape.circle),
+                  )).toList(),
+                ),
+              );
+            },
+          ),
+          headerStyle: const HeaderStyle(
+            formatButtonVisible: false,
+            titleCentered: true,
+            titleTextStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
+            leftChevronIcon: Icon(Icons.chevron_left, color: AppTheme.textSecondary, size: 20),
+            rightChevronIcon: Icon(Icons.chevron_right, color: AppTheme.textSecondary, size: 20),
+            decoration: BoxDecoration(color: AppTheme.surface),
+          ),
+          daysOfWeekStyle: const DaysOfWeekStyle(
+            weekdayStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            weekendStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          rowHeight: 44,
         ),
-        headerStyle: HeaderStyle(
-          formatButtonVisible: false,
-          titleCentered: true,
-          titleTextStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
-          leftChevronIcon: const Icon(Icons.chevron_left, color: AppTheme.textSecondary, size: 20),
-          rightChevronIcon: const Icon(Icons.chevron_right, color: AppTheme.textSecondary, size: 20),
-          headerPadding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: const BoxDecoration(color: AppTheme.surface),
-        ),
-        daysOfWeekStyle: const DaysOfWeekStyle(
-          weekdayStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-          weekendStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-        ),
-        calendarFormat: CalendarFormat.month,
-        rowHeight: 44,
       ),
-
       const Divider(color: AppTheme.border, height: 1),
 
-      // Panel de eventos del día seleccionado
-      Expanded(child: _selectedDay == null || eventosSeleccionados.isEmpty
-          ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.event_available, size: 40, color: AppTheme.textMuted.withOpacity(0.4)),
-              const SizedBox(height: 10),
-              Text(
-                _selectedDay == null ? 'Selecciona un día' : 'Sin eventos este día',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-              ),
-            ]))
-          : ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    DateFormat('EEEE, d MMMM', 'es').format(_selectedDay!),
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5),
-                  ),
+      // Panel de eventos del día
+      Expanded(
+        child: eventosHoy.isEmpty
+            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.event_available, size: 40, color: AppTheme.textMuted.withOpacity(0.4)),
+                const SizedBox(height: 10),
+                Text(
+                  _selectedDay == null ? 'Selecciona un día' : 'Sin eventos — ${_fmtFecha(_selectedDay!)}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                 ),
-                ...eventosSeleccionados.map((e) => _EventoCard(
-                  evento: e,
-                  onPagar: () => _marcarPagado(e),
-                  onEliminar: () => _eliminarEvento(e),
-                )),
-              ],
-            ),
+              ]))
+            : ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      _selectedDay != null ? _fmtFechaLarga(_selectedDay!) : '',
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5),
+                    ),
+                  ),
+                  ...eventosHoy.map((e) => _EventoCard(
+                    evento: e,
+                    colorEvento: _colorEvento(e),
+                    onPagar: () => _marcarPagado(e),
+                    onEliminar: () => _eliminarEvento(e),
+                  )),
+                ],
+              ),
       ),
     ]);
   }
 
+  // ─── VISTA LISTA ─────────────────────────────────────────────────────────────
   Widget _vistaLista() {
     final eventos = _eventosFiltrados;
-
     return Column(children: [
-      // Filtros
       Container(
         color: AppTheme.surface,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(children: [
-          _FiltroChip('todos',    'Todos',    _filtro, (v) => setState(() => _filtro = v)),
-          const SizedBox(width: 8),
-          _FiltroChip('pendiente','Pendientes',_filtro,(v) => setState(() => _filtro = v)),
-          const SizedBox(width: 8),
-          _FiltroChip('pagado',  'Pagados',   _filtro, (v) => setState(() => _filtro = v)),
-          const SizedBox(width: 8),
-          _FiltroChip('vencido', 'Vencidos',  _filtro, (v) => setState(() => _filtro = v)),
-        ]),
-      ),
-      const Divider(color: AppTheme.border, height: 1),
-
-      Expanded(child: eventos.isEmpty
-          ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textMuted.withOpacity(0.4)),
-              const SizedBox(height: 12),
-              Text('Sin eventos ${_filtro == "todos" ? "" : "($_filtro)"}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
-              const SizedBox(height: 6),
-              const Text('Crea gastos con fecha fija para verlos aquí', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-            ]))
-          : ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: eventos.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) => _EventoCard(
-                evento: eventos[i],
-                onPagar: () => _marcarPagado(eventos[i]),
-                onEliminar: () => _eliminarEvento(eventos[i]),
-                showDate: true,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: ['todos','pendiente','pagado','vencido'].map((f) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _filtro = f),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _filtro == f ? AppTheme.primary.withOpacity(0.12) : AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _filtro == f ? AppTheme.primary : AppTheme.border),
+                ),
+                child: Text(_labelFiltro(f), style: TextStyle(
+                  color: _filtro == f ? AppTheme.primary : AppTheme.textSecondary,
+                  fontSize: 12, fontWeight: _filtro == f ? FontWeight.w700 : FontWeight.normal,
+                )),
               ),
             ),
+          )).toList()),
+        ),
+      ),
+      const Divider(color: AppTheme.border, height: 1),
+      Expanded(
+        child: eventos.isEmpty
+            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textMuted.withOpacity(0.4)),
+                const SizedBox(height: 12),
+                const Text('Sin eventos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                const SizedBox(height: 6),
+                const Text('Crea gastos con fecha fija para verlos aquí', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+              ]))
+            : ListView.separated(
+                padding: const EdgeInsets.all(12),
+                itemCount: eventos.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, i) => _EventoCard(
+                  evento: eventos[i],
+                  colorEvento: _colorEvento(eventos[i]),
+                  onPagar: () => _marcarPagado(eventos[i]),
+                  onEliminar: () => _eliminarEvento(eventos[i]),
+                  showDate: true,
+                ),
+              ),
       ),
     ]);
   }
-}
 
-class _FiltroChip extends StatelessWidget {
-  final String value, label, selected;
-  final ValueChanged<String> onTap;
-  const _FiltroChip(this.value, this.label, this.selected, this.onTap);
+  String _labelFiltro(String f) {
+    switch (f) {
+      case 'todos':     return 'Todos';
+      case 'pendiente': return 'Pendientes';
+      case 'pagado':    return 'Pagados';
+      case 'vencido':   return 'Vencidos';
+      default:          return f;
+    }
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = value == selected;
-    return GestureDetector(
-      onTap: () => onTap(value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary.withOpacity(0.12) : AppTheme.surfaceAlt,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.border),
-        ),
-        child: Text(label, style: TextStyle(
-          color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
-          fontSize: 12, fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-        )),
-      ),
-    );
+  String _fmtFecha(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  String _fmtFechaLarga(DateTime d) {
+    try { return DateFormat('EEEE, d MMMM', 'es').format(d); } catch (_) { return _fmtFecha(d); }
   }
 }
 
+// ─── TARJETA DE EVENTO ─────────────────────────────────────────────────────────
 class _EventoCard extends StatelessWidget {
   final Map<String, dynamic> evento;
+  final Color colorEvento;
   final VoidCallback onPagar, onEliminar;
   final bool showDate;
-  const _EventoCard({required this.evento, required this.onPagar, required this.onEliminar, this.showDate = false});
+  const _EventoCard({required this.evento, required this.colorEvento, required this.onPagar, required this.onEliminar, this.showDate = false});
 
   @override
   Widget build(BuildContext context) {
-    final estado = evento['estado'] as String? ?? 'pendiente';
-    final monto  = double.tryParse(evento['monto_esperado']?.toString() ?? '0') ?? 0;
-    final fecha  = _parseFecha(evento['fecha_evento']);
-    final pagado = estado == 'pagado';
+    final estado  = evento['estado'] as String? ?? 'pendiente';
+    final tipo    = evento['tipo']   as String? ?? 'pago';
+    final monto   = double.tryParse(evento['monto_esperado']?.toString() ?? '0') ?? 0;
+    final hecho   = estado == 'pagado' || estado == 'cobrado';
     final vencido = estado == 'vencido';
 
+    final fechaStr = evento['fecha_evento']?.toString().substring(0, 10) ?? '';
     int diasRestantes = 0;
     bool esHoy = false;
-    if (fecha != null) {
-      final hoy = DateTime.now();
-      final diff = fecha.difference(DateTime(hoy.year, hoy.month, hoy.day)).inDays;
-      diasRestantes = diff;
-      esHoy = diff == 0;
-    }
-
-    Color borderColor = AppTheme.border;
-    if (pagado) borderColor = AppTheme.success.withOpacity(0.3);
-    else if (vencido) borderColor = AppTheme.danger.withOpacity(0.3);
-    else if (esHoy) borderColor = AppTheme.warning.withOpacity(0.5);
+    try {
+      final parts = fechaStr.split('-');
+      if (parts.length == 3) {
+        final f = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        final hoy = DateTime.now();
+        final hoyNorm = DateTime(hoy.year, hoy.month, hoy.day);
+        diasRestantes = f.difference(hoyNorm).inDays;
+        esHoy = diasRestantes == 0;
+      }
+    } catch (_) {}
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: pagado ? AppTheme.success.withOpacity(0.04) : vencido ? AppTheme.danger.withOpacity(0.04) : AppTheme.surface,
+        color: hecho ? AppTheme.success.withOpacity(0.04) : vencido ? AppTheme.danger.withOpacity(0.04) : AppTheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: hecho ? AppTheme.success.withOpacity(0.25) : vencido ? AppTheme.danger.withOpacity(0.25) : AppTheme.border),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Icono
+        // Icono tipo
         Container(
-          width: 38, height: 38,
-          margin: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: _colorEstado(estado).withOpacity(0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(_iconEstado(estado), color: _colorEstado(estado), size: 18),
+          width: 36, height: 36,
+          decoration: BoxDecoration(color: colorEvento.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+          child: Icon(_iconTipo(tipo, hecho), color: colorEvento, size: 18),
         ),
+        const SizedBox(width: 12),
 
         // Info
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(evento['titulo'] ?? '', style: TextStyle(
-            color: pagado ? AppTheme.textSecondary : AppTheme.textPrimary,
+            color: hecho ? AppTheme.textSecondary : AppTheme.textPrimary,
             fontWeight: FontWeight.w600, fontSize: 14,
-            decoration: pagado ? TextDecoration.lineThrough : null,
+            decoration: hecho ? TextDecoration.lineThrough : null,
           )),
           const SizedBox(height: 4),
           Row(children: [
-            if (showDate && fecha != null) ...[
-              Text(DateFormat('d MMM', 'es').format(fecha), style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-              const SizedBox(width: 8),
-            ],
+            // Badge tipo
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: colorEvento.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(tipo == 'cobro' ? 'COBRO' : 'PAGO', style: TextStyle(color: colorEvento, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+            ),
+            const SizedBox(width: 6),
             _badgeEstado(estado, diasRestantes, esHoy),
+            if (showDate && fechaStr.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(fechaStr, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+            ],
           ]),
         ])),
 
         // Monto y acción
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('\$${monto.toStringAsFixed(2)}', style: TextStyle(
-            color: pagado ? AppTheme.textSecondary : AppTheme.textPrimary,
+            color: hecho ? AppTheme.textSecondary : AppTheme.textPrimary,
             fontWeight: FontWeight.w700, fontSize: 15,
-            decoration: pagado ? TextDecoration.lineThrough : null,
+            decoration: hecho ? TextDecoration.lineThrough : null,
           )),
           const SizedBox(height: 6),
-          if (!pagado)
+          if (!hecho)
             Row(children: [
-              GestureDetector(
-                onTap: onEliminar,
-                child: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16),
-              ),
+              GestureDetector(onTap: onEliminar, child: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16)),
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: onPagar,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.12),
+                    color: colorEvento.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                    border: Border.all(color: colorEvento.withOpacity(0.3)),
                   ),
-                  child: const Text('Pagar', style: TextStyle(color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                  child: Text(tipo == 'cobro' ? 'Cobrar' : 'Pagar',
+                      style: TextStyle(color: colorEvento, fontSize: 11, fontWeight: FontWeight.w700)),
                 ),
               ),
             ])
           else
-            const Icon(Icons.check_circle, color: AppTheme.success, size: 18),
+            Icon(Icons.check_circle, color: AppTheme.success, size: 18),
         ]),
       ]),
     );
   }
 
   Widget _badgeEstado(String estado, int dias, bool esHoy) {
-    String label;
-    Color color;
-    if (estado == 'pagado') { label = 'Pagado'; color = AppTheme.success; }
-    else if (estado == 'vencido') { label = 'Vencido ${dias.abs()}d'; color = AppTheme.danger; }
-    else if (esHoy) { label = 'Hoy'; color = AppTheme.warning; }
-    else if (dias <= 3) { label = 'En ${dias}d'; color = AppTheme.warning; }
-    else { label = 'En ${dias}d'; color = AppTheme.textMuted; }
-
+    String label; Color color;
+    switch (estado) {
+      case 'pagado':  case 'cobrado': label = 'Listo';   color = AppTheme.success; break;
+      case 'vencido': label = 'Vencido ${dias.abs()}d'; color = AppTheme.danger;  break;
+      default:
+        if (esHoy)      { label = 'Hoy';       color = AppTheme.warning; }
+        else if (dias <= 3) { label = 'En ${dias}d'; color = AppTheme.warning; }
+        else              { label = 'En ${dias}d'; color = AppTheme.textMuted;  }
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
       child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
     );
   }
 
-  Color _colorEstado(String? e) {
-    switch (e) {
-      case 'pagado':  return AppTheme.success;
-      case 'vencido': return AppTheme.danger;
-      default:        return AppTheme.colorFijo;
-    }
-  }
-
-  IconData _iconEstado(String? e) {
-    switch (e) {
-      case 'pagado':  return Icons.check_circle_outline;
-      case 'vencido': return Icons.error_outline;
-      default:        return Icons.payment;
-    }
-  }
-
-  DateTime? _parseFecha(dynamic v) {
-    if (v == null) return null;
-    try { return DateTime.parse(v.toString().split('T')[0]); } catch (_) { return null; }
+  IconData _iconTipo(String tipo, bool hecho) {
+    if (hecho) return Icons.check_circle_outline;
+    return tipo == 'cobro' ? Icons.attach_money : Icons.payment;
   }
 }
