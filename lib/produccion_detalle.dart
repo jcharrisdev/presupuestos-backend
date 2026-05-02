@@ -1,13 +1,31 @@
+/// Pantalla de detalle de un presupuesto de producción.
+///
+/// Muestra la lista de ítems (insumos) con su costo individual y subtotal,
+/// y el COSTO TOTAL de todos los ítems en el encabezado.
+///
+/// Funcionalidades:
+///   - Agregar ítems: bottom sheet con nombre, cantidad y precio unitario.
+///   - Eliminar ítems: swipe hacia la izquierda (Dismissible) + confirmación.
+///   - Pull-to-refresh y botón de recarga en el AppBar.
+///
+/// El costo total se recalcula en el backend cada vez que se agregan
+/// o eliminan ítems: `total = SUM(cantidad × precio_unitario)`.
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 
+/// Detalle de insumos de un presupuesto de producción.
 class ProduccionDetalle extends StatefulWidget {
   final int presupuestoId;
   final String nombre;
   final String firebaseUid;
-  const ProduccionDetalle({Key? key, required this.presupuestoId, required this.nombre, required this.firebaseUid}) : super(key: key);
+  const ProduccionDetalle({
+    Key? key,
+    required this.presupuestoId,
+    required this.nombre,
+    required this.firebaseUid,
+  }) : super(key: key);
 
   @override
   _ProduccionDetalleState createState() => _ProduccionDetalleState();
@@ -21,10 +39,15 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
   @override
   void initState() { super.initState(); _cargar(); }
 
+  /// Carga los ítems del presupuesto de producción desde el backend.
+  ///
+  /// La respuesta incluye `items` (array) y `total_invertido` (suma calculada).
   Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
-      final res = await ApiClient.get('/produccion/${widget.presupuestoId}?firebase_uid=${widget.firebaseUid}');
+      final res = await ApiClient.get(
+        '/produccion/${widget.presupuestoId}?firebase_uid=${widget.firebaseUid}',
+      );
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
@@ -36,10 +59,14 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
     } catch (_) { setState(() => _loading = false); }
   }
 
+  /// Abre el modal para agregar un nuevo ítem de insumo.
+  ///
+  /// Campos: nombre del insumo, cantidad (decimales permitidos), precio unitario.
+  /// Valida que todos los campos sean positivos antes de enviar.
   void _modalAgregarItem() {
-    final nombreCtrl    = TextEditingController();
-    final cantidadCtrl  = TextEditingController(text: '1');
-    final precioCtrl    = TextEditingController();
+    final nombreCtrl   = TextEditingController();
+    final cantidadCtrl = TextEditingController(text: '1'); // cantidad por defecto = 1
+    final precioCtrl   = TextEditingController();
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
@@ -48,26 +75,37 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
       builder: (_) => Padding(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          // Handle decorativo
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
           const Text('Agregar ítem', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
+          // Nombre del insumo
           TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(hintText: 'Nombre del insumo (ej: Harina)')),
           const SizedBox(height: 12),
+          // Cantidad y precio en fila
           Row(children: [
             Expanded(child: TextField(
               controller: cantidadCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(labelText: 'Cantidad', prefixIcon: Icon(Icons.numbers, size: 16, color: AppTheme.textSecondary)),
+              decoration: const InputDecoration(
+                labelText: 'Cantidad',
+                prefixIcon: Icon(Icons.numbers, size: 16, color: AppTheme.textSecondary),
+              ),
             )),
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: precioCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(labelText: 'Precio unitario', prefixText: '\$ ', prefixStyle: TextStyle(color: AppTheme.primary)),
+              decoration: const InputDecoration(
+                labelText: 'Precio unitario',
+                prefixText: '\$ ',
+                prefixStyle: TextStyle(color: AppTheme.primary),
+              ),
             )),
           ]),
           const SizedBox(height: 24),
@@ -76,13 +114,15 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
               final nombre   = nombreCtrl.text.trim();
               final cantidad = double.tryParse(cantidadCtrl.text) ?? 0;
               final precio   = double.tryParse(precioCtrl.text) ?? 0;
+              // Validar todos los campos antes de enviar
               if (nombre.isEmpty || cantidad <= 0 || precio <= 0) return;
               Navigator.pop(context);
-              final res = await ApiClient.post('/produccion/${widget.presupuestoId}/items', {
-                'nombre': nombre, 'cantidad': cantidad, 'precio_unitario': precio,
-                'firebase_uid': widget.firebaseUid,
-              });
-              if (res.statusCode == 201) _cargar();
+              final res = await ApiClient.post(
+                '/produccion/${widget.presupuestoId}/items',
+                {'nombre': nombre, 'cantidad': cantidad, 'precio_unitario': precio,
+                 'firebase_uid': widget.firebaseUid},
+              );
+              if (res.statusCode == 201) _cargar(); // recargar para ver el nuevo ítem y el total actualizado
             },
             child: const Text('Agregar ítem'),
           )),
@@ -91,6 +131,10 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
     );
   }
 
+  /// Elimina un ítem tras confirmación del usuario.
+  ///
+  /// Se llama desde el `confirmDismiss` del [Dismissible] para que el
+  /// swipe no elimine sin preguntar.
   Future<void> _eliminarItem(int itemId) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -110,7 +154,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
     );
     if (ok != true) return;
     await ApiClient.delete('/produccion/items/$itemId?firebase_uid=${widget.firebaseUid}');
-    _cargar();
+    _cargar(); // recalcular total
   }
 
   @override
@@ -128,10 +172,13 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
-              // Header total
+              // ── ENCABEZADO CON COSTO TOTAL ──────────────────────────────
               Container(
                 width: double.infinity, padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(color: AppTheme.surface, border: Border(bottom: BorderSide(color: AppTheme.border))),
+                decoration: const BoxDecoration(
+                  color: AppTheme.surface,
+                  border: Border(bottom: BorderSide(color: AppTheme.border)),
+                ),
                 child: Row(children: [
                   const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('COSTO TOTAL', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1)),
@@ -146,7 +193,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                 ]),
               ),
 
-              // Lista de ítems
+              // ── LISTA DE ÍTEMS ───────────────────────────────────────────
               Expanded(child: _items.isEmpty
                   ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Icon(Icons.inventory_2_outlined, size: 56, color: AppTheme.textMuted.withOpacity(0.35)),
@@ -163,17 +210,25 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                         final item   = _items[i];
                         final cant   = double.tryParse(item['cantidad']?.toString() ?? '1') ?? 1;
                         final precio = double.tryParse(item['precio_unitario']?.toString() ?? '0') ?? 0;
-                        final sub    = cant * precio;
+                        final sub    = cant * precio; // subtotal del ítem
 
+                        // Dismissible permite swipe-to-delete hacia la izquierda
                         return Dismissible(
                           key: Key('item_${item['id']}'),
                           direction: DismissDirection.endToStart,
+                          // Fondo rojo con ícono de basurero al deslizar
                           background: Container(
                             alignment: Alignment.centerRight,
                             padding: const EdgeInsets.only(right: 20),
-                            decoration: BoxDecoration(color: AppTheme.danger.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                            decoration: BoxDecoration(
+                              color: AppTheme.danger.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                             child: const Icon(Icons.delete_outline, color: AppTheme.danger),
                           ),
+                          // confirmDismiss muestra diálogo y retorna false para que
+                          // Dismissible no elimine el widget del árbol (lo hacemos nosotros
+                          // al recargar la lista desde el backend).
                           confirmDismiss: (_) => _eliminarItem(item['id']).then((_) => false),
                           child: Container(
                             padding: const EdgeInsets.all(14),
@@ -183,8 +238,10 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                             ),
                             child: Row(children: [
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(item['nombre'], style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                                Text(item['nombre'],
+                                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                                 const SizedBox(height: 3),
+                                // Cantidad × Precio unitario
                                 Text('${_fmtNum(cant)} × \$${_fmtNum(precio)}',
                                     style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ])),
@@ -203,5 +260,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
     );
   }
 
+  /// Formatea un número eliminando decimales innecesarios.
+  /// Ej: 1.0 → "1", 0.5 → "0.50", 2.5 → "2.5".
   String _fmtNum(double n) => n == n.roundToDouble() ? n.toInt().toString() : n.toStringAsFixed(2);
 }

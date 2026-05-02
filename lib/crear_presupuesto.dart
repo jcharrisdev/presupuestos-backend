@@ -1,8 +1,19 @@
+/// Pantalla para crear un nuevo presupuesto.
+///
+/// Campos del formulario:
+///   - Nombre descriptivo (ej: "Casa", "Trabajo")
+///   - Monto total del período (límite de gasto por ciclo)
+///   - Tipo de período: quincenal (14 días) o mensual (30 días)
+///   - Día de inicio del período: del 1 al 31
+///
+/// Al confirmar llama a POST /presupuestos y hace `Navigator.pop()`
+/// para regresar a [ListaPresupuestos], que recarga automáticamente.
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 
+/// Formulario de creación de presupuesto.
 class CrearPresupuesto extends StatefulWidget {
   final String firebaseUid;
   const CrearPresupuesto({Key? key, required this.firebaseUid}) : super(key: key);
@@ -14,10 +25,20 @@ class CrearPresupuesto extends StatefulWidget {
 class _CrearPresupuestoState extends State<CrearPresupuesto> {
   final _nombreCtrl = TextEditingController();
   final _montoCtrl  = TextEditingController();
+
+  /// Tipo de período seleccionado. Por defecto mensual.
   String _tipoPeriodo = 'mensual';
+
+  /// Día del mes en que inicia cada nuevo período (1–31).
   int _diaInicio = 1;
+
+  /// true mientras se espera respuesta del backend.
   bool _loading = false;
 
+  /// Envía el formulario al backend.
+  ///
+  /// Valida que el nombre no esté vacío y que el monto sea positivo.
+  /// En caso de error de servidor, muestra el mensaje retornado por la API.
   Future<void> _crear() async {
     final nombre = _nombreCtrl.text.trim();
     final monto  = double.tryParse(_montoCtrl.text.trim());
@@ -32,14 +53,16 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
     setState(() => _loading = true);
     try {
       final res = await ApiClient.post('/presupuestos', {
-        'nombre': nombre, 'monto_total': monto,
+        'nombre': nombre,
+        'monto_total': monto,
         'firebase_uid': widget.firebaseUid,
-        'tipo_periodo': _tipoPeriodo, 'dia_inicio_periodo': _diaInicio,
+        'tipo_periodo': _tipoPeriodo,
+        'dia_inicio_periodo': _diaInicio,
       });
 
       if (res.statusCode == 201) {
         if (!mounted) return;
-        Navigator.pop(context);
+        Navigator.pop(context); // regresa a ListaPresupuestos que recargará
       } else {
         final err = json.decode(res.body);
         throw Exception(err['error'] ?? 'Error');
@@ -64,6 +87,7 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── NOMBRE ────────────────────────────────────────────────────
             _label('Nombre del presupuesto'),
             TextField(
               controller: _nombreCtrl,
@@ -72,15 +96,22 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
             ),
             const SizedBox(height: 20),
 
+            // ── MONTO ─────────────────────────────────────────────────────
             _label('Monto total del período'),
             TextField(
               controller: _montoCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w600),
-              decoration: const InputDecoration(prefixText: '\$ ', prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 18, fontWeight: FontWeight.w600)),
+              decoration: const InputDecoration(
+                prefixText: '\$ ',
+                prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 18, fontWeight: FontWeight.w600),
+              ),
             ),
             const SizedBox(height: 20),
 
+            // ── TIPO DE PERÍODO ───────────────────────────────────────────
+            // Toggle visual entre Quincenal y Mensual.
+            // _PeriodOption usa AnimatedContainer para suavizar la selección.
             _label('Tipo de período'),
             Row(children: [
               _PeriodOption(
@@ -97,6 +128,9 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
             ]),
             const SizedBox(height: 20),
 
+            // ── DÍA DE INICIO ─────────────────────────────────────────────
+            // El backend usa este día para calcular automáticamente
+            // las fechas de inicio y fin de cada período.
             _label('Día de inicio del período'),
             DropdownButtonFormField<int>(
               value: _diaInicio,
@@ -111,6 +145,7 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
             ),
             const SizedBox(height: 36),
 
+            // ── BOTÓN CREAR ───────────────────────────────────────────────
             SizedBox(
               width: double.infinity,
               child: _loading
@@ -123,12 +158,16 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
     );
   }
 
+  /// Etiqueta de campo de formulario con estilo consistente.
   Widget _label(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(t, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.4)),
   );
 }
 
+/// Botón de toggle para seleccionar tipo de período (Quincenal / Mensual).
+///
+/// Usa [AnimatedContainer] para una transición suave al cambiar la selección.
 class _PeriodOption extends StatelessWidget {
   final String label, sub;
   final bool selected;
@@ -144,14 +183,24 @@ class _PeriodOption extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
+            // Fondo amarillo semitransparente si está seleccionado
             color: selected ? AppTheme.primary.withOpacity(0.1) : AppTheme.surfaceAlt,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: selected ? AppTheme.primary : AppTheme.border, width: selected ? 1.5 : 1),
+            border: Border.all(
+              color: selected ? AppTheme.primary : AppTheme.border,
+              width: selected ? 1.5 : 1,
+            ),
           ),
           child: Column(children: [
-            Text(label, style: TextStyle(color: selected ? AppTheme.primary : AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+            Text(label, style: TextStyle(
+              color: selected ? AppTheme.primary : AppTheme.textPrimary,
+              fontWeight: FontWeight.w700, fontSize: 14,
+            )),
             const SizedBox(height: 3),
-            Text(sub, style: TextStyle(color: selected ? AppTheme.primary.withOpacity(0.7) : AppTheme.textMuted, fontSize: 11)),
+            Text(sub, style: TextStyle(
+              color: selected ? AppTheme.primary.withOpacity(0.7) : AppTheme.textMuted,
+              fontSize: 11,
+            )),
           ]),
         ),
       ),

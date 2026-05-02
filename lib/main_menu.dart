@@ -1,3 +1,13 @@
+/// Menú principal (home) de Salarying.
+///
+/// Es la pantalla que ve el usuario tras iniciar sesión.
+/// Muestra 4 tarjetas de navegación hacia los módulos principales:
+///   - Mis Presupuestos
+///   - Ahorro y Metas
+///   - Calendario
+///   - Cobros
+///
+/// También muestra un indicador del estado de conexión con el backend.
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'lista_presupuestos.dart';
@@ -6,24 +16,31 @@ import 'calendario.dart';
 import 'login_screen.dart';
 import 'cobros_home.dart';
 
+/// Pantalla principal con las 4 cards de navegación.
+///
+/// [firebaseUid] se propaga a TODAS las sub-pantallas para filtrar
+/// los datos por usuario en cada petición al backend.
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
   const MainMenu({Key? key, required this.firebaseUid}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Inicial del email para el avatar (ej: "j" si el uid es "juan@...")
     final initials = firebaseUid.isNotEmpty ? firebaseUid[0].toUpperCase() : '?';
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false, // Sin flecha de "atrás" — es la pantalla raíz
         title: const Text('Salarying'),
         actions: [
+          // Botón de cerrar sesión: usa pushAndRemoveUntil para limpiar
+          // todo el stack de navegación y que el botón "atrás" no regrese al menú.
           IconButton(
             icon: const Icon(Icons.logout, size: 20),
             onPressed: () => Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (_) => false,
+              (_) => false, // elimina todas las rutas anteriores
             ),
             tooltip: 'Cerrar sesión',
           ),
@@ -35,9 +52,10 @@ class MainMenu extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header usuario
+              // ── HEADER USUARIO ────────────────────────────────────────────
               Row(
                 children: [
+                  // Avatar con la inicial del email/uid
                   CircleAvatar(
                     backgroundColor: AppTheme.primary.withOpacity(0.15),
                     radius: 22,
@@ -51,6 +69,7 @@ class MainMenu extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Bienvenido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      // Truncar el uid si es muy largo (ej: UIDs de Firebase son ~28 chars)
                       Text(
                         firebaseUid.length > 24 ? '${firebaseUid.substring(0, 24)}...' : firebaseUid,
                         style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
@@ -64,7 +83,9 @@ class MainMenu extends StatelessWidget {
               const Text('PANEL PRINCIPAL', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
               const SizedBox(height: 14),
 
-              // Cards de navegación
+              // ── TARJETAS DE NAVEGACIÓN ────────────────────────────────────
+              // Cada _NavCard navega a su pantalla y devuelve el firebaseUid.
+
               _NavCard(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Mis Presupuestos',
@@ -107,7 +128,7 @@ class MainMenu extends StatelessWidget {
 
               const SizedBox(height: 32),
 
-              // Info cards
+              // ── ESTADO DEL SISTEMA ────────────────────────────────────────
               const Text('ESTADO DEL SISTEMA', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
               const SizedBox(height: 14),
               Container(
@@ -120,6 +141,7 @@ class MainMenu extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
+                    // Punto verde = backend accesible
                     Container(
                       width: 8, height: 8,
                       decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
@@ -139,11 +161,14 @@ class MainMenu extends StatelessWidget {
   }
 }
 
+/// Tarjeta de navegación reutilizable para los módulos del menú principal.
+///
+/// Muestra un ícono con color de acento, título, subtítulo y flecha de acceso.
 class _NavCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color color;
+  final Color color;     // color de acento del módulo
   final VoidCallback onTap;
 
   const _NavCard({
@@ -164,6 +189,7 @@ class _NavCard extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // Ícono del módulo con fondo de color semitransparente
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
@@ -190,4 +216,3 @@ class _NavCard extends StatelessWidget {
     );
   }
 }
-

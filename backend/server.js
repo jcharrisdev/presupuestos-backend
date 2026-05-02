@@ -1,54 +1,139 @@
+/**
+ * server.js — Backend principal de Salarying
+ *
+ * Stack: Node.js + Express + MySQL (mysql2) + node-cron
+ * Desplegado en: Render (free tier)
+ * Base de datos: Clever Cloud MySQL
+ *
+ * MÓDULOS QUE GESTIONA ESTE ARCHIVO:
+ *  1. Períodos — lógica de ciclos de presupuesto (quincenal / mensual)
+ *  2. Presupuestos — CRUD de presupuestos del usuario
+ *  3. Gastos — plantillas de gasto y meta de ahorro
+ *  4. Movimientos — transacciones reales dentro de un período
+ *  5. Calendario — eventos de pago/cobro con fecha fija
+ *  6. Cobros — producción de insumos, ventas y cobros a clientes
+ *  7. Cron job — marcado automático de eventos vencidos cada medianoche
+ *
+ * AUTENTICACIÓN:
+ *  Por ahora se usa firebase_uid = email del usuario.
+ *  Cuando se implemente Firebase Auth real, vendrá del JWT en el header.
+ *  Todos los endpoints ya reciben y filtran por firebase_uid para estar
+ *  preparados para ese cambio sin refactorizaciones mayores.
+ */
+
 const express = require('express');
 const mysql   = require('mysql2');
 const cors    = require('cors');
-const cron    = require('node-cron');
+const cron    = require('node-cron');  // Para el job diario de vencimientos
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors());          // Permite peticiones desde el app Flutter (cross-origin)
+app.use(express.json());  // Parsea el body de las peticiones como JSON
 
-/* =========================
-   CONEXIÓN MYSQL (Pool)
-========================= */
+// =============================================================================
+// CONEXIÓN A MYSQL — POOL de conexiones
+// =============================================================================
+// Se usa createPool en lugar de createConnection para evitar que el servidor
+// crashee cuando Clever Cloud cierra conexiones inactivas (timeout).
+// Con pool, mysql2 reabre la conexión automáticamente cuando se necesita.
+// connectionLimit: 10 → máximo 10 conexiones simultáneas (suficiente para free tier)
 const pool = mysql.createPool({
-  host: process.env.MYSQLHOST, user: process.env.MYSQLUSER,
-  password: process.env.MYSQLPASSWORD, database: process.env.MYSQLDATABASE,
-  port: Number(process.env.MYSQLPORT),
-  waitForConnections: true, connectionLimit: 10, queueLimit: 0,
+  host:     process.env.MYSQLHOST,
+  user:     process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLDATABASE,
+  port:     Number(process.env.MYSQLPORT),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
+
+// Verifica la conexión al arrancar el servidor
 pool.getConnection((err, conn) => {
   if (err) { console.error('❌ Error conectando a MySQL:', err); return; }
   console.log('✅ Conectado a MySQL');
-  conn.release();
+  conn.release(); // Libera la conexión de vuelta al pool
 });
+
+// Usamos la versión con Promises (async/await) del pool
 const db = pool.promise();
 
-/* =========================
-   LÓGICA DE PERÍODOS
-========================= */
+
+// =============================================================================
+// LÓGICA DE PERÍODOS
+// Estas funciones son el corazón del sistema. Cada presupuesto opera en ciclos
+// de tiempo (períodos). La función principal es getPeriodoActivo(), que siempre
+// garantiza que exista un período vigente para trabajar.
+// =============================================================================
+
+/**
+ * Obtiene el período activo de un presupuesto.
+ * Si el período actual ya venció, lo cierra y crea uno nuevo automáticamente.
+ * Si no existe ningún período, crea el primero.
+ *
+ * @param {number} presupuestoId - ID del presupuesto
+ * @param {string} firebaseUid - ID del usuario
+ * @returns {Object} Período activo (con id, fecha_inicio, fecha_fin, etc.)
+ */
 async function getPeriodoActivo(presupuestoId, firebaseUid) {
+  // Obtenemos la configuración del presupuesto para saber su tipo de período
   const [[presupuesto]] = await db.execute(
     `SELECT tipo_periodo, dia_inicio_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
     [presupuestoId, firebaseUid]
   );
   if (!presupuesto) throw new Error('Presupuesto no encontrado');
+
   const { tipo_periodo, dia_inicio_periodo } = presupuesto;
+
+  // Buscamos el único período activo (siempre debe haber máximo 1)
   const [periodos] = await db.execute(
-    `SELECT *, DATE(NOW()) fecha_hoy FROM periodos WHERE presupuesto_id = ? AND firebase_uid = ? AND estado = 'activo' LIMIT 1`,
+    `SELECT *, DATE(NOW()) fecha_hoy FROM periodos
+     WHERE presupuesto_id = ? AND firebase_uid = ? AND estado = 'activo' LIMIT 1`,
     [presupuestoId, firebaseUid]
   );
+
   if (periodos.length > 0) {
     const periodo = periodos[0];
-    const hoyStr = periodo.fecha_hoy instanceof Date ? periodo.fecha_hoy.toISOString().split('T')[0] : String(periodo.fecha_hoy);
-    const finStr  = periodo.fecha_fin  instanceof Date ? periodo.fecha_fin.toISOString().split('T')[0]  : String(periodo.fecha_fin);
+
+    // Comparamos fechas como strings "YYYY-MM-DD" para evitar problemas de timezone.
+    // MySQL retorna DATE como string, pero a veces como Date object según la versión.
+    const hoyStr = periodo.fecha_hoy instanceof Date
+      ? periodo.fecha_hoy.toISOString().split('T')[0]
+      : String(periodo.fecha_hoy);
+    const finStr = periodo.fecha_fin instanceof Date
+      ? periodo.fecha_fin.toISOString().split('T')[0]
+      : String(periodo.fecha_fin);
+
+    // Si el período aún no venció, lo devolvemos tal cual
     if (hoyStr <= finStr) return periodo;
-    await db.execute(`UPDATE periodos SET estado = 'cerrado', closed_at = NOW() WHERE id = ?`, [periodo.id]);
+
+    // Si ya venció: cerramos el período actual y creamos el siguiente
+    await db.execute(
+      `UPDATE periodos SET estado = 'cerrado', closed_at = NOW() WHERE id = ?`,
+      [periodo.id]
+    );
+    // El nuevo período comienza el día siguiente al fin del anterior
     return crearNuevoPeriodo(presupuestoId, firebaseUid, tipo_periodo, periodo.fecha_fin);
   }
+
+  // No existe ningún período → crear el primero
   return crearPrimerPeriodo(presupuestoId, firebaseUid, tipo_periodo, dia_inicio_periodo);
 }
 
+/**
+ * Genera automáticamente los movimientos para un período recién creado.
+ * Solo aplica a gastos de tipo 'fijo', 'ahorro' con cuotas restantes, y 'fijo_x_periodo'.
+ * Los gastos 'no fijo' NO se generan aquí — el usuario los agrega manualmente.
+ *
+ * @param {number} presupuestoId
+ * @param {number} periodoId - ID del nuevo período
+ * @param {string} firebaseUid
+ */
 async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) {
+  // Solo traemos gastos que deben generar movimiento automático:
+  // - fijo: siempre (alquiler, servicios)
+  // - ahorro: si no tiene límite (numero_quincena IS NULL) o le quedan cuotas
+  // - fijo_x_periodo: si le quedan períodos (numero_quincena > 0)
   const [gastos] = await db.execute(
     `SELECT * FROM gastos WHERE presupuesto_id = ? AND firebase_uid = ?
      AND (
@@ -58,77 +143,172 @@ async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) 
      )`,
     [presupuestoId, firebaseUid]
   );
+
   for (const gasto of gastos) {
+    // Insertamos el movimiento con estado pagado=0 (pendiente de pago)
     await db.execute(
-      `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
+      `INSERT INTO movimientos
+       (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
       [presupuestoId, periodoId, gasto.id, gasto.descripcion, gasto.monto, gasto.tipo, firebaseUid]
     );
-    if (gasto.tipo === 'fijo_x_periodo' || (gasto.tipo === 'ahorro' && gasto.numero_quincena !== null)) {
-      await db.execute(`UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`, [gasto.id]);
+
+    // Para gastos con contador de períodos: decrementamos el contador
+    // Cuando llegue a 0, el gasto ya no generará más movimientos
+    if (gasto.tipo === 'fijo_x_periodo' ||
+        (gasto.tipo === 'ahorro' && gasto.numero_quincena !== null)) {
+      await db.execute(
+        `UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`,
+        [gasto.id]
+      );
     }
   }
 }
 
+/**
+ * Crea el primer período de un presupuesto.
+ * Calcula la fecha de inicio según el día configurado en el presupuesto.
+ * Si el día de inicio ya pasó este mes, el período empieza el mes/quincena siguiente.
+ *
+ * Ejemplo: dia_inicio=15, hoy=20 mayo → primer período empieza el 15 junio.
+ * Ejemplo: dia_inicio=1, hoy=1 mayo a las 8am → primer período empieza el 1 mayo.
+ * (Se compara solo la fecha, no la hora, para evitar que el mismo día quede "pasado")
+ *
+ * @param {number} presupuestoId
+ * @param {string} firebaseUid
+ * @param {string} tipoPeriodo - 'quincenal' | 'mensual'
+ * @param {number} dia_inicio_periodo - Día del mes (1-31)
+ */
 async function crearPrimerPeriodo(presupuestoId, firebaseUid, tipoPeriodo, dia_inicio_periodo) {
   const hoy = new Date();
-  const hoyStr = hoy.toISOString().split('T')[0];
+  const hoyStr = hoy.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+  // Construimos la fecha de inicio con UTC para evitar desfases por timezone
   let fechaInicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), dia_inicio_periodo));
+
+  // Si el día ya pasó este mes, avanzamos al siguiente ciclo
   if (fechaInicio.toISOString().split('T')[0] < hoyStr) {
     if (tipoPeriodo === 'quincenal') fechaInicio.setUTCDate(fechaInicio.getUTCDate() + 14);
     else fechaInicio.setUTCMonth(fechaInicio.getUTCMonth() + 1);
   }
+
   return _insertarPeriodo(presupuestoId, firebaseUid, tipoPeriodo, fechaInicio);
 }
 
+/**
+ * Crea el siguiente período consecutivo después de que el anterior venció.
+ * La fecha de inicio es siempre el día siguiente al fin del período anterior.
+ *
+ * @param {string} fechaFinAnterior - Fecha de fin del período cerrado
+ */
 async function crearNuevoPeriodo(presupuestoId, firebaseUid, tipoPeriodo, fechaFinAnterior) {
   const fechaInicio = new Date(fechaFinAnterior);
-  fechaInicio.setDate(fechaInicio.getDate() + 1);
+  fechaInicio.setDate(fechaInicio.getDate() + 1); // Día siguiente al fin anterior
   return _insertarPeriodo(presupuestoId, firebaseUid, tipoPeriodo, fechaInicio);
 }
 
+/**
+ * Función interna que inserta el registro en la tabla periodos y
+ * llama a generarMovimientosPeriodo para crear las transacciones del nuevo ciclo.
+ * Es el paso final tanto para el primer período como para los subsiguientes.
+ */
 async function _insertarPeriodo(presupuestoId, firebaseUid, tipoPeriodo, fechaInicio) {
   const fechaFin = calcularFechaFin(fechaInicio, tipoPeriodo);
-  const [[{ ultimo }]] = await db.execute(`SELECT MAX(numero_periodo) AS ultimo FROM periodos WHERE presupuesto_id = ?`, [presupuestoId]);
-  const numeroPeriodo = (ultimo || 0) + 1;
-  const [result] = await db.execute(
-    `INSERT INTO periodos (presupuesto_id, firebase_uid, numero_periodo, tipo_periodo, fecha_inicio, fecha_fin, estado) VALUES (?, ?, ?, ?, ?, ?, 'activo')`,
-    [presupuestoId, firebaseUid, numeroPeriodo, tipoPeriodo, fechaInicio.toISOString().split('T')[0], fechaFin]
+
+  // Obtenemos el número del último período para incrementarlo
+  const [[{ ultimo }]] = await db.execute(
+    `SELECT MAX(numero_periodo) AS ultimo FROM periodos WHERE presupuesto_id = ?`,
+    [presupuestoId]
   );
+  const numeroPeriodo = (ultimo || 0) + 1;
+
+  const [result] = await db.execute(
+    `INSERT INTO periodos (presupuesto_id, firebase_uid, numero_periodo, tipo_periodo, fecha_inicio, fecha_fin, estado)
+     VALUES (?, ?, ?, ?, ?, ?, 'activo')`,
+    [presupuestoId, firebaseUid, numeroPeriodo, tipoPeriodo,
+     fechaInicio.toISOString().split('T')[0], fechaFin]
+  );
+
+  // Generamos los movimientos automáticos para este nuevo período
   await generarMovimientosPeriodo(presupuestoId, result.insertId, firebaseUid);
-  return { id: result.insertId, presupuesto_id: presupuestoId, firebase_uid: firebaseUid, numero_periodo: numeroPeriodo, tipo_periodo: tipoPeriodo, fecha_inicio: fechaInicio, fecha_fin: fechaFin, estado: 'activo' };
+
+  return {
+    id: result.insertId, presupuesto_id: presupuestoId, firebase_uid: firebaseUid,
+    numero_periodo: numeroPeriodo, tipo_periodo: tipoPeriodo,
+    fecha_inicio: fechaInicio, fecha_fin: fechaFin, estado: 'activo',
+  };
 }
 
+/**
+ * Calcula la fecha de fin de un período dado su fecha de inicio.
+ * - Quincenal: fecha_inicio + 14 días
+ * - Mensual: último día del mes siguiente (para cubrir meses de 28, 30 o 31 días)
+ *
+ * @param {Date} fechaInicio
+ * @param {string} tipoPeriodo - 'quincenal' | 'mensual'
+ * @returns {string} Fecha de fin en formato "YYYY-MM-DD"
+ */
 function calcularFechaFin(fechaInicio, tipoPeriodo) {
   const f = new Date(fechaInicio);
-  if (tipoPeriodo === 'quincenal') f.setDate(f.getDate() + 14);
-  else { f.setMonth(f.getMonth() + 1); f.setDate(f.getDate() - 1); }
+  if (tipoPeriodo === 'quincenal') {
+    f.setDate(f.getDate() + 14);
+  } else {
+    // Para mensual: avanzamos un mes y restamos un día
+    // Ej: inicio 01/05 → fin 31/05 (no 01/06)
+    f.setMonth(f.getMonth() + 1);
+    f.setDate(f.getDate() - 1);
+  }
   return f.toISOString().split('T')[0];
 }
 
-/* =========================
-   LÓGICA DE CALENDARIO
-========================= */
+
+// =============================================================================
+// LÓGICA DE CALENDARIO
+// Genera eventos futuros en calendario_eventos cuando el usuario crea
+// un gasto con tipo_fecha = 'fija'. Esto permite ver los pagos en el calendario.
+// =============================================================================
+
+/**
+ * Calcula todas las fechas de pago para los próximos 12 meses según la frecuencia.
+ *
+ * - 'unico': una sola fecha exacta
+ * - 'mensual': una fecha por mes (en el dia_pago del mes)
+ * - 'quincenal': dos fechas por mes (dia_pago y dia_pago+14)
+ * - 'anual': una fecha por año
+ *
+ * Se usa Math.min(dia, ultimoDiaMes) para evitar el problema del 31 en meses cortos.
+ *
+ * @param {string} frecuencia - 'unico' | 'mensual' | 'quincenal' | 'anual'
+ * @param {number} diaPago - Día del mes (1-31)
+ * @param {Date|string} fechaExacta - Solo para frecuencia='unico'
+ * @returns {string[]} Array de fechas "YYYY-MM-DD"
+ */
 function calcularFechasEvento(frecuencia, diaPago, fechaExacta) {
   const fechas = [];
   const hoy = new Date();
 
   if (frecuencia === 'unico') {
     if (fechaExacta) {
-      const f = fechaExacta instanceof Date ? fechaExacta.toISOString().split('T')[0] : String(fechaExacta).split('T')[0];
+      const f = fechaExacta instanceof Date
+        ? fechaExacta.toISOString().split('T')[0]
+        : String(fechaExacta).split('T')[0];
       fechas.push(f);
     }
     return fechas;
   }
 
-  const MESES = 12;
+  const MESES = 12; // Generamos eventos para los próximos 12 meses
   for (let m = 0; m < MESES; m++) {
-    const anio = hoy.getUTCFullYear() + Math.floor((hoy.getUTCMonth() + m) / 12);
-    const mes  = (hoy.getUTCMonth() + m) % 12;
-    const ultimoDia = new Date(Date.UTC(anio, mes + 1, 0)).getUTCDate();
+    const anio      = hoy.getUTCFullYear() + Math.floor((hoy.getUTCMonth() + m) / 12);
+    const mes       = (hoy.getUTCMonth() + m) % 12;
+    const ultimoDia = new Date(Date.UTC(anio, mes + 1, 0)).getUTCDate(); // Último día del mes
 
+    // Para anual, solo generamos 1 evento cada 12 meses
     if (frecuencia === 'anual' && m % 12 !== 0) continue;
 
+    // Base: dia_pago del mes (ajustado al último día si el mes es más corto)
     const dias = [Math.min(diaPago, ultimoDia)];
+    // Para quincenal: segunda fecha 14 días después (también ajustada)
     if (frecuencia === 'quincenal') dias.push(Math.min(diaPago + 14, ultimoDia));
 
     for (const dia of dias) {
@@ -138,8 +318,20 @@ function calcularFechasEvento(frecuencia, diaPago, fechaExacta) {
   return fechas;
 }
 
+/**
+ * Genera los eventos de calendario para un gasto con tipo_fecha='fija'.
+ * Se llama automáticamente al crear un gasto con fecha fija.
+ * También se puede llamar manualmente con POST /calendario/generar.
+ *
+ * @param {number} gastoId
+ * @param {string} firebaseUid
+ * @returns {number} Cantidad de eventos insertados
+ */
 async function generarEventosCalendario(gastoId, firebaseUid) {
-  const [[gasto]] = await db.execute(`SELECT * FROM gastos WHERE id = ? AND firebase_uid = ?`, [gastoId, firebaseUid]);
+  const [[gasto]] = await db.execute(
+    `SELECT * FROM gastos WHERE id = ? AND firebase_uid = ?`, [gastoId, firebaseUid]
+  );
+  // Solo generamos eventos si el gasto tiene fecha fija configurada
   if (!gasto || gasto.tipo_fecha !== 'fija') return 0;
 
   const fechas = calcularFechasEvento(gasto.frecuencia_pago, gasto.dia_pago, gasto.fecha_pago_exacta);
@@ -147,8 +339,11 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
   for (const fecha of fechas) {
     try {
       await db.execute(
-        `INSERT INTO calendario_eventos (firebase_uid, gasto_id, titulo, tipo, fecha_evento, monto_esperado, notificacion_activa, dias_anticipacion) VALUES (?, ?, ?, 'pago', ?, ?, ?, ?)`,
-        [firebaseUid, gastoId, gasto.descripcion, fecha, gasto.monto, gasto.genera_notificacion ? 1 : 0, gasto.dias_anticipacion || 3]
+        `INSERT INTO calendario_eventos
+         (firebase_uid, gasto_id, titulo, tipo, fecha_evento, monto_esperado, notificacion_activa, dias_anticipacion)
+         VALUES (?, ?, ?, 'pago', ?, ?, ?, ?)`,
+        [firebaseUid, gastoId, gasto.descripcion, fecha, gasto.monto,
+         gasto.genera_notificacion ? 1 : 0, gasto.dias_anticipacion || 3]
       );
       insertados++;
     } catch (err) { console.error('Error insertando evento:', err.message); }
@@ -156,51 +351,106 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
   return insertados;
 }
 
-/* =========================
-   HEALTHCHECK
-========================= */
-app.get('/', (req, res) => res.json({ status: 'Backend funcionando correctamente', version: '2.4' }));
 
-/* =========================
-   PRESUPUESTOS
-========================= */
+// =============================================================================
+// HEALTHCHECK
+// =============================================================================
+// Endpoint raíz para verificar que el servidor está activo.
+// Render y el app Flutter usan este endpoint para saber si el backend responde.
+app.get('/', (req, res) => res.json({
+  status: 'Backend funcionando correctamente',
+  version: '2.4'  // Incrementar con cada cambio mayor
+}));
+
+
+// =============================================================================
+// MÓDULO: PRESUPUESTOS
+// CRUD básico de presupuestos de usuario.
+// =============================================================================
+
+/**
+ * POST /presupuestos
+ * Crea un nuevo presupuesto y genera automáticamente su primer período.
+ * El primer período se calcula en base al dia_inicio_periodo configurado.
+ */
 app.post('/presupuestos', async (req, res) => {
   const { nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo } = req.body;
+
   if (!nombre || monto_total == null || !firebase_uid || !tipo_periodo || !dia_inicio_periodo)
     return res.status(400).json({ error: 'Datos incompletos' });
+
   try {
     const [result] = await db.execute(
-      `INSERT INTO presupuestos (nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO presupuestos (nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo)
+       VALUES (?, ?, ?, ?, ?)`,
       [nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo]
     );
+    // Crear primer período automáticamente al momento de crear el presupuesto
     await crearPrimerPeriodo(result.insertId, firebase_uid, tipo_periodo, dia_inicio_periodo);
     res.status(201).json({ id: result.insertId, nombre, monto_total, tipo_periodo, dia_inicio_periodo });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al crear presupuesto' }); }
+  } catch (error) {
+    console.error('Error creando presupuesto:', error);
+    res.status(500).json({ error: 'Error al crear presupuesto' });
+  }
 });
 
+/**
+ * GET /presupuestos?firebase_uid=
+ * Lista todos los presupuestos del usuario, ordenados del más reciente al más antiguo.
+ */
 app.get('/presupuestos', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    const [results] = await db.execute(`SELECT * FROM presupuestos WHERE firebase_uid = ? ORDER BY id DESC`, [firebase_uid]);
+    const [results] = await db.execute(
+      `SELECT * FROM presupuestos WHERE firebase_uid = ? ORDER BY id DESC`, [firebase_uid]
+    );
     res.json(results);
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al obtener presupuestos' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener presupuestos' });
+  }
 });
 
+/**
+ * PUT /presupuestos/:id
+ * Actualiza el nombre y monto de un presupuesto existente.
+ * Requiere firebase_uid para verificar propiedad del recurso (seguridad básica).
+ */
 app.put('/presupuestos/:id', async (req, res) => {
   const { id } = req.params;
   const { nombre, monto_total, firebase_uid } = req.body;
-  if (!nombre || monto_total == null || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  if (!nombre || monto_total == null || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
   try {
-    const [result] = await db.execute(`UPDATE presupuestos SET nombre = ?, monto_total = ? WHERE id = ? AND firebase_uid = ?`, [nombre, monto_total, id, firebase_uid]);
+    const [result] = await db.execute(
+      `UPDATE presupuestos SET nombre = ?, monto_total = ? WHERE id = ? AND firebase_uid = ?`,
+      [nombre, monto_total, id, firebase_uid]
+    );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Presupuesto no encontrado' });
     res.json({ message: 'Presupuesto actualizado' });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al actualizar presupuesto' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar presupuesto' });
+  }
 });
 
-/* =========================
-   GASTOS
-========================= */
+
+// =============================================================================
+// MÓDULO: GASTOS
+// Los gastos son plantillas que definen qué se gasta en cada período.
+// No son transacciones directas; generan movimientos automáticamente.
+// =============================================================================
+
+/**
+ * POST /gastos/ahorroMeta
+ * Crea un gasto de tipo 'ahorro' con cuota distribuida por período.
+ * Calcula automáticamente la cuota según el tipo de período del presupuesto:
+ *   - Mensual:   cuota = monto_total / tiempo_meses
+ *   - Quincenal: cuota = monto_total / (tiempo_meses × 2)  ← 2 períodos por mes
+ *
+ * numero_quincena = cantidad total de períodos de pago (contador regresivo).
+ */
 app.post('/gastos/ahorroMeta', async (req, res) => {
   const { presupuesto_id, descripcion, monto, fecha, firebase_uid, tiempo_meses = 12 } = req.body;
   if (!presupuesto_id || !descripcion || monto == null || !firebase_uid)
@@ -209,20 +459,23 @@ app.post('/gastos/ahorroMeta', async (req, res) => {
   const fechaStr = fecha ? fecha.split('T')[0] : new Date().toISOString().split('T')[0];
 
   try {
-    // Obtener tipo_periodo del presupuesto para calcular cuota correcta
+    // Necesitamos el tipo_periodo para saber cuántos períodos caben en los meses indicados
     const [[presupuesto]] = await db.execute(
       `SELECT tipo_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
       [presupuesto_id, firebase_uid]
     );
     if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
 
+    // Calculamos cuántos períodos en total tiene el plan de ahorro
     const periodos_total = presupuesto.tipo_periodo === 'quincenal'
-      ? Number(tiempo_meses) * 2
-      : Number(tiempo_meses);
+      ? Number(tiempo_meses) * 2   // Quincenal: 2 períodos por mes
+      : Number(tiempo_meses);       // Mensual: 1 período por mes
 
     // Cuota por período (redondeando hacia arriba para no perder centavos)
     const monto_periodo = Math.ceil((monto / periodos_total) * 100) / 100;
 
+    // Guardamos el gasto con el monto de la CUOTA (no el total)
+    // numero_quincena actúa como contador regresivo de períodos restantes
     const [result] = await db.execute(
       `INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid, numero_quincena)
        VALUES (?, ?, ?, 'ahorro', ?, 0, ?, ?)`,
@@ -230,96 +483,144 @@ app.post('/gastos/ahorroMeta', async (req, res) => {
     );
     const gastoId = result.insertId;
 
+    // Crear el movimiento para el período actual inmediatamente
     try {
       const periodo = await getPeriodoActivo(presupuesto_id, firebase_uid);
       await db.execute(
-        `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
+        `INSERT INTO movimientos
+         (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
          VALUES (?, ?, ?, ?, ?, 'ahorro', 0, ?, NOW())`,
         [presupuesto_id, periodo.id, gastoId, descripcion, monto_periodo, firebase_uid]
       );
-      // Ya se usó un período
-      await db.execute(`UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`, [gastoId]);
+      // Decrementamos porque el primer período ya fue consumido
+      await db.execute(
+        `UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`,
+        [gastoId]
+      );
     } catch (err) { console.error('⚠️ No se pudo auto-crear movimiento para ahorro:', err.message); }
 
-    res.status(201).json({
-      id: gastoId, monto_periodo, periodos_total,
-      tipo_periodo: presupuesto.tipo_periodo,
-      message: 'Ahorro/Meta creado'
-    });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al crear ahorro/meta' }); }
+    res.status(201).json({ id: gastoId, monto_periodo, periodos_total, tipo_periodo: presupuesto.tipo_periodo, message: 'Ahorro/Meta creado' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al crear ahorro/meta' });
+  }
 });
 
+/**
+ * POST /gastos
+ * Crea un gasto estándar (fijo, no fijo, fijo_x_periodo).
+ * Para tipos 'fijo', 'fijo_x_periodo' y 'ahorro': auto-crea movimiento en período activo.
+ * Si tipo_fecha='fija': genera eventos en el calendario para los próximos 12 meses.
+ */
 app.post('/gastos', async (req, res) => {
   const {
     presupuesto_id, descripcion, monto, tipo, fecha, firebase_uid,
-    tipo_fecha = 'flexible', dia_pago = null, frecuencia_pago = null,
-    fecha_pago_exacta = null, genera_notificacion = false, dias_anticipacion = 3
+    tipo_fecha = 'flexible',    // 'flexible' | 'fija'
+    dia_pago = null,            // Día del mes para gastos con fecha fija
+    frecuencia_pago = null,     // 'unico' | 'mensual' | 'quincenal' | 'anual'
+    fecha_pago_exacta = null,   // Solo para frecuencia='unico'
+    genera_notificacion = false,
+    dias_anticipacion = 3
   } = req.body;
 
   if (!presupuesto_id || !descripcion || monto == null || !tipo || !fecha || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
 
+  // Normalizamos las fechas a formato YYYY-MM-DD (quitamos la parte de tiempo)
   const fechaStr = fecha.split('T')[0];
   const fechaPagoStr = fecha_pago_exacta ? fecha_pago_exacta.split('T')[0] : null;
 
   try {
     const [result] = await db.execute(
-      `INSERT INTO gastos (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid, tipo_fecha, dia_pago, frecuencia_pago, fecha_pago_exacta, genera_notificacion, dias_anticipacion)
+      `INSERT INTO gastos
+       (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid,
+        tipo_fecha, dia_pago, frecuencia_pago, fecha_pago_exacta, genera_notificacion, dias_anticipacion)
        VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
       [presupuesto_id, descripcion, monto, tipo, fechaStr, firebase_uid,
-       tipo_fecha, dia_pago, frecuencia_pago, fechaPagoStr, genera_notificacion ? 1 : 0, dias_anticipacion]
+       tipo_fecha, dia_pago, frecuencia_pago, fechaPagoStr,
+       genera_notificacion ? 1 : 0, dias_anticipacion]
     );
     const gastoId = result.insertId;
 
-    // Auto-crear movimiento
+    // Auto-crear movimiento para gastos que aparecen automáticamente cada período
     if (tipo === 'fijo' || tipo === 'fijo_x_periodo' || tipo === 'ahorro') {
       try {
         const periodo = await getPeriodoActivo(presupuesto_id, firebase_uid);
         await db.execute(
-          `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
+          `INSERT INTO movimientos
+           (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
           [presupuesto_id, periodo.id, gastoId, descripcion, monto, tipo, firebase_uid]
         );
         console.log(`✅ Movimiento auto-creado para gasto ${gastoId} en periodo ${periodo.id}`);
       } catch (err) { console.error('⚠️ No se pudo auto-crear movimiento:', err.message); }
     }
 
-    // Generar eventos de calendario si tiene fecha fija
+    // Si tiene fecha fija, generar eventos en el calendario
     if (tipo_fecha === 'fija') {
       const count = await generarEventosCalendario(gastoId, firebase_uid);
       console.log(`📅 ${count} eventos de calendario generados para gasto ${gastoId}`);
     }
 
     res.status(201).json({ id: gastoId, presupuesto_id, descripcion, monto, tipo, fecha: fechaStr, pagado: 0, firebase_uid });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al agregar gasto' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al agregar gasto' });
+  }
 });
 
+/**
+ * GET /presupuestos/:id/gastos?firebase_uid=
+ * Devuelve todos los gastos de un presupuesto.
+ * También verifica/crea el período activo (efecto secundario intencional).
+ */
 app.get('/presupuestos/:id/gastos', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    await getPeriodoActivo(id, firebase_uid);
-    const [results] = await db.execute(`SELECT * FROM gastos WHERE presupuesto_id = ? AND firebase_uid = ? ORDER BY id DESC`, [id, firebase_uid]);
+    await getPeriodoActivo(id, firebase_uid); // Asegura que exista un período activo
+    const [results] = await db.execute(
+      `SELECT * FROM gastos WHERE presupuesto_id = ? AND firebase_uid = ? ORDER BY id DESC`,
+      [id, firebase_uid]
+    );
     res.json(results);
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/** PUT /gastos/:id — Actualiza el campo 'pagado' de un gasto (uso legacy) */
 app.put('/gastos/:id', async (req, res) => {
-  const { id } = req.params; const { pagado } = req.body;
+  const { id } = req.params;
+  const { pagado } = req.body;
   if (pagado === undefined) return res.status(400).json({ error: 'Campo pagado es obligatorio' });
   const pagadoValue = pagado === true || pagado === 1 ? 1 : 0;
   try {
     const [result] = await db.execute(`UPDATE gastos SET pagado = ? WHERE id = ?`, [pagadoValue, id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Gasto no encontrado' });
     res.json({ message: 'Estado actualizado', id, pagado: pagadoValue });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al actualizar gasto' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar gasto' });
+  }
 });
 
+/**
+ * PUT /presupuestos/:id/gastos/reanudar-fijos
+ * Resetea el estado de pago de todos los movimientos FIJOS del período activo.
+ * Se usa cuando el usuario quiere "limpiar" los pagos del período para
+ * gestionar quién pagó qué en presupuestos compartidos.
+ * IMPORTANTE: opera sobre movimientos (no sobre gastos) para no perder el historial.
+ */
 app.put('/presupuestos/:id/gastos/reanudar-fijos', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
     const periodo = await getPeriodoActivo(id, firebase_uid);
+    // Reseteamos pagado, monto_real y fecha_pago de los movimientos fijos del período
     const [result] = await db.execute(
       `UPDATE movimientos
        SET pagado = 0, monto_pagado_real = NULL, pagado_por_uid = NULL, fecha_pagado = NULL
@@ -327,179 +628,364 @@ app.put('/presupuestos/:id/gastos/reanudar-fijos', async (req, res) => {
       [id, periodo.id, firebase_uid]
     );
     res.json({ message: 'Gastos fijos reanudados', afectados: result.affectedRows });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al reanudar gastos fijos' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al reanudar gastos fijos' });
+  }
 });
 
+/** DELETE /gastos/:id — Elimina un gasto y sus movimientos asociados (por CASCADE) */
 app.delete('/gastos/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const [result] = await db.execute(`DELETE FROM gastos WHERE id = ?`, [id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Gasto no encontrado' });
     res.json({ message: 'Gasto eliminado' });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al eliminar gasto' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar gasto' });
+  }
 });
 
-/* =========================
-   AHORROS
-========================= */
+
+// =============================================================================
+// MÓDULO: AHORROS
+// Vista agregada de los gastos de tipo 'ahorro' con su progreso.
+// El monto_ahorrado se calcula sumando monto_pagado_real de los movimientos pagados.
+// =============================================================================
+
+/**
+ * GET /ahorros?firebase_uid=
+ * Lista todas las metas de ahorro del usuario con su progreso actual.
+ * monto_meta = monto del gasto (cuota por período)
+ * monto_ahorrado = suma de lo realmente pagado en todos los movimientos de esa meta
+ */
 app.get('/ahorros', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
     const [ahorros] = await db.execute(
-      `SELECT g.id, g.descripcion AS nombre, g.monto AS monto_meta, COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado
-       FROM gastos g LEFT JOIN movimientos m ON m.gasto_id = g.id AND m.pagado = 1
-       WHERE g.firebase_uid = ? AND g.tipo = 'ahorro' GROUP BY g.id`,
+      `SELECT g.id, g.descripcion AS nombre, g.monto AS monto_meta,
+              COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado
+       FROM gastos g
+       LEFT JOIN movimientos m ON m.gasto_id = g.id AND m.pagado = 1
+       WHERE g.firebase_uid = ? AND g.tipo = 'ahorro'
+       GROUP BY g.id`,
       [firebase_uid]
     );
     res.json(ahorros);
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al obtener ahorros' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener ahorros' });
+  }
 });
 
+/** DELETE /ahorros/:id — Elimina una meta de ahorro (solo gastos de tipo 'ahorro') */
 app.delete('/ahorros/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const [result] = await db.execute(`DELETE FROM gastos WHERE id = ? AND tipo = 'ahorro'`, [id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Ahorro no encontrado' });
     res.json({ message: 'Ahorro eliminado' });
-  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al eliminar ahorro' }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar ahorro' });
+  }
 });
 
-/* =========================
-   MOVIMIENTOS
-========================= */
+
+// =============================================================================
+// MÓDULO: MOVIMIENTOS
+// Los movimientos son las transacciones reales dentro de un período.
+// La pantalla de detalle del presupuesto trabaja exclusivamente con movimientos.
+// =============================================================================
+
+/**
+ * GET /presupuestos/:id/detalle?firebase_uid=
+ * Endpoint principal de la pantalla de detalle del presupuesto.
+ * Devuelve:
+ *   - periodo: el período activo (o crea uno si no existe)
+ *   - movimientos: todas las transacciones del período activo
+ *   - resumen: totales por tipo + porcentaje de pagados
+ */
 app.get('/presupuestos/:id/detalle', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
     const periodo = await getPeriodoActivo(id, firebase_uid);
+
     const [movimientos] = await db.execute(
-      `SELECT * FROM movimientos WHERE presupuesto_id = ? AND periodo_id = ? AND firebase_uid = ? ORDER BY id DESC`,
+      `SELECT * FROM movimientos
+       WHERE presupuesto_id = ? AND periodo_id = ? AND firebase_uid = ?
+       ORDER BY id DESC`,
       [id, periodo.id, firebase_uid]
     );
+
+    // Calculamos totales por tipo de gasto
     let totalFijo = 0, totalNoFijo = 0, totalAhorro = 0;
     movimientos.forEach(m => {
-      if (m.tipo === 'fijo' || m.tipo === 'fijo_x_periodo') totalFijo += Number(m.monto);
-      if (m.tipo === 'no fijo') totalNoFijo += Number(m.monto);
-      if (m.tipo === 'ahorro') totalAhorro += Number(m.monto);
+      if (m.tipo === 'fijo' || m.tipo === 'fijo_x_periodo') totalFijo   += Number(m.monto);
+      if (m.tipo === 'no fijo')                              totalNoFijo += Number(m.monto);
+      if (m.tipo === 'ahorro')                               totalAhorro += Number(m.monto);
     });
+
     const pagados = movimientos.filter(m => m.pagado === 1).length;
-    res.json({ periodo, movimientos, resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado: totalFijo + totalNoFijo + totalAhorro, porcentajePagados: movimientos.length > 0 ? pagados / movimientos.length : 0 } });
-  } catch (error) { console.error('Error detalle:', error); res.status(500).json({ error: error.message }); }
+
+    res.json({
+      periodo,
+      movimientos,
+      resumen: {
+        totalFijo, totalNoFijo, totalAhorro,
+        totalGastado: totalFijo + totalNoFijo + totalAhorro,
+        // Porcentaje de movimientos marcados como pagados (0.0 a 1.0)
+        porcentajePagados: movimientos.length > 0 ? pagados / movimientos.length : 0,
+      },
+    });
+  } catch (error) {
+    console.error('Error detalle:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/**
+ * POST /presupuestos/:id/movimientos
+ * Crea movimientos manualmente desde una selección de gastos.
+ * Para gastos 'no fijo': permite múltiples movimientos por período
+ *   (ej: varias compras en el supermercado en el mismo mes).
+ * Para gastos 'fijo' / 'ahorro': evita duplicados (ya se crean automáticamente).
+ */
 app.post('/presupuestos/:id/movimientos', async (req, res) => {
-  const { id } = req.params; const { firebase_uid, items } = req.body;
-  if (!firebase_uid || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Datos incompletos' });
+  const { id } = req.params;
+  const { firebase_uid, items } = req.body; // items: [{gasto_id, monto}]
+
+  if (!firebase_uid || !Array.isArray(items) || items.length === 0)
+    return res.status(400).json({ error: 'Datos incompletos' });
+
   try {
     const periodo = await getPeriodoActivo(id, firebase_uid);
+
     for (const item of items) {
       const { gasto_id, monto } = item;
       if (!gasto_id || monto == null || monto <= 0) continue;
-      const [[gasto]] = await db.execute(`SELECT * FROM gastos WHERE id = ? AND presupuesto_id = ? AND firebase_uid = ?`, [gasto_id, id, firebase_uid]);
+
+      // Verificamos que el gasto existe y pertenece al usuario
+      const [[gasto]] = await db.execute(
+        `SELECT * FROM gastos WHERE id = ? AND presupuesto_id = ? AND firebase_uid = ?`,
+        [gasto_id, id, firebase_uid]
+      );
       if (!gasto) continue;
-      // Para gastos no fijos se permiten múltiples movimientos por período (ej: varias visitas al supermercado)
+
+      // Para gastos no-fijo: permitimos múltiples movimientos en el mismo período
+      // Para fijo/ahorro: saltamos si ya existe para no duplicar
       if (gasto.tipo !== 'no fijo') {
-        const [[existing]] = await db.execute(`SELECT id FROM movimientos WHERE gasto_id = ? AND periodo_id = ? AND firebase_uid = ?`, [gasto_id, periodo.id, firebase_uid]);
-        if (existing) continue;
+        const [[existing]] = await db.execute(
+          `SELECT id FROM movimientos WHERE gasto_id = ? AND periodo_id = ? AND firebase_uid = ?`,
+          [gasto_id, periodo.id, firebase_uid]
+        );
+        if (existing) continue; // Ya existe, no duplicar
       }
+
       await db.execute(
-        `INSERT INTO movimientos (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
+        `INSERT INTO movimientos
+         (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
         [id, periodo.id, gasto.id, gasto.descripcion, monto, gasto.tipo, firebase_uid]
       );
     }
+
     res.status(201).json({ message: 'Movimientos creados correctamente', periodo_id: periodo.id });
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/**
+ * GET /presupuestos/:id/gastos-seleccionables?firebase_uid=
+ * Devuelve todos los gastos del presupuesto para el modal de "Agregar".
+ * Incluye gastos de todos los tipos (no solo 'no fijo').
+ * El Flutter decide cómo manejar duplicados según el tipo del gasto.
+ */
 app.get('/presupuestos/:id/gastos-seleccionables', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
     const periodo = await getPeriodoActivo(id, firebase_uid);
     const [gastos] = await db.execute(
-      `SELECT g.* FROM gastos g WHERE g.presupuesto_id = ? AND g.firebase_uid = ? AND g.tipo = 'no fijo'
-       AND NOT EXISTS (SELECT 1 FROM movimientos m WHERE m.gasto_id = g.id AND m.periodo_id = ?) ORDER BY g.descripcion`,
+      `SELECT g.* FROM gastos g
+       WHERE g.presupuesto_id = ? AND g.firebase_uid = ? AND g.tipo = 'no fijo'
+       AND NOT EXISTS (
+         SELECT 1 FROM movimientos m
+         WHERE m.gasto_id = g.id AND m.periodo_id = ?
+       )
+       ORDER BY g.descripcion`,
       [id, firebase_uid, periodo.id]
     );
     res.json({ periodo_id: periodo.id, gastos });
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/**
+ * PUT /movimientos/:id/pagar
+ * Marca un movimiento como pagado con su monto real.
+ * monto_pagado_real puede diferir del monto presupuestado.
+ * Esta diferencia es visible en la pantalla de detalle para análisis financiero.
+ */
 app.put('/movimientos/:id/pagar', async (req, res) => {
-  const { id } = req.params; const { pagado, monto_pagado_real, firebase_uid } = req.body;
-  if (pagado === undefined || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
-  if (pagado === 1 && (!monto_pagado_real || monto_pagado_real <= 0)) return res.status(400).json({ error: 'Monto pagado real inválido' });
+  const { id } = req.params;
+  const { pagado, monto_pagado_real, firebase_uid } = req.body;
+
+  if (pagado === undefined || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  if (pagado === 1 && (!monto_pagado_real || monto_pagado_real <= 0))
+    return res.status(400).json({ error: 'Monto pagado real inválido' });
+
   try {
     const [[movimiento]] = await db.execute(`SELECT id FROM movimientos WHERE id = ?`, [id]);
     if (!movimiento) return res.status(404).json({ error: 'Movimiento no encontrado' });
+
     await db.execute(
-      `UPDATE movimientos SET pagado = ?, monto_pagado_real = ?, pagado_por_uid = ?, fecha_pagado = CASE WHEN ? = 1 THEN NOW() ELSE NULL END WHERE id = ?`,
-      [pagado, pagado ? monto_pagado_real : null, pagado ? firebase_uid : null, pagado, id]
+      `UPDATE movimientos
+       SET pagado = ?,
+           monto_pagado_real = ?,
+           pagado_por_uid = ?,
+           fecha_pagado = CASE WHEN ? = 1 THEN NOW() ELSE NULL END
+       WHERE id = ?`,
+      [pagado, pagado ? monto_pagado_real : null,
+       pagado ? firebase_uid : null, pagado, id]
     );
     res.json({ message: 'Movimiento actualizado correctamente' });
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-/* =========================
-   CALENDARIO
-========================= */
+
+// =============================================================================
+// MÓDULO: CALENDARIO
+// Agenda de eventos de pago y cobro con fecha fija.
+// Los eventos de pago se generan al crear gastos con tipo_fecha='fija'.
+// Los eventos de cobro se generan al agregar clientes con condicion='plazo'.
+// =============================================================================
+
+/**
+ * GET /calendario/eventos?firebase_uid=&mes=&anio=
+ * Devuelve todos los eventos del mes/año indicado para el usuario.
+ * Si no se pasa mes/anio, devuelve todos los eventos del usuario.
+ */
 app.get('/calendario/eventos', async (req, res) => {
   const { firebase_uid, mes, anio } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    let sql = `SELECT ce.*, g.tipo as gasto_tipo FROM calendario_eventos ce LEFT JOIN gastos g ON ce.gasto_id = g.id WHERE ce.firebase_uid = ?`;
+    let sql = `SELECT ce.*, g.tipo AS gasto_tipo
+               FROM calendario_eventos ce
+               LEFT JOIN gastos g ON ce.gasto_id = g.id
+               WHERE ce.firebase_uid = ?`;
     const params = [firebase_uid];
-    if (mes && anio) { sql += ` AND YEAR(ce.fecha_evento) = ? AND MONTH(ce.fecha_evento) = ?`; params.push(anio, mes); }
+    if (mes && anio) {
+      sql += ` AND YEAR(ce.fecha_evento) = ? AND MONTH(ce.fecha_evento) = ?`;
+      params.push(anio, mes);
+    }
     sql += ` ORDER BY ce.fecha_evento ASC`;
     const [eventos] = await db.execute(sql, params);
     res.json(eventos);
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/**
+ * POST /calendario/generar
+ * Genera manualmente los eventos de calendario para un gasto ya existente.
+ * Útil si el usuario cambia un gasto a tipo_fecha='fija' después de crearlo.
+ */
 app.post('/calendario/generar', async (req, res) => {
   const { gasto_id, firebase_uid } = req.body;
   if (!gasto_id || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   try {
     const count = await generarEventosCalendario(gasto_id, firebase_uid);
     res.json({ message: `${count} eventos generados`, count });
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/**
+ * PUT /calendario/eventos/:id/estado
+ * Actualiza el estado de un evento: 'pendiente' | 'pagado' | 'vencido'.
+ * Se llama cuando el usuario marca un pago desde la pantalla del calendario.
+ */
 app.put('/calendario/eventos/:id/estado', async (req, res) => {
-  const { id } = req.params; const { estado, firebase_uid } = req.body;
+  const { id } = req.params;
+  const { estado, firebase_uid } = req.body;
   if (!estado || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
-  if (!['pendiente','pagado','vencido'].includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
+  if (!['pendiente', 'pagado', 'vencido', 'cobrado'].includes(estado))
+    return res.status(400).json({ error: 'Estado inválido' });
   try {
-    const [result] = await db.execute(`UPDATE calendario_eventos SET estado = ? WHERE id = ? AND firebase_uid = ?`, [estado, id, firebase_uid]);
+    const [result] = await db.execute(
+      `UPDATE calendario_eventos SET estado = ? WHERE id = ? AND firebase_uid = ?`,
+      [estado, id, firebase_uid]
+    );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Evento no encontrado' });
     res.json({ message: 'Estado actualizado', estado });
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
+/**
+ * DELETE /calendario/eventos/:id?firebase_uid=&solo_este=true|false
+ * Elimina un evento del calendario.
+ * solo_este=true  → solo elimina este evento específico
+ * solo_este=false → elimina este y todos los futuros del mismo gasto
+ *   (útil cuando el usuario cancela un gasto recurrente)
+ */
 app.delete('/calendario/eventos/:id', async (req, res) => {
-  const { id } = req.params; const { firebase_uid, solo_este } = req.query;
+  const { id } = req.params;
+  const { firebase_uid, solo_este } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
     let sql, params;
     if (solo_este === 'false') {
-      const [[ev]] = await db.execute(`SELECT gasto_id, fecha_evento FROM calendario_eventos WHERE id = ?`, [id]);
+      // Eliminar este y todos los eventos futuros del mismo gasto
+      const [[ev]] = await db.execute(
+        `SELECT gasto_id, fecha_evento FROM calendario_eventos WHERE id = ?`, [id]
+      );
       if (!ev) return res.status(404).json({ error: 'Evento no encontrado' });
-      const fechaStr = ev.fecha_evento instanceof Date ? ev.fecha_evento.toISOString().split('T')[0] : String(ev.fecha_evento).split('T')[0];
-      sql = `DELETE FROM calendario_eventos WHERE gasto_id = ? AND firebase_uid = ? AND fecha_evento >= ?`;
+      const fechaStr = ev.fecha_evento instanceof Date
+        ? ev.fecha_evento.toISOString().split('T')[0]
+        : String(ev.fecha_evento).split('T')[0];
+      sql    = `DELETE FROM calendario_eventos WHERE gasto_id = ? AND firebase_uid = ? AND fecha_evento >= ?`;
       params = [ev.gasto_id, firebase_uid, fechaStr];
     } else {
-      sql = `DELETE FROM calendario_eventos WHERE id = ? AND firebase_uid = ?`;
+      sql    = `DELETE FROM calendario_eventos WHERE id = ? AND firebase_uid = ?`;
       params = [id, firebase_uid];
     }
     const [result] = await db.execute(sql, params);
     res.json({ message: `${result.affectedRows} evento(s) eliminado(s)` });
-  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-/* =========================
-   PRODUCCIÓN DE INSUMOS
-========================= */
+
+// =============================================================================
+// MÓDULO: PRODUCCIÓN DE INSUMOS
+// Presupuestos de costo de producción (ej: ingredientes para hacer cheesecakes).
+// El costo total se calcula como SUM(cantidad × precio_unitario) de los ítems.
+// =============================================================================
+
+/** GET /produccion?firebase_uid= — Lista los presupuestos de producción con su total */
 app.get('/produccion', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
@@ -508,13 +994,18 @@ app.get('/produccion', async (req, res) => {
       `SELECT p.*, COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
        FROM presupuestos_produccion p
        LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = p.id
-       WHERE p.firebase_uid = ? GROUP BY p.id ORDER BY p.id DESC`,
+       WHERE p.firebase_uid = ?
+       GROUP BY p.id ORDER BY p.id DESC`,
       [firebase_uid]
     );
     res.json(rows);
-  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/** POST /produccion — Crea un nuevo presupuesto de producción */
 app.post('/produccion', async (req, res) => {
   const { nombre, descripcion, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
@@ -524,11 +1015,16 @@ app.post('/produccion', async (req, res) => {
       [firebase_uid, nombre, descripcion || null]
     );
     res.status(201).json({ id: result.insertId, nombre });
-  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/** GET /produccion/:id — Detalle de un presupuesto de producción con todos sus ítems */
 app.get('/produccion/:id', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[presupuesto]] = await db.execute(
@@ -539,13 +1035,18 @@ app.get('/produccion/:id', async (req, res) => {
       [id, firebase_uid]
     );
     if (!presupuesto) return res.status(404).json({ error: 'No encontrado' });
+
     const [items] = await db.execute(
       `SELECT * FROM items_produccion WHERE presupuesto_produccion_id = ? ORDER BY id ASC`, [id]
     );
     res.json({ ...presupuesto, items });
-  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/** POST /produccion/:id/items — Agrega un ítem de insumo al presupuesto */
 app.post('/produccion/:id/items', async (req, res) => {
   const { id } = req.params;
   const { nombre, cantidad, precio_unitario, firebase_uid } = req.body;
@@ -558,30 +1059,50 @@ app.post('/produccion/:id/items', async (req, res) => {
       [id, firebase_uid, nombre, cantidad, precio_unitario]
     );
     res.status(201).json({ id: result.insertId, nombre, cantidad, precio_unitario });
-  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/** DELETE /produccion/items/:id — Elimina un ítem de producción */
 app.delete('/produccion/items/:id', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    await db.execute(`DELETE FROM items_produccion WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    await db.execute(
+      `DELETE FROM items_produccion WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
     res.json({ message: 'Item eliminado' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/** DELETE /produccion/:id — Elimina un presupuesto de producción y sus ítems (CASCADE) */
 app.delete('/produccion/:id', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    await db.execute(`DELETE FROM presupuestos_produccion WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    await db.execute(
+      `DELETE FROM presupuestos_produccion WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
     res.json({ message: 'Presupuesto eliminado' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-/* =========================
-   VENTAS Y COBROS
-========================= */
+
+// =============================================================================
+// MÓDULO: VENTAS Y COBROS A CLIENTES
+// Gestión de ventas con su rentabilidad y cobros por cliente.
+// La rentabilidad = total_cobrado − total_invertido_en_produccion.
+// =============================================================================
+
+/** GET /ventas?firebase_uid= — Lista ventas con totales cobrados y pendientes */
 app.get('/ventas', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
@@ -591,14 +1112,19 @@ app.get('/ventas', async (req, res) => {
               COALESCE(SUM(CASE WHEN c.estado='cobrado' THEN c.monto_cobrado ELSE 0 END), 0) AS total_cobrado,
               COALESCE(SUM(c.monto), 0) AS total_esperado,
               SUM(CASE WHEN c.estado='pendiente' THEN 1 ELSE 0 END) AS cobros_pendientes
-       FROM ventas v LEFT JOIN cobros_clientes c ON c.venta_id = v.id
-       WHERE v.firebase_uid = ? GROUP BY v.id ORDER BY v.id DESC`,
+       FROM ventas v
+       LEFT JOIN cobros_clientes c ON c.venta_id = v.id
+       WHERE v.firebase_uid = ?
+       GROUP BY v.id ORDER BY v.id DESC`,
       [firebase_uid]
     );
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/** POST /ventas — Crea una nueva venta, opcionalmente vinculada a un presupuesto de producción */
 app.post('/ventas', async (req, res) => {
   const { nombre, presupuesto_produccion_id, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
@@ -608,13 +1134,24 @@ app.post('/ventas', async (req, res) => {
       [firebase_uid, nombre, presupuesto_produccion_id || null]
     );
     res.status(201).json({ id: result.insertId, nombre });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/**
+ * GET /ventas/:id?firebase_uid=
+ * Devuelve el detalle completo de una venta incluyendo:
+ *   - Información de la venta
+ *   - Lista de cobros/clientes
+ *   - Resumen de rentabilidad (invertido, cobrado, ganancia, margen)
+ */
 app.get('/ventas/:id', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // Obtenemos la venta con el total invertido en producción (JOIN a items)
     const [[venta]] = await db.execute(
       `SELECT v.*, p.nombre AS produccion_nombre,
               COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
@@ -625,18 +1162,21 @@ app.get('/ventas/:id', async (req, res) => {
       [id, firebase_uid]
     );
     if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
     const [cobros] = await db.execute(
       `SELECT * FROM cobros_clientes WHERE venta_id = ? AND firebase_uid = ? ORDER BY id ASC`,
       [id, firebase_uid]
     );
+
+    // Calculamos la rentabilidad en el backend para no hacerlo en Flutter
     const totalCobrado  = cobros.filter(c => c.estado === 'cobrado').reduce((s, c) => s + Number(c.monto_cobrado || c.monto), 0);
     const totalEsperado = cobros.reduce((s, c) => s + Number(c.monto), 0);
     const invertido     = Number(venta.total_invertido);
     const ganancia      = totalCobrado - invertido;
     const margen        = invertido > 0 ? (ganancia / invertido * 100) : 0;
+
     res.json({
-      venta,
-      cobros,
+      venta, cobros,
       resumen: {
         total_invertido: invertido,
         total_cobrado: totalCobrado,
@@ -647,86 +1187,152 @@ app.get('/ventas/:id', async (req, res) => {
         cobros_pendientes: cobros.filter(c => c.estado === 'pendiente').length,
       }
     });
-  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/**
+ * POST /ventas/:id/cobros
+ * Agrega un cliente a una venta con su monto y condición de pago.
+ * Si condicion_pago = 'plazo': crea automáticamente un evento en calendario_eventos
+ * para recordar la fecha de cobro (fecha = hoy + dias_plazo).
+ * El evento aparece en el calendario del usuario junto con los pagos normales,
+ * pero con tipo='cobro' para diferenciarse visualmente.
+ */
 app.post('/ventas/:id/cobros', async (req, res) => {
   const { id } = req.params;
   const { nombre_cliente, monto, condicion_pago, dias_plazo, firebase_uid } = req.body;
   if (!nombre_cliente || !monto || !condicion_pago || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
+
   try {
+    // Calculamos la fecha de cobro (solo si es a plazo)
     let fechaCobro = null;
     if (condicion_pago === 'plazo' && dias_plazo) {
       const f = new Date();
       f.setDate(f.getDate() + Number(dias_plazo));
       fechaCobro = f.toISOString().split('T')[0];
     }
+
     const [result] = await db.execute(
-      `INSERT INTO cobros_clientes (venta_id, firebase_uid, nombre_cliente, monto, condicion_pago, dias_plazo, fecha_cobro)
+      `INSERT INTO cobros_clientes
+       (venta_id, firebase_uid, nombre_cliente, monto, condicion_pago, dias_plazo, fecha_cobro)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [id, firebase_uid, nombre_cliente, monto, condicion_pago, dias_plazo || null, fechaCobro]
     );
     const cobroId = result.insertId;
-    // Auto-crear evento en calendario si es cobro a plazo
+
+    // Si es a plazo, crear evento en el calendario para recordar el cobro
     if (condicion_pago === 'plazo' && fechaCobro) {
       const [[venta]] = await db.execute(`SELECT nombre FROM ventas WHERE id = ?`, [id]);
       const titulo = `Cobro: ${nombre_cliente} (${venta?.nombre || 'Venta'})`;
+
       const [evResult] = await db.execute(
         `INSERT INTO calendario_eventos (firebase_uid, titulo, tipo, fecha_evento, monto_esperado, estado)
          VALUES (?, ?, 'cobro', ?, ?, 'pendiente')`,
         [firebase_uid, titulo, fechaCobro, monto]
       );
-      await db.execute(`UPDATE cobros_clientes SET calendario_evento_id = ? WHERE id = ?`, [evResult.insertId, cobroId]);
+      // Vinculamos el evento al cobro para poder actualizarlo cuando se cobre
+      await db.execute(
+        `UPDATE cobros_clientes SET calendario_evento_id = ? WHERE id = ?`,
+        [evResult.insertId, cobroId]
+      );
     }
+
     res.status(201).json({ id: cobroId, message: 'Cliente agregado' });
-  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/**
+ * PUT /cobros/:id/cobrar
+ * Marca un cobro como realizado con el monto real cobrado.
+ * También actualiza el evento del calendario a 'pagado' (si existe).
+ */
 app.put('/cobros/:id/cobrar', async (req, res) => {
   const { id } = req.params;
   const { monto_cobrado, firebase_uid } = req.body;
   if (!monto_cobrado || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   try {
     await db.execute(
-      `UPDATE cobros_clientes SET estado = 'cobrado', monto_cobrado = ?, fecha_cobrado = NOW()
+      `UPDATE cobros_clientes
+       SET estado = 'cobrado', monto_cobrado = ?, fecha_cobrado = NOW()
        WHERE id = ? AND firebase_uid = ?`,
       [monto_cobrado, id, firebase_uid]
     );
-    // Marcar evento de calendario como pagado si existe
-    const [[cobro]] = await db.execute(`SELECT calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]);
+
+    // Actualizamos el evento del calendario si existe
+    const [[cobro]] = await db.execute(
+      `SELECT calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]
+    );
     if (cobro?.calendario_evento_id) {
-      await db.execute(`UPDATE calendario_eventos SET estado = 'pagado' WHERE id = ?`, [cobro.calendario_evento_id]);
+      await db.execute(
+        `UPDATE calendario_eventos SET estado = 'pagado' WHERE id = ?`,
+        [cobro.calendario_evento_id]
+      );
     }
+
     res.json({ message: 'Cobro registrado' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/**
+ * DELETE /cobros/:id?firebase_uid=
+ * Elimina un cobro/cliente de una venta.
+ * Si tenía un evento en el calendario, también lo elimina.
+ */
 app.delete('/cobros/:id', async (req, res) => {
-  const { id } = req.params; const { firebase_uid } = req.query;
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    const [[cobro]] = await db.execute(`SELECT calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]);
-    await db.execute(`DELETE FROM cobros_clientes WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    const [[cobro]] = await db.execute(
+      `SELECT calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]
+    );
+    await db.execute(
+      `DELETE FROM cobros_clientes WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    // Limpiamos el evento del calendario vinculado
     if (cobro?.calendario_evento_id) {
-      await db.execute(`DELETE FROM calendario_eventos WHERE id = ?`, [cobro.calendario_evento_id]);
+      await db.execute(
+        `DELETE FROM calendario_eventos WHERE id = ?`, [cobro.calendario_evento_id]
+      );
     }
     res.json({ message: 'Cobro eliminado' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-/* =========================
-   CRON JOB — VENCIDOS
-========================= */
+
+// =============================================================================
+// CRON JOB — DETECCIÓN DE EVENTOS VENCIDOS
+// Corre cada día a medianoche (hora de Panamá UTC-5).
+// Busca eventos del calendario que hayan vencido sin ser pagados y los marca.
+// Esto permite al usuario ver claramente cuáles pagos se le pasaron.
+// =============================================================================
 cron.schedule('0 0 * * *', async () => {
   try {
-    const [result] = await db.execute(`UPDATE calendario_eventos SET estado = 'vencido' WHERE estado = 'pendiente' AND fecha_evento < CURDATE()`);
+    const [result] = await db.execute(
+      `UPDATE calendario_eventos
+       SET estado = 'vencido'
+       WHERE estado = 'pendiente' AND fecha_evento < CURDATE()`
+    );
     console.log(`⏰ Cron vencidos: ${result.affectedRows} eventos actualizados`);
-  } catch (err) { console.error('Error en cron vencimientos:', err); }
-}, { timezone: 'America/Panama' });
+  } catch (err) {
+    console.error('Error en cron vencimientos:', err);
+  }
+}, { timezone: 'America/Panama' }); // Zona horaria de Panamá (donde opera el usuario)
 
-/* =========================
-   SERVER
-========================= */
+
+// =============================================================================
+// INICIO DEL SERVIDOR
+// =============================================================================
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`🚀 Servidor activo en puerto ${PORT}`));

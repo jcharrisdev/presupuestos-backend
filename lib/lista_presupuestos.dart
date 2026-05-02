@@ -1,9 +1,16 @@
+/// Pantalla de listado de presupuestos del usuario.
+///
+/// Carga todos los presupuestos mediante [PresupuestoService] y los muestra
+/// como tarjetas. Al tocar una tarjeta navega a [DetallesPresupuesto].
+/// Al crear uno nuevo navega a [CrearPresupuesto] y recarga al regresar.
+/// Soporta pull-to-refresh para recargar manualmente.
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'crear_presupuesto.dart';
 import 'presupuestos_service.dart';
 import 'detalles_presupuesto.dart';
 
+/// Pantalla de lista de presupuestos con FAB para crear uno nuevo.
 class ListaPresupuestos extends StatefulWidget {
   final String firebaseUid;
   const ListaPresupuestos({Key? key, required this.firebaseUid}) : super(key: key);
@@ -23,6 +30,8 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
     _cargar();
   }
 
+  /// Carga (o recarga) la lista de presupuestos desde el backend.
+  /// Muestra spinner durante la carga y SnackBar si hay error de red.
   Future<void> _cargar() async {
     setState(() => isLoading = true);
     try {
@@ -56,6 +65,8 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
                     itemBuilder: (_, i) => _PresupuestoCard(
                       presupuesto: presupuestos[i],
                       onTap: () async {
+                        // Espera a que el usuario regrese de DetallesPresupuesto
+                        // y recarga en caso de que haya modificado datos.
                         await Navigator.push(context, MaterialPageRoute(
                           builder: (_) => DetallesPresupuesto(
                             presupuesto: presupuestos[i],
@@ -72,7 +83,7 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
           await Navigator.push(context, MaterialPageRoute(
             builder: (_) => CrearPresupuesto(firebaseUid: widget.firebaseUid),
           ));
-          _cargar();
+          _cargar(); // recargar tras crear para mostrar el nuevo presupuesto
         },
         icon: const Icon(Icons.add),
         label: const Text('Nuevo'),
@@ -80,6 +91,7 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
     );
   }
 
+  /// Pantalla vacía cuando el usuario no tiene presupuestos todavía.
   Widget _empty() {
     return Center(
       child: Column(
@@ -96,6 +108,9 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
   }
 }
 
+/// Tarjeta visual para un presupuesto individual.
+///
+/// Muestra nombre, tipo de período, monto total y día de inicio.
 class _PresupuestoCard extends StatelessWidget {
   final Map<String, dynamic> presupuesto;
   final VoidCallback onTap;
@@ -104,8 +119,8 @@ class _PresupuestoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final monto = double.tryParse(presupuesto['monto_total'].toString()) ?? 0;
-    final tipo = presupuesto['tipo_periodo'] ?? '';
-    final dia = presupuesto['dia_inicio_periodo']?.toString() ?? '';
+    final tipo  = presupuesto['tipo_periodo'] ?? '';
+    final dia   = presupuesto['dia_inicio_periodo']?.toString() ?? '';
 
     return GestureDetector(
       onTap: onTap,
@@ -127,6 +142,7 @@ class _PresupuestoCard extends StatelessWidget {
                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 16),
                   ),
                 ),
+                // Badge del tipo de período
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -143,6 +159,7 @@ class _PresupuestoCard extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
+                // Monto total del período
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -155,6 +172,7 @@ class _PresupuestoCard extends StatelessWidget {
                   ],
                 ),
                 const Spacer(),
+                // Día de inicio del ciclo
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -166,6 +184,7 @@ class _PresupuestoCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
+            // Indicador de acción "Ver detalle"
             const Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

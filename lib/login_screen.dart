@@ -1,7 +1,17 @@
+/// Pantalla de inicio de sesión de Salarying.
+///
+/// ESTADO ACTUAL (sprint 1): autenticación simplificada.
+/// El email ingresado SE USA DIRECTAMENTE como `firebase_uid` en todas
+/// las peticiones al backend. No hay contraseña ni validación real.
+///
+/// SPRINT FUTURO: se reemplazará por Firebase Auth (`signInWithEmailAndPassword`).
+/// Al integrar Firebase, el UID será el de Firebase y el email solo se usará
+/// como credencial. La migración estará aislada aquí y en [ApiClient.setToken].
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'main_menu.dart';
 
+/// Pantalla de login con campo de email.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
@@ -10,9 +20,17 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  /// Controlador del campo de email.
   final _emailCtrl = TextEditingController();
+
+  /// true mientras se procesa el "login" (300ms de delay para feedback visual).
   bool _loading = false;
 
+  /// Ejecuta el inicio de sesión.
+  ///
+  /// Valida que el email no esté vacío, muestra el spinner 300ms y
+  /// navega a [MainMenu] pasando el email como `firebaseUid`.
+  /// `pushReplacement` evita que el botón "atrás" regrese al login.
   void _login() {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
@@ -22,6 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     setState(() => _loading = true);
+
+    // Delay mínimo para que el spinner sea visible antes de navegar
     Future.delayed(const Duration(milliseconds: 300), () {
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -48,10 +68,11 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo / Brand
+                // ── LOGO / BRAND ──────────────────────────────────────────────
                 Center(
                   child: Column(
                     children: [
+                      // Ícono de la app sobre fondo amarillo con esquinas redondeadas
                       Container(
                         width: 64,
                         height: 64,
@@ -82,13 +103,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 48),
 
-                // Form
+                // ── FORMULARIO ────────────────────────────────────────────────
                 const Text('Correo electrónico', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: AppTheme.textPrimary),
+                  // Permite enviar el form con el teclado
                   onSubmitted: (_) => _login(),
                   decoration: const InputDecoration(
                     hintText: 'ejemplo@correo.com',
@@ -98,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 28),
 
+                // Botón principal / spinner de carga
                 SizedBox(
                   width: double.infinity,
                   child: _loading
@@ -110,7 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 32),
 
-                // Aviso temporal
+                // ── AVISO TEMPORAL ────────────────────────────────────────────
+                // Informa al usuario que la autenticación real viene pronto
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(

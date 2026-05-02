@@ -1,8 +1,25 @@
+/// Pantalla de progreso de metas de ahorro.
+///
+/// Carga todas las metas del usuario desde GET /ahorros y las muestra
+/// como tarjetas con una barra de progreso visual.
+///
+/// El backend retorna para cada meta:
+///   - `nombre`: descripción de la meta
+///   - `monto_meta`: objetivo total (el monto original ingresado)
+///   - `monto_ahorrado`: suma de movimientos pagados de tipo 'ahorro'
+///
+/// El progreso se calcula localmente: `monto_ahorrado / monto_meta`.
+///
+/// Los estados visuales son:
+///   - < 75% → "En progreso" (azul)
+///   - 75–99% → "Casi listo" (amarillo)
+///   - 100%   → "Completado" (verde)
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 
+/// Lista de metas de ahorro con progreso.
 class ProgresoAhorroScreen extends StatefulWidget {
   final String firebaseUid;
   const ProgresoAhorroScreen({Key? key, required this.firebaseUid}) : super(key: key);
@@ -18,6 +35,7 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
   @override
   void initState() { super.initState(); _cargar(); }
 
+  /// Carga las metas de ahorro desde el backend.
   Future<void> _cargar() async {
     setState(() => isLoading = true);
     try {
@@ -31,6 +49,10 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
     }
   }
 
+  /// Elimina una meta de ahorro tras confirmación del usuario.
+  ///
+  /// Muestra un diálogo de confirmación antes de llamar DELETE /ahorros/:id.
+  /// Al confirmar, recarga la lista.
   Future<void> _eliminar(int id) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -72,7 +94,10 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
                     padding: const EdgeInsets.all(16),
                     itemCount: ahorros.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _AhorroCard(ahorro: ahorros[i], onDelete: () => _eliminar(ahorros[i]['id'])),
+                    itemBuilder: (_, i) => _AhorroCard(
+                      ahorro: ahorros[i],
+                      onDelete: () => _eliminar(ahorros[i]['id']),
+                    ),
                   ),
                 ),
     );
@@ -87,6 +112,10 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
   ]));
 }
 
+/// Tarjeta de una meta de ahorro con barra de progreso y estado.
+///
+/// Calcula el porcentaje en base a `monto_ahorrado / monto_meta`
+/// y asigna un color y etiqueta según el avance.
 class _AhorroCard extends StatelessWidget {
   final Map<String, dynamic> ahorro;
   final VoidCallback onDelete;
@@ -96,14 +125,16 @@ class _AhorroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final meta     = double.tryParse(ahorro['monto_meta'].toString()) ?? 0;
     final ahorrado = double.tryParse(ahorro['monto_ahorrado'].toString()) ?? 0;
+    // Porcentaje completado, acotado a [0, 1] para no romper la barra
     final pct      = meta > 0 ? (ahorrado / meta).clamp(0.0, 1.0) : 0.0;
     final restante = meta - ahorrado;
 
+    // Determinar estado visual según el porcentaje
     Color statusColor;
     String statusLabel;
-    if (pct >= 1) { statusColor = AppTheme.success; statusLabel = 'Completado'; }
+    if (pct >= 1)         { statusColor = AppTheme.success; statusLabel = 'Completado'; }
     else if (pct >= 0.75) { statusColor = AppTheme.warning; statusLabel = 'Casi listo'; }
-    else { statusColor = AppTheme.colorFijo; statusLabel = 'En progreso'; }
+    else                  { statusColor = AppTheme.colorFijo; statusLabel = 'En progreso'; }
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -113,6 +144,7 @@ class _AhorroCard extends StatelessWidget {
         border: Border.all(color: AppTheme.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── HEADER ──────────────────────────────────────────────────────
         Row(children: [
           Container(
             width: 40, height: 40,
@@ -123,6 +155,7 @@ class _AhorroCard extends StatelessWidget {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(ahorro['nombre'], style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 2),
+            // Badge de estado con color dinámico
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
@@ -132,6 +165,7 @@ class _AhorroCard extends StatelessWidget {
               child: Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w600)),
             ),
           ])),
+          // Botón de eliminar meta
           IconButton(
             icon: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 18),
             onPressed: onDelete,
@@ -140,7 +174,7 @@ class _AhorroCard extends StatelessWidget {
 
         const SizedBox(height: 18),
 
-        // Montos
+        // ── MONTOS ──────────────────────────────────────────────────────
         Row(children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Ahorrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
@@ -158,20 +192,23 @@ class _AhorroCard extends StatelessWidget {
 
         const SizedBox(height: 14),
 
-        // Barra progreso
+        // ── BARRA DE PROGRESO ────────────────────────────────────────────
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: pct, minHeight: 8,
             backgroundColor: AppTheme.surfaceAlt,
-            color: statusColor,
+            color: statusColor, // color cambia según el estado
           ),
         ),
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('${(pct * 100).toStringAsFixed(1)}% completado', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          Text('${(pct * 100).toStringAsFixed(1)}% completado',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          // Mostrar "Faltan $X" solo si queda algo por ahorrar
           if (restante > 0)
-            Text('Faltan \$${restante.toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+            Text('Faltan \$${restante.toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         ]),
       ]),
     );
