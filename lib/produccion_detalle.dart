@@ -171,7 +171,36 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.nombre, overflow: TextOverflow.ellipsis),
-        actions: [IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Presupuesto de producción',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Registra los insumos (materiales, ingredientes, etc.) '
+                  'que necesitas para producir tu producto o servicio.\n\n'
+                  '1. Toca "Ítem" para agregar un insumo con nombre, cantidad y precio unitario.\n'
+                  '2. El subtotal de cada ítem = cantidad × precio unitario.\n'
+                  '3. El COSTO TOTAL en la parte superior es la suma de todos los ítems.\n\n'
+                  'Para eliminar un ítem, desliza la tarjeta hacia la izquierda.\n\n'
+                  'Este costo total se usa al vincular el presupuesto a una venta '
+                  'para calcular la ganancia neta (cobrado − invertido).',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _modalAgregarItem,
