@@ -634,11 +634,22 @@ app.put('/presupuestos/:id/gastos/reanudar-fijos', async (req, res) => {
   }
 });
 
-/** DELETE /gastos/:id — Elimina un gasto y sus movimientos asociados (por CASCADE) */
+/**
+ * DELETE /gastos/:id?firebase_uid=
+ * Elimina un gasto y sus movimientos asociados (CASCADE).
+ * FIX: se agregó validación de firebase_uid para evitar que un usuario
+ * elimine gastos de otro usuario si conoce el ID.
+ */
 app.delete('/gastos/:id', async (req, res) => {
   const { id } = req.params;
+  const { firebase_uid } = req.query;
+  // FIX: firebase_uid es requerido para verificar propiedad del recurso
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    const [result] = await db.execute(`DELETE FROM gastos WHERE id = ?`, [id]);
+    const [result] = await db.execute(
+      `DELETE FROM gastos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Gasto no encontrado' });
     res.json({ message: 'Gasto eliminado' });
   } catch (error) {
@@ -680,11 +691,20 @@ app.get('/ahorros', async (req, res) => {
   }
 });
 
-/** DELETE /ahorros/:id — Elimina una meta de ahorro (solo gastos de tipo 'ahorro') */
+/**
+ * DELETE /ahorros/:id?firebase_uid=
+ * Elimina una meta de ahorro.
+ * FIX: se agregó validación de firebase_uid para verificar propiedad del recurso.
+ */
 app.delete('/ahorros/:id', async (req, res) => {
   const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    const [result] = await db.execute(`DELETE FROM gastos WHERE id = ? AND tipo = 'ahorro'`, [id]);
+    const [result] = await db.execute(
+      `DELETE FROM gastos WHERE id = ? AND tipo = 'ahorro' AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Ahorro no encontrado' });
     res.json({ message: 'Ahorro eliminado' });
   } catch (error) {
@@ -1229,12 +1249,14 @@ app.post('/ventas/:id/cobros', async (req, res) => {
       const [[venta]] = await db.execute(`SELECT nombre FROM ventas WHERE id = ?`, [id]);
       const titulo = `Cobro: ${nombre_cliente} (${venta?.nombre || 'Venta'})`;
 
+      // FIX: se agrega cobro_id al evento para que Flutter pueda acceder al cobro desde el calendario.
+      // Sin este campo, calendario.dart no podía llamar PUT /cobros/:id/cobrar al marcar el evento.
       const [evResult] = await db.execute(
-        `INSERT INTO calendario_eventos (firebase_uid, titulo, tipo, fecha_evento, monto_esperado, estado)
-         VALUES (?, ?, 'cobro', ?, ?, 'pendiente')`,
-        [firebase_uid, titulo, fechaCobro, monto]
+        `INSERT INTO calendario_eventos (firebase_uid, titulo, tipo, fecha_evento, monto_esperado, estado, cobro_id)
+         VALUES (?, ?, 'cobro', ?, ?, 'pendiente', ?)`,
+        [firebase_uid, titulo, fechaCobro, monto, cobroId]
       );
-      // Vinculamos el evento al cobro para poder actualizarlo cuando se cobre
+      // Vínculo inverso: cobros_clientes también guarda el id del evento del calendario
       await db.execute(
         `UPDATE cobros_clientes SET calendario_evento_id = ? WHERE id = ?`,
         [evResult.insertId, cobroId]
