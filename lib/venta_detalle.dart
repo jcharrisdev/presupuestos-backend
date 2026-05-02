@@ -224,7 +224,41 @@ class _VentaDetalleState extends State<VentaDetalle> {
     return Scaffold(
       appBar: AppBar(
         title: Text(nombre, overflow: TextOverflow.ellipsis),
-        actions: [IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Detalle de venta',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Muestra la rentabilidad de una venta y el estado de cobro de cada cliente.\n\n'
+                  'Gráfica de rentabilidad:\n'
+                  '  • Invertido → costo total de los insumos vinculados.\n'
+                  '  • Cobrado → suma de los cobros ya realizados.\n'
+                  '  • Esperado → total de todos los cobros (realizados + pendientes).\n'
+                  '  • Ganancia = Cobrado − Invertido.\n\n'
+                  'Lista de clientes:\n'
+                  '  1. Toca "Cliente" para agregar un cobro.\n'
+                  '  2. Contra entrega → se cobra en el momento de la entrega.\n'
+                  '  3. A plazo → se programa un recordatorio en el Calendario.\n'
+                  '  4. Toca "Cobrar" para registrar el monto recibido.\n\n'
+                  'Si no vinculaste un presupuesto de producción, '
+                  'la barra de "Invertido" no aparece.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _modalAgregarCliente,
