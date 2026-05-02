@@ -86,7 +86,36 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Progreso de Ahorros'),
-        actions: [IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Progreso de ahorros',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Muestra el avance de todas tus metas de ahorro activas.\n\n'
+                  '• La barra verde indica cuánto llevas ahorrado vs la meta total.\n'
+                  '• "En progreso" → menos del 75% completado.\n'
+                  '• "Casi listo" → entre el 75% y el 99%.\n'
+                  '• "Completado" → llegaste a la meta.\n\n'
+                  'El saldo se actualiza automáticamente cada vez que marcas como pagada '
+                  'la cuota de ahorro en el detalle del presupuesto.\n\n'
+                  'Toca el ícono de basura para eliminar una meta.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
