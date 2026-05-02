@@ -1188,6 +1188,29 @@ app.get('/ventas/:id', async (req, res) => {
       [id, firebase_uid]
     );
 
+    // Adjuntar ítems de pedido a cada cobro (Fase 1: detalle de productos por cliente)
+    if (cobros.length > 0) {
+      const cobroIds = cobros.map(c => c.id);
+      const placeholders = cobroIds.map(() => '?').join(',');
+      const [items] = await db.execute(
+        `SELECT pi.*, vp.nombre AS variante_nombre, pr.nombre AS producto_nombre
+         FROM pedido_items pi
+         LEFT JOIN variantes_producto vp ON vp.id = pi.variante_id
+         LEFT JOIN productos pr ON pr.id = vp.producto_id
+         WHERE pi.cobro_cliente_id IN (${placeholders})
+         ORDER BY pi.id ASC`,
+        cobroIds
+      );
+      const itemsMap = {};
+      items.forEach(item => {
+        if (!itemsMap[item.cobro_cliente_id]) itemsMap[item.cobro_cliente_id] = [];
+        itemsMap[item.cobro_cliente_id].push(item);
+      });
+      cobros.forEach(c => { c.items = itemsMap[c.id] || []; });
+    } else {
+      cobros.forEach(c => { c.items = []; });
+    }
+
     // Calculamos la rentabilidad en el backend para no hacerlo en Flutter
     const totalCobrado  = cobros.filter(c => c.estado === 'cobrado').reduce((s, c) => s + Number(c.monto_cobrado || c.monto), 0);
     const totalEsperado = cobros.reduce((s, c) => s + Number(c.monto), 0);
