@@ -165,6 +165,34 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
       appBar: AppBar(
         title: const Text('Ahorro y Metas'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Ahorro y Metas',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Crea metas de ahorro y el sistema calcula cuánto debes apartar en cada período.\n\n'
+                  '1. Escribe el nombre de tu meta (ej: "Vacaciones").\n'
+                  '2. Ingresa el monto total que quieres ahorrar.\n'
+                  '3. Elige el presupuesto donde se descontará la cuota.\n'
+                  '4. Ajusta el plazo con el slider (en meses).\n\n'
+                  'La cuota por período se calcula automáticamente:\n'
+                  '  Quincenal → monto ÷ (meses × 2)\n'
+                  '  Mensual → monto ÷ meses\n\n'
+                  'Toca "Ver progreso" para ver el avance de tus metas.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
           // Navega al historial de metas creadas
           TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(
