@@ -49,7 +49,36 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mis Presupuestos')),
+      appBar: AppBar(
+        title: const Text('Mis Presupuestos'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Mis Presupuestos',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Aquí se listan todos tus presupuestos.\n\n'
+                  '1. Toca el botón "Nuevo" para crear un presupuesto.\n'
+                  '2. Toca una tarjeta para ver el detalle del período activo.\n'
+                  '3. Desliza hacia abajo para actualizar la lista.\n\n'
+                  'Cada presupuesto tiene un ciclo quincenal (14 días) o mensual (30 días). '
+                  'El sistema abre períodos automáticamente según el día de inicio que configuraste.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : presupuestos.isEmpty
