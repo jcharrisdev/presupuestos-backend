@@ -34,13 +34,38 @@ class MainMenu extends StatelessWidget {
         automaticallyImplyLeading: false, // Sin flecha de "atrás" — es la pantalla raíz
         title: const Text('Salarying'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: AppTheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                title: const Text('Panel principal',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                content: const Text(
+                  'Esta es la pantalla de inicio de Salarying.\n\n'
+                  '1. Mis Presupuestos — registra y controla tus gastos por período (quincenal o mensual).\n'
+                  '2. Ahorro y Metas — define metas de ahorro y sigue su progreso.\n'
+                  '3. Calendario — ve todos tus pagos y cobros programados en un calendario.\n'
+                  '4. Cobros — gestiona producción, ventas y cobros a clientes.\n\n'
+                  'Toca cualquier tarjeta para entrar al módulo.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+                ],
+              ),
+            ),
+          ),
           // Botón de cerrar sesión: usa pushAndRemoveUntil para limpiar
           // todo el stack de navegación y que el botón "atrás" no regrese al menú.
           IconButton(
             icon: const Icon(Icons.logout, size: 20),
             onPressed: () => Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (_) => false, // elimina todas las rutas anteriores
+              (_) => false,
             ),
             tooltip: 'Cerrar sesión',
           ),
