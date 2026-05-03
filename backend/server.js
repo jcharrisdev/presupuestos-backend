@@ -945,10 +945,14 @@ app.post('/calendario/generar', async (req, res) => {
  */
 app.put('/calendario/eventos/:id/estado', async (req, res) => {
   const { id } = req.params;
-  const { estado, firebase_uid } = req.body;
+  let { estado, firebase_uid } = req.body;
   if (!estado || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   if (!['pendiente', 'pagado', 'vencido', 'cobrado'].includes(estado))
     return res.status(400).json({ error: 'Estado inválido' });
+  // El ENUM de calendario_eventos solo acepta ('pendiente','pagado','vencido').
+  // Versiones anteriores del app enviaban 'cobrado' → mapear a 'pagado' para
+  // evitar WARN_DATA_TRUNCATED de MySQL sin requerir migración de schema.
+  if (estado === 'cobrado') estado = 'pagado';
   try {
     const [result] = await db.execute(
       `UPDATE calendario_eventos SET estado = ? WHERE id = ? AND firebase_uid = ?`,
