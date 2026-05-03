@@ -133,60 +133,160 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
 
   /// Abre el bottom sheet para crear una nueva venta.
   ///
-  /// Bug 2: el usuario ingresa manualmente el monto de inversión (opcional).
   /// Campos:
-  ///   - Nombre de la venta (requerido)
-  ///   - Inversión total (opcional, ej: $45.00 gastados en insumos)
+  ///   - Nombre (requerido)
+  ///   - Presupuesto de producción (opcional): vincula al presupuesto para
+  ///     calcular total_invertido automáticamente desde items_produccion.
+  ///   - Inversión manual (opcional): si se ingresa, tiene prioridad sobre
+  ///     el cálculo automático del presupuesto vinculado.
   void _crearVenta() {
-    final nombreCtrl   = TextEditingController();
+    final nombreCtrl    = TextEditingController();
     final inversionCtrl = TextEditingController();
+    int? prodId;               // presupuesto de producción seleccionado
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _handle(),
-          const Text('Nueva venta',
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: nombreCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(hintText: 'Ej: Venta mayo semana 1'),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: inversionCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
-            decoration: const InputDecoration(
-              labelText: 'Inversión total (opcional)',
-              prefixText: '\$ ',
-              helperText: 'Cuánto gastaste para producir esta venta',
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 20, 20,
+              MediaQuery.of(context).viewInsets.bottom + 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            _handle(),
+            const Text('Nueva venta',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
+
+            // ── Nombre ──────────────────────────────────────────────────────
+            TextField(
+              controller: nombreCtrl, autofocus: true,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                labelText: 'Nombre de la venta',
+                hintText: 'Ej: Venta mayo semana 1',
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () async {
-              if (nombreCtrl.text.trim().isEmpty) return;
-              Navigator.pop(context);
-              // Solo enviar inversion si es un número MAYOR que 0.
-              // inversion = 0 en la BD bloquea el fallback COALESCE y muestra $0 siempre.
-              final inversion = double.tryParse(inversionCtrl.text.trim());
-              final body = <String, dynamic>{
-                'nombre': nombreCtrl.text.trim(),
-                'firebase_uid': widget.firebaseUid,
-              };
-              if (inversion != null && inversion > 0) body['inversion'] = inversion;
-              final res = await ApiClient.post('/ventas', body);
-              if (res.statusCode == 201) _cargarVentas();
-            },
-            child: const Text('Crear venta'),
-          )),
-        ]),
+            const SizedBox(height: 20),
+
+            // ── Presupuesto de producción ───────────────────────────────────
+            const Text('Presupuesto de producción (opcional)',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            const Text('El sistema calculará la inversión desde los insumos registrados.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              value: prodId,
+              dropdownColor: AppTheme.surfaceAlt,
+              hint: const Text('Sin presupuesto de insumos',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppTheme.surfaceAlt,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppTheme.border)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppTheme.border)),
+              ),
+              items: [
+                const DropdownMenuItem<int>(
+                    value: null,
+                    child: Text('Sin presupuesto',
+                        style: TextStyle(color: AppTheme.textMuted))),
+                ..._producciones.map((p) {
+                  final pid = p['id'] is int
+                      ? p['id'] as int
+                      : int.tryParse(p['id']?.toString() ?? '') ?? 0;
+                  final costo = double.tryParse(
+                          p['total_invertido']?.toString() ?? '0') ??
+                      0;
+                  return DropdownMenuItem<int>(
+                    value: pid,
+                    child: Text(
+                      '${p['nombre']} · \$${costo.toStringAsFixed(2)}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppTheme.textPrimary,
+                          fontSize: 13),
+                    ),
+                  );
+                }),
+              ],
+              onChanged: (v) => setS(() => prodId = v),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Inversión manual ────────────────────────────────────────────
+            const Text('Inversión manual (opcional)',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            const Text(
+                'Si ingresas un monto aquí, tiene prioridad sobre el presupuesto.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: inversionCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18),
+              decoration: const InputDecoration(
+                prefixText: '\$ ',
+                prefixStyle: TextStyle(
+                    color: AppTheme.colorFijo,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18),
+                hintText: '0.00',
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // ── Botón crear ─────────────────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final nombre = nombreCtrl.text.trim();
+                  if (nombre.isEmpty) return;
+                  Navigator.pop(context);
+
+                  // Normalizar separador decimal (coma → punto)
+                  final invTexto =
+                      inversionCtrl.text.trim().replaceAll(',', '.');
+                  final inversion =
+                      invTexto.isEmpty ? null : double.tryParse(invTexto);
+
+                  final body = <String, dynamic>{
+                    'nombre': nombre,
+                    'firebase_uid': widget.firebaseUid,
+                  };
+                  // Solo enviar si > 0 (0 bloquea COALESCE en backend)
+                  if (inversion != null && inversion > 0) {
+                    body['inversion'] = inversion;
+                  }
+                  if (prodId != null) {
+                    body['presupuesto_produccion_id'] = prodId;
+                  }
+
+                  final res = await ApiClient.post('/ventas', body);
+                  if (res.statusCode == 201) _cargarVentas();
+                },
+                child: const Text('Crear venta'),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }

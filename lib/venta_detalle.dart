@@ -15,6 +15,7 @@
 /// genera automáticamente un evento en `calendario_eventos` para recordar
 /// la fecha de cobro.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'theme/app_theme.dart';
@@ -1055,22 +1056,35 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
           TextField(
             controller: ctrl, autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            // Aceptar dígitos, punto y coma (la coma se normaliza a punto al guardar)
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+            ],
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800),
             decoration: const InputDecoration(
               prefixText: '\$ ',
               prefixStyle: TextStyle(color: AppTheme.colorFijo, fontSize: 26, fontWeight: FontWeight.w800),
               hintText: '0.00',
+              helperText: 'Acepta punto o coma como decimal (ej: 45.50 o 45,50)',
+              helperStyle: TextStyle(color: AppTheme.textMuted, fontSize: 10),
             ),
           ),
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
-              // Campo vacío = borrar inversión (null). Número válido = guardar.
-              // NUNCA enviar 0 implícito: COALESCE(0,...) en MySQL devuelve 0
-              // y bloquea el fallback a presupuestos de producción.
-              final texto = ctrl.text.trim();
+              // Normalizar separador decimal: el teclado numérico de algunos
+              // dispositivos Android latinoamericanos envía "45,50" en lugar
+              // de "45.50". double.tryParse solo acepta punto.
+              final texto = ctrl.text.trim().replaceAll(',', '.');
               final inversion = texto.isEmpty ? null : double.tryParse(texto);
-              if (texto.isNotEmpty && inversion == null) return; // número inválido
+
+              // Validación: si hay texto pero no parsea → campo inválido
+              if (texto.isNotEmpty && inversion == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Ingresa un número válido (ej: 45.50)')),
+                );
+                return;
+              }
 
               Navigator.pop(context);
 
@@ -1100,9 +1114,17 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                   {'inversion': inversion, 'firebase_uid': widget.firebaseUid});
 
               if (!mounted) return;
-              if (res.statusCode != 200) {
+              if (res.statusCode == 404) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error al guardar la inversión (${res.statusCode})')),
+                  const SnackBar(
+                    content: Text('El servidor necesita ser actualizado. '
+                        'Ve a Render y haz Deploy Manual.'),
+                    duration: Duration(seconds: 5),
+                  ),
+                );
+              } else if (res.statusCode != 200) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error ${res.statusCode} al guardar la inversión')),
                 );
               }
               _cargar(); // sincronizar con servidor en background
