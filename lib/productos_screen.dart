@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'receta_screen.dart';
 
 class ProductosScreen extends StatefulWidget {
   final String firebaseUid;
@@ -310,11 +311,13 @@ class _ProductosScreenState extends State<ProductosScreen> {
                 content: const Text(
                   'Define aquí lo que vendes.\n\n'
                   '• Producto → lo que vendes (ej: Cheesecake).\n'
-                  '• Variante → versión con precio propio (ej: Fresa regular \$3.75).\n\n'
+                  '• Variante → versión con precio propio (ej: Fresa regular \$3.75).\n'
+                  '• Receta → insumos necesarios para producir una tanda de la variante.\n\n'
                   '1. Toca "Producto" para crear uno nuevo.\n'
                   '2. Toca el producto para ver sus variantes.\n'
                   '3. Toca "+" para agregar variantes.\n'
-                  '4. Toca una variante para editar su precio.\n\n'
+                  '4. Toca una variante para editar su precio.\n'
+                  '5. Toca "Receta" junto a la variante para definir sus insumos.\n\n'
                   'Al crear el pedido de un cliente dentro de una venta, '
                   'podrás seleccionar variantes del catálogo y el total '
                   'se calculará automáticamente.',
@@ -375,6 +378,16 @@ class _ProductosScreenState extends State<ProductosScreen> {
                             v['id'] is int ? v['id'] as int : int.tryParse(v['id'].toString()) ?? 0,
                             v['nombre']?.toString() ?? '',
                           ),
+                          onVerReceta: (v) {
+                            final varId = v['id'] is int ? v['id'] as int : int.tryParse(v['id'].toString()) ?? 0;
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => RecetaScreen(
+                                varianteId: varId,
+                                varianteNombre: v['nombre']?.toString() ?? '',
+                                firebaseUid: widget.firebaseUid,
+                              ),
+                            ));
+                          },
                           variantesActivas: variantesActivas,
                         );
                       },
@@ -405,13 +418,14 @@ class _ProductoCard extends StatelessWidget {
   final bool expandido;
   final int variantesActivas;
   final VoidCallback onExpand, onEliminarProducto, onAgregarVariante;
-  final void Function(Map<String, dynamic>) onEditarVariante, onEliminarVariante;
+  final void Function(Map<String, dynamic>) onEditarVariante, onEliminarVariante, onVerReceta;
 
   const _ProductoCard({
     required this.producto, required this.variantes, required this.expandido,
     required this.variantesActivas, required this.onExpand,
     required this.onEliminarProducto, required this.onAgregarVariante,
     required this.onEditarVariante, required this.onEliminarVariante,
+    required this.onVerReceta,
   });
 
   @override
@@ -516,7 +530,23 @@ class _ProductoCard extends StatelessWidget {
                     ])),
                     Text('\$${precio.toStringAsFixed(2)}', style: const TextStyle(
                       color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
+                    // Botón Receta: navega a RecetaScreen para esta variante
+                    GestureDetector(
+                      onTap: () => onVerReceta(v),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.colorAhorro.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: AppTheme.colorAhorro.withOpacity(0.3)),
+                        ),
+                        child: const Text('Receta',
+                            style: TextStyle(color: AppTheme.colorAhorro, fontSize: 10,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     GestureDetector(
                       onTap: () => onEliminarVariante(v),
                       child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
