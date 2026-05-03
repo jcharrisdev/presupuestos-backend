@@ -306,11 +306,33 @@ lib/theme/app_theme.dart         Tema Binance oscuro + TipoChip + LabelDivider
 ================================================================================
 
 SESIÓN 3 (2026-05-03):
-  - flutter analyze: corregido único error real (test/widget_test.dart importaba
-    presupuestos_service.dart y usaba MyApp → reemplazado con test placeholder)
+  - flutter analyze: corregido error real (test/widget_test.dart → test placeholder)
   - APK release generado: build\app\outputs\flutter-apk\app-release.apk (22.2 MB)
-  - 182 infos restantes son solo estilo (withOpacity deprecated, curly_braces, etc.)
-    no bloquean el build ni el funcionamiento
+  - 182 infos restantes son solo estilo, no bloquean el build
+
+  AUDITORÍA COMPLETA DEL MÓDULO DE COBROS:
+
+  Flutter (calendario.dart):
+    - FIX: panel de eventos sin Container(color: AppTheme.background) → pantalla
+      blanca en Android release al presionar día con evento (BUG CONOCIDO resuelto)
+    - FIX: estado de carga del CalendarioScreen también sin fondo → mismo fix
+    - FIX: _cargarEventos() catch silencioso → ahora muestra SnackBar con error
+    - FIX CRÍTICO: _marcarPagado() enviaba estado='cobrado' al backend pero el
+      ENUM de calendario_eventos solo acepta ('pendiente','pagado','vencido') →
+      MySQL lo rechazaba silenciosamente → evento no se marcaba como pagado.
+      Ahora siempre envía 'pagado' (que es el estado correcto para ambos tipos)
+
+  Backend (server.js):
+    - FIX SEGURIDAD: GET /cobros/:id/items no verificaba firebase_uid del cobro →
+      cualquier usuario podía leer ítems de cobros ajenos conociendo el ID
+    - FIX SEGURIDAD: DELETE /pedido-items/:id mismo problema → ahora usa JOIN
+      con cobros_clientes para verificar ownership
+    - FIX: POST /cobros/:id/items no sincronizaba monto_esperado en
+      calendario_eventos → cobros creados con catálogo + fecha programada
+      quedaban con monto $0 en el calendario. Ahora se actualiza al recalcular
+    - FIX: PUT /ventas/:id no verificaba affectedRows → respondía 200 aunque
+      la venta no existiera. Ahora retorna 404 correctamente
+    - FIX: doble /** en JSDoc de POST /ventas eliminado
 
 SESIÓN 2 (2026-05-02) — DOCUMENTACIÓN:
   - Comentarios exhaustivos en TODOS los archivos del proyecto
@@ -465,6 +487,8 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
+2ae5843 fix: backend cobros — ownership, sync monto evento y doble JSDoc
+1908f32 fix: calendario — panel en blanco, catch silencioso y estado 'cobrado' inválido
 2fdebf7 fix: restaurar presupuesto de producción y corregir parseo decimal en inversión
 e41985c fix: auditoría completa del módulo de cobros — inversión, ganancia y UX
 c05ab3c docs: actualizar CLAUDE_CONTEXT con Bug 1, Bug 2, Mejora 1 y Mejora 2
