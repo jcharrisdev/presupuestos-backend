@@ -310,6 +310,22 @@ SESIÓN 3 (2026-05-03):
   - APK release generado: build\app\outputs\flutter-apk\app-release.apk (22.2 MB)
   - 182 infos restantes son solo estilo, no bloquean el build
 
+  OPTIMIZACIÓN VENTANA DE VENTAS (venta_detalle.dart):
+
+    Bug root cause: _cargar() llamado en background hacía setState(_loading=true)
+    que reemplazaba la UI completa con 'Cargando venta...' durante el cold start de
+    Render (~50s). Esto borraba el optimistic update y dejaba todo en 0%.
+    Fix: _cargar({silencioso:true}) — barra delgada de 3px en lugar de loading completo.
+
+    - FIX: ganancia mostraba el invertido como pérdida si cobrado=0 → ahora $0.00
+    - FIX: % cobrado siempre 0% → solucionado con refresh silencioso
+    - FIX: mensaje "Ve a Render y haz Deploy Manual" eliminado → error real del servidor
+    - NUEVO: barra de progreso visual para % cobrado (LinearProgressIndicator)
+    - NUEVO: sección OBJETIVO DE MARGEN (dropdown 10-60% + ventas necesarias + brecha)
+      Fórmula: ventas = invertido / (1 - margen_objetivo)
+      Compara ventas proyectadas vs objetivo con badge verde/rojo
+    - didPopNext, refresh button, pull-to-refresh: todos usan silencioso=true
+
   AUDITORÍA COMPLETA DEL MÓDULO DE COBROS:
 
   Flutter (calendario.dart):
@@ -487,6 +503,8 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
+51c46ef feat: venta_detalle — sección OBJETIVO DE MARGEN
+01a1850 fix: venta_detalle — ganancia, % cobrado, refresh silencioso e inversión
 2ae5843 fix: backend cobros — ownership, sync monto evento y doble JSDoc
 1908f32 fix: calendario — panel en blanco, catch silencioso y estado 'cobrado' inválido
 2fdebf7 fix: restaurar presupuesto de producción y corregir parseo decimal en inversión
