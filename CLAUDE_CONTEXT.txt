@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-02
+Última actualización: 2026-05-02 (sesión 2)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -140,6 +140,14 @@ cobros_clientes
   monto_cobrado, fecha_cobrado, calendario_evento_id,
   created_at
 
+--- MÓDULO MULTI-PRESUPUESTO (NUEVO - Fase 2) ---
+
+venta_presupuestos
+  id, venta_id, presupuesto_produccion_id, created_at
+  UK: (venta_id, presupuesto_produccion_id)
+  FK: venta_id → ventas(id) CASCADE
+  FK: presupuesto_produccion_id → presupuestos_produccion(id) CASCADE
+
 --- MÓDULO CATÁLOGO DE PRODUCTOS (NUEVO - Fase 1) ---
 
 productos
@@ -167,14 +175,22 @@ pedido_items
 
 EJECUTAR UNA SOLA VEZ en la BD de Clever Cloud:
 
+-- Sesión 1 (Fases 1 y 3):
 ALTER TABLE cobros_clientes
   ADD COLUMN monto_manual TINYINT(1) NOT NULL DEFAULT 1 AFTER monto,
   ADD COLUMN fecha_pago_especifica DATE NULL AFTER fecha_cobro,
   MODIFY COLUMN condicion_pago
     ENUM('contra_entrega','plazo','fecha_especifica') NOT NULL DEFAULT 'contra_entrega';
 
-Las tablas productos, variantes_producto y pedido_items también deben crearse
-en producción ejecutando las sentencias CREATE TABLE del schema.sql.
+-- Crear tablas nuevas de sesión 1:
+-- productos, variantes_producto, pedido_items (ver schema.sql)
+
+-- Sesión 2 (Fase 2 — Multi-presupuesto):
+-- 1. Crear tabla venta_presupuestos (ver schema.sql)
+-- 2. Migrar relaciones existentes:
+INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id)
+SELECT id, presupuesto_produccion_id FROM ventas
+WHERE presupuesto_produccion_id IS NOT NULL;
 
 ================================================================================
 6. ENDPOINTS DEL BACKEND (todos los existentes)
@@ -216,7 +232,7 @@ POST   /produccion/:id/items
 DELETE /produccion/items/:id?firebase_uid=
 DELETE /produccion/:id?firebase_uid=
 
---- CATÁLOGO DE PRODUCTOS (NUEVO Fase 1) ---
+--- CATÁLOGO DE PRODUCTOS (Fase 1) ---
 GET    /productos?firebase_uid=
 POST   /productos
 PUT    /productos/:id
@@ -226,7 +242,7 @@ POST   /productos/:id/variantes
 PUT    /variantes/:id
 DELETE /variantes/:id?firebase_uid=
 
---- PEDIDO ITEMS (NUEVO Fase 1) ---
+--- PEDIDO ITEMS (Fase 1) ---
 GET    /cobros/:id/items?firebase_uid=
 POST   /cobros/:id/items
 DELETE /pedido-items/:id?firebase_uid=
@@ -234,14 +250,19 @@ DELETE /pedido-items/:id?firebase_uid=
 --- VENTAS ---
 GET    /ventas?firebase_uid=
 POST   /ventas
+  → Body: { nombre, firebase_uid, presupuesto_ids?: int[] }   ← Fase 2: array de IDs
 GET    /ventas/:id?firebase_uid=
-  → Retorna: { venta, cobros[{...items[]}], resumen{} }
-  → cobros ahora incluye items[] con el detalle de productos por cliente
+  → Retorna: { venta, presupuestos[], cobros[{...items[]}], resumen{} }  ← Fase 2+7
+  → presupuestos[]: lista de presupuestos vinculados con total_invertido individual
+  → resumen ampliado: total_pendiente, margen_esperado, porcentaje_cobrado
 POST   /ventas/:id/cobros
   → Soporta condicion_pago: 'contra_entrega' | 'plazo' | 'fecha_especifica'
-  → Si fecha_especifica: campo fecha_pago_especifica (YYYY-MM-DD) → crea evento calendario
 PUT    /cobros/:id/cobrar
 DELETE /cobros/:id?firebase_uid=
+
+--- MULTI-PRESUPUESTO (Fase 2) ---
+POST   /ventas/:id/presupuestos       — vincula presupuesto adicional a una venta
+DELETE /ventas/:id/presupuestos/:pid?firebase_uid=  — desvincula presupuesto
 
 ================================================================================
 7. ARCHIVOS FLUTTER Y SU PROPÓSITO
@@ -327,12 +348,11 @@ FASE 3 — FECHA EXACTA DE COBRO (implementado):
 9. FASES PENDIENTES DE IMPLEMENTAR
 ================================================================================
 
-FASE 2 — Multi-presupuesto por venta (~6,000-8,000 tokens):
-  Qué hace: elimina la dependencia rígida de una venta a UN solo presupuesto de producción
-  Schema: nueva tabla venta_presupuestos (junction: venta_id, presupuesto_produccion_id)
-  Migration: INSERT INTO venta_presupuestos SELECT id, presupuesto_produccion_id FROM ventas WHERE presupuesto_produccion_id IS NOT NULL
-  Backend: GET /ventas/:id total_invertido suma N presupuestos vía JOIN a venta_presupuestos
-  Flutter: cobros_home._crearVenta() permite seleccionar múltiples presupuestos
+FASE 2 — IMPLEMENTADA ✓
+  - Schema: venta_presupuestos (junction table)
+  - Backend: POST /ventas acepta presupuesto_ids[], GET /ventas/:id suma N presupuestos,
+             nuevos endpoints POST/DELETE /ventas/:id/presupuestos/:pid
+  - Flutter: cobros_home multi-select checkboxes, venta_detalle sección COSTOS DE PRODUCCIÓN
 
 FASE 4 — Recetas de productos (~22,000-28,000 tokens):
   Qué hace: define qué insumos se necesitan para producir una variante
@@ -353,10 +373,9 @@ FASE 6 — Budget integrado estimado vs real (~14,000-18,000 tokens):
   Backend: modificar GET /ventas/:id resumen para incluir costo_estimado y costo_real
   Flutter: nueva sección en venta_detalle con comparación visual
 
-FASE 7 — Resumen financiero completo (~8,000-12,000 tokens):
-  Qué hace: muestra todas las métricas: ingresos, costos, ganancia, margen estimado/real
-  Backend: ampliar el objeto resumen de GET /ventas/:id
-  Flutter: mejorar la gráfica de rentabilidad en venta_detalle
+FASE 7 — IMPLEMENTADA ✓
+  - Backend: resumen ampliado con total_pendiente, margen_esperado, porcentaje_cobrado
+  - Flutter: segunda fila de stats en venta_detalle (por cobrar, % cobrado, margen esperado)
 
 ================================================================================
 10. INSTRUCCIÓN PARA NUEVA SESIÓN
@@ -408,17 +427,17 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
+ea8fc78 feat: venta_detalle muestra presupuestos vinculados y resumen financiero completo (Fase 2 + 7)
+9415283 feat: _crearVenta() permite seleccionar múltiples presupuestos de producción (Fase 2)
+e90ed11 backend: POST /ventas acepta N presupuestos y GET /ventas/:id calcula total_invertido desde venta_presupuestos (Fase 2)
+106690f schema: tabla venta_presupuestos para multi-presupuesto por venta (Fase 2)
 28c17c3 feat: venta_detalle soporta catálogo de productos y fecha exacta de cobro (Fase 1+3)
 a1836cd feat: cobros_home agrega pestaña Productos (Fase 1)
 4b6efcd feat: pantalla de catálogo de productos y variantes (Fase 1)
 fda7736 backend: POST /ventas/:id/cobros soporta fecha_especifica (Fase 3)
 03f7de9 backend: GET /ventas/:id incluye items[] por cobro (Fase 1)
 f63a11a backend: CRUD productos/variantes y endpoints pedido_items (Fase 1)
-616ebb3 schema: tablas productos, variantes_producto y pedido_items (Fase 1)
-546d70d fix: pestaña Ventas en blanco por fondo gris de Android y campos sin parsear
-b433c8c fix: pantalla de venta en blanco cuando _venta es null tras cargar
-d54484a fix: timeout de 55s en ApiClient para evitar pantallas colgadas
-[... varios commits anteriores de fixes y documentación]
+[... commits anteriores]
 
 ================================================================================
 FIN DEL ARCHIVO DE CONTEXTO
