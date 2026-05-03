@@ -217,20 +217,44 @@ CREATE TABLE IF NOT EXISTS items_produccion (
 
 -- -----------------------------------------------------------------------------
 -- TABLA: ventas
--- Representa una venta o lote de ventas. Puede estar vinculada a un presupuesto
--- de producción para calcular la rentabilidad.
--- La ganancia = total_cobrado − total_invertido_en_insumos.
+-- Representa una venta o lote de ventas. Puede estar vinculada a uno o más
+-- presupuestos de producción (vía venta_presupuestos) para calcular rentabilidad.
+-- La ganancia = total_cobrado − SUM(total_invertido de todos los presupuestos).
+-- presupuesto_produccion_id se conserva como campo LEGACY para compatibilidad.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ventas (
   id                        INT PRIMARY KEY AUTO_INCREMENT,
   firebase_uid              VARCHAR(255) NOT NULL,
   nombre                    VARCHAR(255) NOT NULL,        -- Ej: "Venta mayo semana 1"
-  presupuesto_produccion_id INT NULL,                     -- Opcional: para calcular margen
+  presupuesto_produccion_id INT NULL,                     -- LEGACY: primer presupuesto vinculado
   estado                    ENUM('activa','cerrada') NOT NULL DEFAULT 'activa',
   created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (presupuesto_produccion_id) REFERENCES presupuestos_produccion(id) ON DELETE SET NULL,
   INDEX idx_uid (firebase_uid)
+);
+
+
+-- -----------------------------------------------------------------------------
+-- TABLA: venta_presupuestos  (Fase 2 — Multi-presupuesto)
+-- Junction table: una venta puede tener N presupuestos de producción vinculados.
+-- El total_invertido de la venta = SUM de los costos de todos los presupuestos aquí.
+--
+-- Migración inicial (ejecutar UNA VEZ en Clever Cloud):
+--   INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id)
+--   SELECT id, presupuesto_produccion_id FROM ventas
+--   WHERE presupuesto_produccion_id IS NOT NULL;
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS venta_presupuestos (
+  id                        INT PRIMARY KEY AUTO_INCREMENT,
+  venta_id                  INT NOT NULL,
+  presupuesto_produccion_id INT NOT NULL,
+  created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE,
+  FOREIGN KEY (presupuesto_produccion_id) REFERENCES presupuestos_produccion(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_venta_presupuesto (venta_id, presupuesto_produccion_id),
+  INDEX idx_venta (venta_id)
 );
 
 
@@ -331,6 +355,7 @@ CREATE TABLE IF NOT EXISTS pedido_items (
 -- MIGRACIONES — Ejecutar UNA SOLA VEZ sobre la BD en producción (Clever Cloud)
 -- Estas sentencias adaptan tablas existentes sin perder datos.
 --
+-- [Sesión anterior — Fases 1 y 3]:
 -- ALTER TABLE cobros_clientes
 --   ADD COLUMN monto_manual TINYINT(1) NOT NULL DEFAULT 1 AFTER monto,
 --   ADD COLUMN fecha_pago_especifica DATE NULL AFTER fecha_cobro,
@@ -340,4 +365,12 @@ CREATE TABLE IF NOT EXISTS pedido_items (
 -- Efecto de monto_manual:
 --   1 (DEFAULT) → el monto fue ingresado manualmente (todos los registros viejos)
 --   0           → el monto se calcula desde pedido_items automáticamente
+--
+-- [Fase 2 — Multi-presupuesto]:
+-- 1. Crear la tabla venta_presupuestos (ver CREATE TABLE arriba).
+-- 2. Migrar las relaciones existentes (ventas con presupuesto_produccion_id ya definido):
+--
+-- INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id)
+-- SELECT id, presupuesto_produccion_id FROM ventas
+-- WHERE presupuesto_produccion_id IS NOT NULL;
 -- =============================================================================
