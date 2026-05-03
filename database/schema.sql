@@ -382,12 +382,13 @@ CREATE TABLE IF NOT EXISTS recetas (
 -- Ej: 500 g de queso crema por tanda de 12 cheesecakes.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS receta_insumos (
-  id         INT PRIMARY KEY AUTO_INCREMENT,
-  receta_id  INT NOT NULL,
-  nombre     VARCHAR(255) NOT NULL,   -- Ej: "Queso crema", "Harina"
-  cantidad   DECIMAL(10,3) NOT NULL,  -- Cantidad por tanda
-  unidad     VARCHAR(50) NOT NULL DEFAULT 'g', -- Ej: "g", "kg", "ml", "unidad"
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  id              INT PRIMARY KEY AUTO_INCREMENT,
+  receta_id       INT NOT NULL,
+  nombre          VARCHAR(255) NOT NULL,         -- Ej: "Queso crema", "Harina"
+  cantidad        DECIMAL(10,3) NOT NULL,         -- Cantidad por tanda
+  unidad          VARCHAR(50) NOT NULL DEFAULT 'g', -- Ej: "g", "kg", "ml", "unidad"
+  precio_unitario DECIMAL(10,2) NULL DEFAULT NULL, -- (Fase 6) Costo por unidad del insumo
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (receta_id) REFERENCES recetas(id) ON DELETE CASCADE,
   INDEX idx_receta (receta_id)
 );
@@ -415,4 +416,7 @@ CREATE TABLE IF NOT EXISTS receta_insumos (
 -- INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id)
 -- SELECT id, presupuesto_produccion_id FROM ventas
 -- WHERE presupuesto_produccion_id IS NOT NULL;
+--
+-- [Fase 6 — costo estimado]:
+-- ALTER TABLE receta_insumos ADD COLUMN precio_unitario DECIMAL(10,2) NULL DEFAULT NULL AFTER unidad;
 -- =============================================================================
