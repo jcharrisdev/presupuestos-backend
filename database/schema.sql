@@ -352,6 +352,48 @@ CREATE TABLE IF NOT EXISTS pedido_items (
 
 
 -- =============================================================================
+-- MÓDULO DE RECETAS (Fase 4)
+-- Define qué insumos se necesitan para producir una variante del catálogo.
+-- Permite calcular automáticamente cuánto comprar de cada insumo dado un volumen
+-- de ventas: cantidad_necesaria = cantidad_base * total_vendido / rendimiento
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- TABLA: recetas
+-- Cada variante puede tener UNA receta (relación 1:1 opcional).
+-- rendimiento = cuántas unidades de la variante produce una tanda de la receta.
+-- Ej: rendimiento=12 → una tanda produce 12 cheesecakes.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS recetas (
+  id          INT PRIMARY KEY AUTO_INCREMENT,
+  variante_id INT NOT NULL UNIQUE,        -- Una variante tiene como máximo una receta
+  rendimiento DECIMAL(10,3) NOT NULL DEFAULT 1, -- Unidades producidas por tanda
+  unidad      VARCHAR(50) NOT NULL DEFAULT 'tanda', -- Nombre de la unidad de producción
+  notas       TEXT NULL,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (variante_id) REFERENCES variantes_producto(id) ON DELETE CASCADE,
+  INDEX idx_variante (variante_id)
+);
+
+-- -----------------------------------------------------------------------------
+-- TABLA: receta_insumos
+-- Cada fila es un insumo (ingrediente / material) de una receta.
+-- cantidad = cuánto se necesita de este insumo por UNA TANDA de la receta.
+-- Ej: 500 g de queso crema por tanda de 12 cheesecakes.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS receta_insumos (
+  id         INT PRIMARY KEY AUTO_INCREMENT,
+  receta_id  INT NOT NULL,
+  nombre     VARCHAR(255) NOT NULL,   -- Ej: "Queso crema", "Harina"
+  cantidad   DECIMAL(10,3) NOT NULL,  -- Cantidad por tanda
+  unidad     VARCHAR(50) NOT NULL DEFAULT 'g', -- Ej: "g", "kg", "ml", "unidad"
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (receta_id) REFERENCES recetas(id) ON DELETE CASCADE,
+  INDEX idx_receta (receta_id)
+);
+
+
+-- =============================================================================
 -- MIGRACIONES — Ejecutar UNA SOLA VEZ sobre la BD en producción (Clever Cloud)
 -- Estas sentencias adaptan tablas existentes sin perder datos.
 --
