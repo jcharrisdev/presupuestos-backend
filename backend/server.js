@@ -1145,35 +1145,33 @@ app.get('/ventas', async (req, res) => {
 });
 
 /**
- * POST /ventas — Crea una nueva venta (Fase 2: acepta N presupuestos de producción).
+/**
+ * POST /ventas — Crea una nueva venta.
  *
  * Body:
- *   nombre              string  — requerido
- *   firebase_uid        string  — requerido
- *   presupuesto_ids     int[]   — opcional: IDs de presupuestos vinculados (Fase 2)
- *   presupuesto_produccion_id int — opcional LEGACY: equivale a presupuesto_ids=[id]
- *
- * Los IDs se insertan en venta_presupuestos. El campo legacy presupuesto_produccion_id
- * de ventas se rellena con el primer ID para mantener compat con GET /ventas (lista).
+ *   nombre       string          — requerido
+ *   firebase_uid string          — requerido
+ *   inversion    number          — opcional (Bug 2): inversión manual en pesos
+ *   presupuesto_ids int[]        — opcional (Fase 2): IDs de presupuestos de producción
+ *   presupuesto_produccion_id int — opcional LEGACY
  */
 app.post('/ventas', async (req, res) => {
-  const { nombre, presupuesto_produccion_id, presupuesto_ids, firebase_uid } = req.body;
+  const { nombre, presupuesto_produccion_id, presupuesto_ids, inversion, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   try {
-    // Normalizar a array: presupuesto_ids tiene prioridad sobre el campo legacy
     const ids = presupuesto_ids
       ? (Array.isArray(presupuesto_ids) ? presupuesto_ids : [presupuesto_ids])
       : (presupuesto_produccion_id ? [presupuesto_produccion_id] : []);
 
     const legacyId = ids.length > 0 ? ids[0] : null;
+    const inversionVal = (inversion != null && Number(inversion) >= 0) ? Number(inversion) : null;
 
     const [result] = await db.execute(
-      `INSERT INTO ventas (firebase_uid, nombre, presupuesto_produccion_id) VALUES (?, ?, ?)`,
-      [firebase_uid, nombre, legacyId]
+      `INSERT INTO ventas (firebase_uid, nombre, presupuesto_produccion_id, inversion) VALUES (?, ?, ?, ?)`,
+      [firebase_uid, nombre, legacyId, inversionVal]
     );
     const ventaId = result.insertId;
 
-    // Insertar relaciones en la junction table
     for (const pid of ids) {
       await db.execute(
         `INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id) VALUES (?, ?)`,
@@ -1183,6 +1181,34 @@ app.post('/ventas', async (req, res) => {
 
     res.status(201).json({ id: ventaId, nombre });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /ventas/:id — Edita nombre e inversión de una venta existente.
+ * Body: { nombre?, inversion?, firebase_uid }
+ */
+app.put('/ventas/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, inversion, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const inversionVal = inversion === null ? null
+      : (inversion != null && Number(inversion) >= 0 ? Number(inversion) : undefined);
+
+    await db.execute(
+      `UPDATE ventas
+       SET nombre    = COALESCE(?, nombre),
+           inversion = ${inversionVal !== undefined ? '?' : 'inversion'}
+       WHERE id = ? AND firebase_uid = ?`,
+      inversionVal !== undefined
+        ? [nombre || null, inversionVal, id, firebase_uid]
+        : [nombre || null, id, firebase_uid]
+    );
+    res.json({ message: 'Venta actualizada' });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1207,11 +1233,12 @@ app.get('/ventas/:id', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Fase 2: total_invertido se calcula sumando TODOS los presupuestos vinculados
-    // vía venta_presupuestos. Si no hay filas ahí, fallback al campo legacy.
+    // Bug 2: si la venta tiene inversión manual (campo `inversion`), se usa directamente.
+    // Si no, se calcula desde los presupuestos de producción vinculados (Fase 2) con fallback legacy.
     const [[venta]] = await db.execute(
       `SELECT v.*,
               COALESCE(
+                v.inversion,
                 (SELECT SUM(i.cantidad * i.precio_unitario)
                  FROM venta_presupuestos vp2
                  JOIN items_produccion i ON i.presupuesto_produccion_id = vp2.presupuesto_produccion_id
@@ -1279,8 +1306,9 @@ app.get('/ventas/:id', async (req, res) => {
     const invertido      = Number(venta.total_invertido);
 
     const ganancia          = totalCobrado - invertido;
-    const margen            = invertido > 0 ? (ganancia / invertido * 100) : 0;
-    const margenEsperado    = invertido > 0 ? ((totalEsperado - invertido) / invertido * 100) : 0;
+    // Bug 2: margen = (ganancia / total_cobrado) × 100 (antes dividía entre invertido)
+    const margen            = totalCobrado > 0 ? (ganancia / totalCobrado * 100) : 0;
+    const margenEsperado    = totalEsperado > 0 ? ((totalEsperado - invertido) / totalEsperado * 100) : 0;
     const porcentajeCobrado = totalEsperado > 0 ? (totalCobrado / totalEsperado * 100) : 0;
 
     // Fase 6: costo estimado desde recetas × precios de insumos
@@ -1769,7 +1797,7 @@ app.get('/productos/:id/variantes', async (req, res) => {
  */
 app.post('/productos/:id/variantes', async (req, res) => {
   const { id } = req.params;
-  const { nombre, precio, unidad, firebase_uid } = req.body;
+  const { nombre, tamano, precio, unidad, firebase_uid } = req.body;
   if (!nombre || precio == null || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   try {
     const [[producto]] = await db.execute(
@@ -1777,10 +1805,10 @@ app.post('/productos/:id/variantes', async (req, res) => {
     );
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
     const [result] = await db.execute(
-      `INSERT INTO variantes_producto (producto_id, nombre, precio, unidad) VALUES (?, ?, ?, ?)`,
-      [id, nombre, precio, unidad || 'unidad']
+      `INSERT INTO variantes_producto (producto_id, nombre, tamano, precio, unidad) VALUES (?, ?, ?, ?, ?)`,
+      [id, nombre, tamano || null, precio, unidad || 'unidad']
     );
-    res.status(201).json({ id: result.insertId, nombre, precio, unidad: unidad || 'unidad' });
+    res.status(201).json({ id: result.insertId, nombre, tamano: tamano || null, precio, unidad: unidad || 'unidad' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -1793,19 +1821,20 @@ app.post('/productos/:id/variantes', async (req, res) => {
  */
 app.put('/variantes/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, precio, unidad, activo, firebase_uid } = req.body;
+  const { nombre, tamano, precio, unidad, activo, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Verificar propiedad vía JOIN con productos
     await db.execute(
       `UPDATE variantes_producto v
        JOIN productos p ON p.id = v.producto_id
        SET v.nombre  = COALESCE(?, v.nombre),
+           v.tamano  = COALESCE(?, v.tamano),
            v.precio  = COALESCE(?, v.precio),
            v.unidad  = COALESCE(?, v.unidad),
            v.activo  = COALESCE(?, v.activo)
        WHERE v.id = ? AND p.firebase_uid = ?`,
-      [nombre || null, precio !== undefined ? precio : null,
+      [nombre || null, tamano !== undefined ? (tamano || null) : null,
+       precio !== undefined ? precio : null,
        unidad || null, activo !== undefined ? activo : null,
        id, firebase_uid]
     );

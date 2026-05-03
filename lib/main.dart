@@ -16,6 +16,10 @@ import 'theme/app_theme.dart';
 import 'login_screen.dart';
 import 'services/notification_service.dart';
 
+// RouteObserver global: permite que VentaDetalle detecte cuando vuelve al foco
+// (didPopNext) y recargue datos — fix Bug 1 (cobrado desde calendario no actualizaba).
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
+
 /// Función principal asíncrona requerida por Flutter para operaciones
 /// de inicialización antes de mostrar la primera pantalla.
 void main() async {
@@ -54,6 +58,7 @@ class MyApp extends StatelessWidget {
       title: 'Salarying',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
+      navigatorObservers: [routeObserver],
       home: const LoginScreen(),
     );
   }

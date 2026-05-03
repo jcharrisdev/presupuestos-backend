@@ -155,6 +155,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
   /// Modal para crear una variante de un producto.
   void _modalCrearVariante(int productoId) {
     final nombreCtrl = TextEditingController();
+    final tamanoCtrl = TextEditingController();
     final precioCtrl = TextEditingController();
     final unidadCtrl = TextEditingController(text: 'unidad');
     showModalBottomSheet(
@@ -167,14 +168,25 @@ class _ProductosScreenState extends State<ProductosScreen> {
           _handle(),
           const Text('Nueva variante', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('Ej: "Fresa regular", "Grande", "1/2 pulgada"',
+          const Text('Ej: sabor "Fresa", tamaño "Pequeño"',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 16),
-          TextField(
-            controller: nombreCtrl, autofocus: true,
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(labelText: 'Nombre de la variante'),
-          ),
+          Row(children: [
+            Expanded(child: TextField(
+              controller: nombreCtrl, autofocus: true,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(labelText: 'Nombre / Sabor'),
+            )),
+            const SizedBox(width: 12),
+            Expanded(child: TextField(
+              controller: tamanoCtrl,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                labelText: 'Tamaño (opcional)',
+                hintText: 'Pequeño, Grande…',
+              ),
+            )),
+          ]),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: TextField(
@@ -201,12 +213,14 @@ class _ProductosScreenState extends State<ProductosScreen> {
               final precio = double.tryParse(precioCtrl.text);
               if (nombre.isEmpty || precio == null || precio <= 0) return;
               Navigator.pop(context);
-              final res = await ApiClient.post('/productos/$productoId/variantes', {
+              final body = <String, dynamic>{
                 'nombre': nombre,
                 'precio': precio,
                 'unidad': unidadCtrl.text.trim().isEmpty ? 'unidad' : unidadCtrl.text.trim(),
                 'firebase_uid': widget.firebaseUid,
-              });
+              };
+              if (tamanoCtrl.text.trim().isNotEmpty) body['tamano'] = tamanoCtrl.text.trim();
+              final res = await ApiClient.post('/productos/$productoId/variantes', body);
               if (res.statusCode == 201) _cargarVariantes(productoId);
             },
             child: const Text('Agregar variante'),
@@ -218,10 +232,11 @@ class _ProductosScreenState extends State<ProductosScreen> {
 
   /// Modal para editar el precio de una variante.
   void _modalEditarVariante(int productoId, Map<String, dynamic> variante) {
+    final nombreCtrl = TextEditingController(text: variante['nombre']?.toString() ?? '');
+    final tamanoCtrl = TextEditingController(text: variante['tamano']?.toString() ?? '');
     final precioCtrl = TextEditingController(
       text: (double.tryParse(variante['precio']?.toString() ?? '0') ?? 0).toStringAsFixed(2),
     );
-    final nombreCtrl = TextEditingController(text: variante['nombre']?.toString() ?? '');
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
@@ -232,11 +247,22 @@ class _ProductosScreenState extends State<ProductosScreen> {
           _handle(),
           const Text('Editar variante', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
-          TextField(
-            controller: nombreCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(labelText: 'Nombre'),
-          ),
+          Row(children: [
+            Expanded(child: TextField(
+              controller: nombreCtrl,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(labelText: 'Nombre / Sabor'),
+            )),
+            const SizedBox(width: 12),
+            Expanded(child: TextField(
+              controller: tamanoCtrl,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                labelText: 'Tamaño (opcional)',
+                hintText: 'Pequeño, Grande…',
+              ),
+            )),
+          ]),
           const SizedBox(height: 12),
           TextField(
             controller: precioCtrl, autofocus: true,
@@ -256,6 +282,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
               Navigator.pop(context);
               await ApiClient.put('/variantes/${variante['id']}', {
                 'nombre': nombreCtrl.text.trim(),
+                'tamano': tamanoCtrl.text.trim().isEmpty ? null : tamanoCtrl.text.trim(),
                 'precio': precio,
                 'firebase_uid': widget.firebaseUid,
               });
@@ -525,8 +552,13 @@ class _ProductoCard extends StatelessWidget {
                         color: activo ? AppTheme.textPrimary : AppTheme.textMuted,
                         fontSize: 14, fontWeight: FontWeight.w600,
                       )),
-                      Text(v['unidad']?.toString() ?? 'unidad',
-                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      Text(
+                        [
+                          if ((v['tamano']?.toString() ?? '').isNotEmpty) v['tamano'].toString(),
+                          v['unidad']?.toString() ?? 'unidad',
+                        ].join(' · '),
+                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      ),
                     ])),
                     Text('\$${precio.toStringAsFixed(2)}', style: const TextStyle(
                       color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),

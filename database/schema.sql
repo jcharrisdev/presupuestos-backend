@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS ventas (
   firebase_uid              VARCHAR(255) NOT NULL,
   nombre                    VARCHAR(255) NOT NULL,        -- Ej: "Venta mayo semana 1"
   presupuesto_produccion_id INT NULL,                     -- LEGACY: primer presupuesto vinculado
+  inversion                 DECIMAL(10,2) NULL DEFAULT NULL, -- (Bug 2) Inversión manual del usuario
   estado                    ENUM('activa','cerrada') NOT NULL DEFAULT 'activa',
   created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -317,8 +318,9 @@ CREATE TABLE IF NOT EXISTS productos (
 CREATE TABLE IF NOT EXISTS variantes_producto (
   id          INT PRIMARY KEY AUTO_INCREMENT,
   producto_id INT NOT NULL,
-  nombre      VARCHAR(255) NOT NULL,         -- Ej: "Fresa regular"
-  precio      DECIMAL(10,2) NOT NULL,        -- Precio de venta unitario
+  nombre      VARCHAR(255) NOT NULL,                    -- Ej: "Fresa"
+  tamano      VARCHAR(100) NULL DEFAULT NULL,            -- Ej: "pequeño", "mediano", "grande" (Mejora 1)
+  precio      DECIMAL(10,2) NOT NULL,                   -- Precio de venta unitario
   unidad      VARCHAR(50)   NOT NULL DEFAULT 'unidad',  -- Ej: "kg", "docena", "unidad"
   activo      TINYINT(1)    NOT NULL DEFAULT 1,
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -133,121 +133,59 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
 
   /// Abre el bottom sheet para crear una nueva venta.
   ///
-  /// Fase 2: permite seleccionar MÚLTIPLES presupuestos de producción mediante
-  /// checkboxes. El backend los vincula en la tabla venta_presupuestos y calcula
-  /// el total_invertido sumando todos los presupuestos seleccionados.
-  ///
+  /// Bug 2: el usuario ingresa manualmente el monto de inversión (opcional).
   /// Campos:
   ///   - Nombre de la venta (requerido)
-  ///   - Presupuestos de producción (0 a N, opcional)
+  ///   - Inversión total (opcional, ej: $45.00 gastados en insumos)
   void _crearVenta() {
-    final nombreCtrl = TextEditingController();
-    final Set<int> selectedIds = {}; // IDs de presupuestos seleccionados (multi-select)
+    final nombreCtrl   = TextEditingController();
+    final inversionCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => StatefulBuilder(builder: (ctx, setS) => SingleChildScrollView(
+      builder: (_) => Padding(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
           const Text('Nueva venta',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
-          TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(hintText: 'Ej: Venta mayo semana 1')),
-          const SizedBox(height: 20),
-
-          // Multi-select de presupuestos de producción
-          const Text('Presupuestos de producción (opcional)',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          const SizedBox(height: 4),
-          const Text('Selecciona uno o más para calcular la rentabilidad',
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-          const SizedBox(height: 10),
-
-          if (_producciones.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
-              child: const Text('Sin presupuestos de insumos. Crea uno en la pestaña Producción.',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 12), textAlign: TextAlign.center),
-            )
-          else
-            ..._producciones.map((p) {
-              final pid = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '') ?? 0;
-              final total = double.tryParse(p['total_invertido']?.toString() ?? '0') ?? 0.0;
-              final seleccionado = selectedIds.contains(pid);
-              return GestureDetector(
-                onTap: () => setS(() {
-                  if (seleccionado) selectedIds.remove(pid); else selectedIds.add(pid);
-                }),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: seleccionado ? AppTheme.primary.withOpacity(0.08) : AppTheme.surfaceAlt,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: seleccionado ? AppTheme.primary.withOpacity(0.4) : AppTheme.border,
-                      width: seleccionado ? 1.5 : 1,
-                    ),
-                  ),
-                  child: Row(children: [
-                    Icon(
-                      seleccionado ? Icons.check_box : Icons.check_box_outline_blank,
-                      color: seleccionado ? AppTheme.primary : AppTheme.textMuted, size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(p['nombre']?.toString() ?? '',
-                        style: TextStyle(
-                          color: seleccionado ? AppTheme.textPrimary : AppTheme.textSecondary,
-                          fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal, fontSize: 13,
-                        ))),
-                    Text('\$${total.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 12)),
-                  ]),
-                ),
-              );
-            }),
-
-          // Resumen de costo total si hay varios seleccionados
-          if (selectedIds.length > 1) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(color: AppTheme.colorFijo.withOpacity(0.07), borderRadius: BorderRadius.circular(8)),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('${selectedIds.length} presupuestos seleccionados',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                Text('\$${_producciones.where((p) {
-                  final pid = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '') ?? 0;
-                  return selectedIds.contains(pid);
-                }).fold(0.0, (s, p) => s + (double.tryParse(p['total_invertido']?.toString() ?? '0') ?? 0.0)).toStringAsFixed(2)} total',
-                    style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w700, fontSize: 12)),
-              ]),
+          TextField(
+            controller: nombreCtrl,
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(hintText: 'Ej: Venta mayo semana 1'),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: inversionCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
+            decoration: const InputDecoration(
+              labelText: 'Inversión total (opcional)',
+              prefixText: '\$ ',
+              helperText: 'Cuánto gastaste para producir esta venta',
             ),
-          ],
-
+          ),
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
               if (nombreCtrl.text.trim().isEmpty) return;
               Navigator.pop(context);
+              final inversion = double.tryParse(inversionCtrl.text);
               final body = <String, dynamic>{
                 'nombre': nombreCtrl.text.trim(),
                 'firebase_uid': widget.firebaseUid,
               };
-              // Fase 2: enviar array de IDs seleccionados
-              if (selectedIds.isNotEmpty) body['presupuesto_ids'] = selectedIds.toList();
+              if (inversion != null && inversion >= 0) body['inversion'] = inversion;
               final res = await ApiClient.post('/ventas', body);
               if (res.statusCode == 201) _cargarVentas();
             },
             child: const Text('Crear venta'),
           )),
         ]),
-      )),
+      ),
     );
   }
 

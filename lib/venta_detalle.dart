@@ -20,6 +20,7 @@ import 'dart:math';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'lista_compras_screen.dart';
+import 'main.dart' show routeObserver;
 
 /// Detalle de venta con rentabilidad y lista de cobros a clientes.
 class VentaDetalle extends StatefulWidget {
@@ -31,7 +32,7 @@ class VentaDetalle extends StatefulWidget {
   _VentaDetalleState createState() => _VentaDetalleState();
 }
 
-class _VentaDetalleState extends State<VentaDetalle> {
+class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
   Map<String, dynamic>? _venta;
   List<dynamic> _cobros = [];
 
@@ -47,6 +48,23 @@ class _VentaDetalleState extends State<VentaDetalle> {
 
   @override
   void initState() { super.initState(); _cargar(); }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  // Llamado cuando el usuario regresa a esta pantalla desde una ruta encima
+  // (ej: vuelve del Calendario tras marcar un cobro como pagado).
+  @override
+  void didPopNext() { _cargar(); }
 
   /// Carga la venta, sus cobros y el resumen financiero desde GET /ventas/:id.
   Future<void> _cargar() async {
@@ -222,7 +240,13 @@ class _VentaDetalleState extends State<VentaDetalle> {
                         ),
                         child: Row(children: [
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(v['nombre']?.toString() ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                            Text(
+                              [
+                                v['nombre']?.toString() ?? '',
+                                if ((v['tamano']?.toString() ?? '').isNotEmpty) v['tamano'].toString(),
+                              ].join(' · '),
+                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
                             Text('\$${precio.toStringAsFixed(2)} / ${v['unidad'] ?? 'unidad'}',
                                 style: const TextStyle(color: AppTheme.primary, fontSize: 12)),
                           ])),
@@ -255,7 +279,11 @@ class _VentaDetalleState extends State<VentaDetalle> {
                                 } else {
                                   itemsSel.add({
                                     'variante_id': varId,
-                                    'descripcion': '${prod['nombre']} - ${v['nombre']}',
+                                    'descripcion': [
+                                      prod['nombre']?.toString() ?? '',
+                                      if ((v['tamano']?.toString() ?? '').isNotEmpty) v['tamano'].toString(),
+                                      v['nombre']?.toString() ?? '',
+                                    ].join(' - '),
                                     'precio': precio,
                                     'cantidad': 1.0,
                                   });
@@ -446,9 +474,53 @@ class _VentaDetalleState extends State<VentaDetalle> {
               final monto = double.tryParse(montoCtrl.text) ?? 0;
               if (monto <= 0) return;
               Navigator.pop(context);
-              await ApiClient.put('/cobros/${cobro['id']}/cobrar',
+              final res = await ApiClient.put('/cobros/${cobro['id']}/cobrar',
                   {'monto_cobrado': monto, 'firebase_uid': widget.firebaseUid});
-              _cargar(); // actualizar resumen y lista
+              // Optimistic update: actualizar UI de inmediato sin esperar _cargar().
+              // Evita que un cold start de Render deje los totales desactualizados.
+              if (res.statusCode == 200 && mounted) {
+                final cobroId = cobro['id'] is int
+                    ? cobro['id'] as int
+                    : int.tryParse(cobro['id'].toString()) ?? 0;
+                setState(() {
+                  for (int i = 0; i < _cobros.length; i++) {
+                    final id = _cobros[i]['id'] is int
+                        ? _cobros[i]['id'] as int
+                        : int.tryParse(_cobros[i]['id'].toString()) ?? 0;
+                    if (id == cobroId) {
+                      _cobros[i] = Map<String, dynamic>.from(_cobros[i] as Map)
+                        ..['estado'] = 'cobrado'
+                        ..['monto_cobrado'] = monto;
+                      break;
+                    }
+                  }
+                  // Recalcular resumen localmente con los nuevos cobros
+                  final cobrados  = _cobros.where((c) => c['estado'] == 'cobrado').toList();
+                  final pendts    = _cobros.where((c) => c['estado'] == 'pendiente').toList();
+                  final tCobrado  = cobrados.fold(0.0, (s, c) => s +
+                      (double.tryParse(c['monto_cobrado']?.toString() ?? c['monto']?.toString() ?? '0') ?? 0));
+                  final tEsperado = _cobros.fold(0.0, (s, c) => s +
+                      (double.tryParse(c['monto']?.toString() ?? '0') ?? 0));
+                  final tPend     = pendts.fold(0.0, (s, c) => s +
+                      (double.tryParse(c['monto']?.toString() ?? '0') ?? 0));
+                  final inv  = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
+                  final gan  = tCobrado - inv;
+                  final mrg  = tCobrado > 0 ? (gan / tCobrado * 100) : 0.0;
+                  final pct  = tEsperado > 0 ? (tCobrado / tEsperado * 100) : 0.0;
+                  _resumen = {
+                    ..._resumen,
+                    'total_cobrado':    tCobrado,
+                    'total_pendiente':  tPend,
+                    'total_esperado':   tEsperado,
+                    'ganancia':         gan,
+                    'margen':           mrg,
+                    'porcentaje_cobrado': pct,
+                    'cobros_realizados': cobrados.length,
+                    'cobros_pendientes': pendts.length,
+                  };
+                });
+              }
+              _cargar(); // confirmación desde servidor en background
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.success, foregroundColor: AppTheme.background),
@@ -544,6 +616,11 @@ class _VentaDetalleState extends State<VentaDetalle> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.summarize_outlined, size: 20),
+            tooltip: 'Reporte de producción',
+            onPressed: _modalReporteProduccion,
+          ),
+          IconButton(
             icon: const Icon(Icons.shopping_cart_outlined, size: 20),
             tooltip: 'Lista de compras',
             onPressed: () => Navigator.push(context, MaterialPageRoute(
@@ -622,12 +699,37 @@ class _VentaDetalleState extends State<VentaDetalle> {
                 const Divider(color: AppTheme.border, height: 1),
                 const SizedBox(height: 16),
 
-                // Fila 1: Ganancia neta / Margen real / Cobrados
+                // Fila 0 (Bug 2): Inversión — siempre visible, editable con botón lápiz
+                GestureDetector(
+                  onTap: _modalEditarInversion,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.colorFijo.withOpacity(0.07),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.colorFijo.withOpacity(0.25)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.savings_outlined, color: AppTheme.colorFijo, size: 16),
+                      const SizedBox(width: 10),
+                      const Text('Inversión:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                      const SizedBox(width: 6),
+                      Text('\$${invertido.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800,
+                              fontSize: 15)),
+                      const Spacer(),
+                      const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 14),
+                    ]),
+                  ),
+                ),
+
+                // Fila 1: Ganancia neta / Margen / Cobrados
                 Row(children: [
                   _statBox('Ganancia neta', '\$${ganancia.abs().toStringAsFixed(2)}',
                       ganancia >= 0 ? AppTheme.success : AppTheme.danger),
                   const SizedBox(width: 8),
-                  _statBox('Margen real', '${margen.toStringAsFixed(1)}%',
+                  _statBox('Margen', '${margen.toStringAsFixed(1)}%',
                       margen >= 0 ? AppTheme.success : AppTheme.danger),
                   const SizedBox(width: 8),
                   _statBox('Cobrados', '$realizados / ${realizados + pendientes}', AppTheme.primary),
@@ -794,6 +896,157 @@ class _VentaDetalleState extends State<VentaDetalle> {
             const SizedBox(height: 80), // espacio para el FAB
           ]),
         ),
+      ),
+    );
+  }
+
+  /// Modal de reporte de producción (Mejora 2).
+  /// Agrupa todos los pedido_items de la venta por descripción + precio,
+  /// suma cantidades y muestra el consolidado ordenado alfabéticamente.
+  void _modalReporteProduccion() {
+    // Agregar todos los items de todos los cobros
+    final Map<String, Map<String, dynamic>> agrupado = {};
+    for (final cobro in _cobros) {
+      final items = (cobro['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      for (final item in items) {
+        final desc  = item['descripcion']?.toString() ?? '';
+        final precio = double.tryParse(item['precio_unitario']?.toString() ?? '0') ?? 0;
+        final cant   = double.tryParse(item['cantidad']?.toString() ?? '0') ?? 0;
+        final key    = '$desc||${precio.toStringAsFixed(2)}';
+        if (agrupado.containsKey(key)) {
+          agrupado[key]!['cantidad'] = (agrupado[key]!['cantidad'] as double) + cant;
+        } else {
+          agrupado[key] = {'descripcion': desc, 'precio': precio, 'cantidad': cant};
+        }
+      }
+    }
+
+    final lista = agrupado.values.toList()
+      ..sort((a, b) => (a['descripcion'] as String).compareTo(b['descripcion'] as String));
+
+    showModalBottomSheet(
+      context: context, isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6, maxChildSize: 0.92, minChildSize: 0.4, expand: false,
+        builder: (_, sc) => Column(children: [
+          // Handle + título fijo
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Column(children: [
+              Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Row(children: [
+                const Icon(Icons.summarize_outlined, color: AppTheme.primary, size: 20),
+                const SizedBox(width: 10),
+                const Text('Reporte de Producción',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Text('${lista.length} producto${lista.length != 1 ? 's' : ''}',
+                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+              ]),
+              const SizedBox(height: 12),
+              const Divider(color: AppTheme.border, height: 1),
+            ]),
+          ),
+          // Lista scrollable
+          Expanded(child: lista.isEmpty
+              ? const Center(child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    'Ningún cliente tiene productos del catálogo.\nAgrega clientes con pedidos del catálogo para ver el reporte.',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                ))
+              : ListView.separated(
+                  controller: sc,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+                  itemCount: lista.length,
+                  separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
+                  itemBuilder: (_, i) {
+                    final item  = lista[i];
+                    final cant  = item['cantidad'] as double;
+                    final precio = item['precio'] as double;
+                    final cantStr = cant % 1 == 0 ? cant.toInt().toString() : cant.toStringAsFixed(1);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(children: [
+                        Container(
+                          width: 8, height: 8,
+                          decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(item['descripcion'].toString(),
+                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
+                                  fontWeight: FontWeight.w600)),
+                          Text('\$${precio.toStringAsFixed(2)} c/u',
+                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                        ])),
+                        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Text('$cantStr uds',
+                              style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800,
+                                  fontSize: 16)),
+                          Text('\$${(cant * precio).toStringAsFixed(2)}',
+                              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                        ]),
+                      ]),
+                    );
+                  },
+                ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Bottom sheet para editar la inversión manual de la venta (Bug 2).
+  void _modalEditarInversion() {
+    final invertidoActual = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
+    final ctrl = TextEditingController(text: invertidoActual > 0 ? invertidoActual.toStringAsFixed(2) : '');
+    showModalBottomSheet(
+      context: context, isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          const Text('Editar inversión', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17,
+              fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          const Text('¿Cuánto gastaste para producir esta venta?',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 20),
+          TextField(
+            controller: ctrl, autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800),
+            decoration: const InputDecoration(
+              prefixText: '\$ ',
+              prefixStyle: TextStyle(color: AppTheme.colorFijo, fontSize: 26, fontWeight: FontWeight.w800),
+              hintText: '0.00',
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: () async {
+              final inversion = double.tryParse(ctrl.text) ?? 0;
+              Navigator.pop(context);
+              await ApiClient.put('/ventas/${widget.ventaId}',
+                  {'inversion': inversion, 'firebase_uid': widget.firebaseUid});
+              _cargar();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.colorFijo,
+                foregroundColor: AppTheme.background),
+            child: const Text('Guardar inversión'),
+          )),
+        ]),
       ),
     );
   }
