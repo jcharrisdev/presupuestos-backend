@@ -124,6 +124,7 @@ items_produccion
 ventas
   id, firebase_uid, nombre,
   presupuesto_produccion_id INT NULL (legacy, se mantiene para compat),
+  inversion DECIMAL(10,2) NULL  ← Bug 2: inversión manual del usuario
   estado ENUM('activa','cerrada'), created_at
 
 cobros_clientes
@@ -155,7 +156,9 @@ productos
   activo TINYINT(1) DEFAULT 1, created_at
 
 variantes_producto
-  id, producto_id, nombre, precio DECIMAL(10,2),
+  id, producto_id, nombre,
+  tamano VARCHAR(100) NULL   ← Mejora 1: tamaño libre (pequeño, mediano, grande)
+  precio DECIMAL(10,2),
   unidad VARCHAR(50) DEFAULT 'unidad',
   activo TINYINT(1) DEFAULT 1, created_at
   FK: producto_id → productos(id) CASCADE
@@ -350,6 +353,31 @@ FASE 3 — FECHA EXACTA DE COBRO (implementado):
 9. FASES PENDIENTES DE IMPLEMENTAR
 ================================================================================
 
+BUG 1 — CORREGIDO ✓ (cobrado no actualizaba totales)
+  - Optimistic update en _modalCobrar: actualiza _cobros y _resumen localmente tras PUT 200.
+  - RouteObserver en main.dart + RouteAware en VentaDetalle: llama _cargar() al volver al foco.
+  - Fórmula margen en optimistic update: ganancia/total_cobrado (consistente con Bug 2).
+
+BUG 2 — CORREGIDO ✓ (inversión manual + fórmula margen)
+  - Schema: ventas.inversion DECIMAL NULL. Backend: POST/PUT /ventas aceptan inversion.
+  - GET /ventas/:id: usa inversion si existe, si no calcula desde presupuestos (backward compat).
+  - Fórmula: margen = (ganancia / total_cobrado) × 100 (antes dividía entre invertido).
+  - Flutter: cobros_home campo "Inversión total" en crear venta. venta_detalle muestra
+    inversión con botón editar lápiz (PUT /ventas/:id).
+
+MEJORA 1 — IMPLEMENTADA ✓ (campo Tamaño en variante)
+  - Schema: variantes_producto.tamano VARCHAR(100) NULL.
+  - Backend: POST/PUT /variantes aceptan tamano.
+  - Flutter: productos_screen modales crear/editar variante incluyen campo Tamaño.
+    Tile variante muestra "tamaño · unidad". Selector catálogo en venta_detalle muestra
+    "nombre · tamaño". Descripción en pedido_items: "producto - tamaño - variante".
+
+MEJORA 2 — IMPLEMENTADA ✓ (Reporte de Producción)
+  - Flutter puro (sin backend): venta_detalle botón 🗒 en AppBar.
+  - Modal DraggableScrollableSheet agrupa todos los pedido_items por descripcion+precio,
+    suma cantidades y muestra el consolidado ordenado + subtotal por línea.
+  - IMPORTANTE: solo incluye cobros con catálogo (items[]). Cobros manuales no aparecen.
+
 FASE 2 — IMPLEMENTADA ✓
   - Schema: venta_presupuestos (junction table)
   - Backend: POST /ventas acepta presupuesto_ids[], GET /ventas/:id suma N presupuestos,
@@ -430,6 +458,7 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
+7a9a32a fix: Bug 1 (cobrado optimistic), Bug 2 (inversión manual), Mejora 1 (tamaño), Mejora 2 (reporte)
 073f110 feat: lista de compras automática y comparación estimado vs real (Fase 5 + 6)
 8d100f0 backend: GET /ventas/:id/lista-compras y costo_estimado en resumen (Fase 5 + 6)
 03c3713 schema: precio_unitario en receta_insumos para costo estimado (Fase 6)
