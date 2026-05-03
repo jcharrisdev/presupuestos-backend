@@ -1,0 +1,425 @@
+================================================================================
+ARCHIVO DE CONTEXTO — PROYECTO SALARYING
+Última actualización: 2026-05-02
+Para uso de Claude Code en nuevas sesiones
+================================================================================
+
+================================================================================
+1. IDENTIDAD DEL PROYECTO
+================================================================================
+
+Nombre: Salarying
+Tipo: App de finanzas personales y gestión de miniempresas
+Stack: Flutter 3.29.3 (Dart 3.7.2) + Node.js/Express + MySQL (Clever Cloud)
+
+Repositorio principal (Flutter + backend):
+  C:\Users\Ulises\proyectos\presupuestos-backend
+  GitHub: https://github.com/jcharrisdev/presupuestos-backend
+
+Otro repositorio (app de marcaje, distinto proyecto):
+  C:\Users\Ulises\proyectos\marcaje_app
+  GitHub: https://github.com/jcharrisdev/marcacion_miguel
+
+Git user: jcharrisdev
+Email usuario: jccharris55@gmail.com
+firebase_uid en uso: el email del usuario (autenticación Firebase real pendiente)
+
+================================================================================
+2. INFRAESTRUCTURA
+================================================================================
+
+Backend:
+  - Plataforma: Render (free tier — duerme tras 15min, cold start ~50 seg)
+  - URL: https://presupuestos-backend-h3l6.onrender.com
+  - Archivo: backend/server.js (un solo archivo, ~1600+ líneas)
+  - IMPORTANTE: Render NO hace auto-deploy. El usuario debe hacerlo
+    manualmente desde el dashboard de Render cada vez que hay cambios
+    en backend/server.js
+
+Base de datos:
+  - Plataforma: Clever Cloud (MySQL)
+  - Conexión en server.js: createPool (NO createConnection — se crashea)
+  - Las migraciones (ALTER TABLE) deben ejecutarse manualmente en Clever Cloud
+    porque el schema.sql solo es referencia; no hay sistema de migraciones automático
+
+Flutter:
+  - APK release se genera con: flutter build apk --release
+  - Ruta del APK: build\app\outputs\flutter-apk\app-release.apk (~22 MB)
+  - Gradle 8.7, AGP 8.1.0, Java 21
+
+================================================================================
+3. ARQUITECTURA GENERAL DE LA APP
+================================================================================
+
+Módulos de la app Flutter:
+  1. Mis Presupuestos  → lista_presupuestos.dart → detalles_presupuesto.dart
+  2. Ahorro y Metas    → ahorro_meta.dart → progreso_ahorro.dart
+  3. Calendario        → calendario.dart (puntitos de eventos, 2 tabs)
+  4. Cobros            → cobros_home.dart (3 tabs: Productos | Producción | Ventas)
+                          → productos_screen.dart (catálogo productos/variantes)
+                          → produccion_detalle.dart (insumos de producción)
+                          → venta_detalle.dart (cobros a clientes, rentabilidad)
+
+Servicio HTTP centralizado:
+  lib/services/api_client.dart
+  - static const baseUrl = 'https://presupuestos-backend-h3l6.onrender.com'
+  - Timeout global: 55 segundos (para aguantar cold start de Render)
+  - Métodos: get, post, put, delete (todos con .timeout(_timeout))
+
+Tema visual:
+  lib/theme/app_theme.dart
+  - Inspirado en Binance: fondo #0B0E11, amarillo #F0B90B, verde #0ECB81
+  - Widgets reutilizables: TipoChip, LabelDivider
+
+================================================================================
+4. ESQUEMA DE BASE DE DATOS (estado actual completo)
+================================================================================
+
+--- MÓDULO PRESUPUESTOS PERSONALES ---
+
+presupuestos
+  id, nombre, monto_total, firebase_uid,
+  tipo_periodo ENUM('quincenal','mensual'),
+  dia_inicio_periodo INT,
+  created_at
+
+periodos
+  id, presupuesto_id, firebase_uid, numero_periodo,
+  tipo_periodo, fecha_inicio, fecha_fin,
+  estado ENUM('activo','cerrado'), closed_at, created_at
+
+gastos  (plantillas de gasto, no transacciones reales)
+  id, presupuesto_id, descripcion, monto,
+  tipo ENUM('fijo','no fijo','fijo_x_periodo','ahorro'),
+  fecha, pagado (legacy), firebase_uid, numero_quincena,
+  tipo_fecha ENUM('flexible','fija'), dia_pago, frecuencia_pago,
+  fecha_pago_exacta, genera_notificacion, dias_anticipacion,
+  created_at
+
+movimientos (transacciones reales dentro de un período)
+  id, presupuesto_id, periodo_id, gasto_id,
+  descripcion, monto, tipo, pagado,
+  monto_pagado_real, pagado_por_uid, fecha_pagado,
+  firebase_uid, created_at
+
+calendario_eventos
+  id, firebase_uid, gasto_id, titulo,
+  tipo ENUM('pago','cobro'),
+  fecha_evento, monto_esperado,
+  estado ENUM('pendiente','pagado','vencido'),
+  notificacion_activa, dias_anticipacion, notificacion_enviada,
+  google_event_id, periodo_id,
+  cobro_id INT NULL,   ← AGREGADO en esta sesión (vincula evento → cobros_clientes)
+  created_at, updated_at
+
+--- MÓDULO COBROS ---
+
+presupuestos_produccion
+  id, firebase_uid, nombre, descripcion, created_at
+
+items_produccion
+  id, presupuesto_produccion_id, firebase_uid,
+  nombre, cantidad DECIMAL(10,3), precio_unitario, created_at
+
+ventas
+  id, firebase_uid, nombre,
+  presupuesto_produccion_id INT NULL (legacy, se mantiene para compat),
+  estado ENUM('activa','cerrada'), created_at
+
+cobros_clientes
+  id, venta_id, firebase_uid, nombre_cliente,
+  monto DECIMAL(10,2) NOT NULL,
+  monto_manual TINYINT(1) DEFAULT 1,  ← PENDIENTE migración en prod
+    (1 = monto ingresado manual / 0 = calculado desde pedido_items)
+  condicion_pago ENUM('contra_entrega','plazo'),
+    ← PENDIENTE migrar a ENUM('contra_entrega','plazo','fecha_especifica')
+  dias_plazo INT NULL,
+  fecha_cobro DATE NULL,
+  fecha_pago_especifica DATE NULL,    ← PENDIENTE migración en prod
+  estado ENUM('pendiente','cobrado'),
+  monto_cobrado, fecha_cobrado, calendario_evento_id,
+  created_at
+
+--- MÓDULO CATÁLOGO DE PRODUCTOS (NUEVO - Fase 1) ---
+
+productos
+  id, firebase_uid, nombre, descripcion,
+  activo TINYINT(1) DEFAULT 1, created_at
+
+variantes_producto
+  id, producto_id, nombre, precio DECIMAL(10,2),
+  unidad VARCHAR(50) DEFAULT 'unidad',
+  activo TINYINT(1) DEFAULT 1, created_at
+  FK: producto_id → productos(id) CASCADE
+
+pedido_items
+  id, cobro_cliente_id, variante_id INT NULL,
+  descripcion VARCHAR(255),
+  cantidad DECIMAL(10,3), precio_unitario DECIMAL(10,2),
+  subtotal DECIMAL(10,2),   ← calculado en app: cantidad * precio_unitario
+  created_at
+  FK: cobro_cliente_id → cobros_clientes(id) CASCADE
+  FK: variante_id → variantes_producto(id) SET NULL
+
+================================================================================
+5. MIGRACIONES PENDIENTES EN PRODUCCIÓN (Clever Cloud)
+================================================================================
+
+EJECUTAR UNA SOLA VEZ en la BD de Clever Cloud:
+
+ALTER TABLE cobros_clientes
+  ADD COLUMN monto_manual TINYINT(1) NOT NULL DEFAULT 1 AFTER monto,
+  ADD COLUMN fecha_pago_especifica DATE NULL AFTER fecha_cobro,
+  MODIFY COLUMN condicion_pago
+    ENUM('contra_entrega','plazo','fecha_especifica') NOT NULL DEFAULT 'contra_entrega';
+
+Las tablas productos, variantes_producto y pedido_items también deben crearse
+en producción ejecutando las sentencias CREATE TABLE del schema.sql.
+
+================================================================================
+6. ENDPOINTS DEL BACKEND (todos los existentes)
+================================================================================
+
+--- PRESUPUESTOS ---
+GET    /presupuestos?firebase_uid=
+POST   /presupuestos
+PUT    /presupuestos/:id
+GET    /presupuestos/:id/detalle?firebase_uid=
+GET    /presupuestos/:id/gastos?firebase_uid=
+PUT    /presupuestos/:id/gastos/reanudar-fijos
+POST   /presupuestos/:id/movimientos
+
+--- GASTOS ---
+POST   /gastos
+POST   /gastos/ahorroMeta
+PUT    /gastos/:id
+DELETE /gastos/:id?firebase_uid=
+
+--- MOVIMIENTOS ---
+PUT    /movimientos/:id/pagar
+
+--- AHORROS ---
+GET    /ahorros?firebase_uid=
+DELETE /ahorros/:id?firebase_uid=
+
+--- CALENDARIO ---
+GET    /calendario/eventos?firebase_uid=&mes=&anio=
+POST   /calendario/generar
+PUT    /calendario/eventos/:id/estado
+DELETE /calendario/eventos/:id?firebase_uid=&solo_este=
+
+--- PRODUCCIÓN ---
+GET    /produccion?firebase_uid=
+POST   /produccion
+GET    /produccion/:id?firebase_uid=
+POST   /produccion/:id/items
+DELETE /produccion/items/:id?firebase_uid=
+DELETE /produccion/:id?firebase_uid=
+
+--- CATÁLOGO DE PRODUCTOS (NUEVO Fase 1) ---
+GET    /productos?firebase_uid=
+POST   /productos
+PUT    /productos/:id
+DELETE /productos/:id?firebase_uid=
+GET    /productos/:id/variantes?firebase_uid=
+POST   /productos/:id/variantes
+PUT    /variantes/:id
+DELETE /variantes/:id?firebase_uid=
+
+--- PEDIDO ITEMS (NUEVO Fase 1) ---
+GET    /cobros/:id/items?firebase_uid=
+POST   /cobros/:id/items
+DELETE /pedido-items/:id?firebase_uid=
+
+--- VENTAS ---
+GET    /ventas?firebase_uid=
+POST   /ventas
+GET    /ventas/:id?firebase_uid=
+  → Retorna: { venta, cobros[{...items[]}], resumen{} }
+  → cobros ahora incluye items[] con el detalle de productos por cliente
+POST   /ventas/:id/cobros
+  → Soporta condicion_pago: 'contra_entrega' | 'plazo' | 'fecha_especifica'
+  → Si fecha_especifica: campo fecha_pago_especifica (YYYY-MM-DD) → crea evento calendario
+PUT    /cobros/:id/cobrar
+DELETE /cobros/:id?firebase_uid=
+
+================================================================================
+7. ARCHIVOS FLUTTER Y SU PROPÓSITO
+================================================================================
+
+lib/main.dart                    Inicialización: intl español, notificaciones, runApp
+lib/login_screen.dart            Login temporal con email como firebase_uid
+lib/main_menu.dart               Menú principal con 4 cards de navegación
+
+lib/lista_presupuestos.dart      Lista de presupuestos del usuario
+lib/crear_presupuesto.dart       Formulario crear presupuesto
+lib/editar_presupuesto.dart      Editar nombre/monto de presupuesto
+lib/detalles_presupuesto.dart    Detalle período activo: movimientos, balance, pagos
+
+lib/ahorro_meta.dart             Crear metas de ahorro con cálculo de cuota
+lib/progreso_ahorro.dart         Ver progreso de metas (barras de avance)
+
+lib/calendario.dart              Calendario de pagos/cobros con 2 tabs
+                                 FIX CRÍTICO: comparación de fechas por STRING
+                                 (no isSameDay() → bug de timezone)
+
+lib/cobros_home.dart             3 tabs: Productos | Producción | Ventas
+                                 FAB contextual según tab activa
+lib/productos_screen.dart        NUEVO: catálogo productos/variantes (CRUD)
+lib/produccion_detalle.dart      Insumos de un presupuesto de producción
+lib/venta_detalle.dart           Detalle de venta: rentabilidad + cobros
+                                 NUEVO: modal con catálogo productos y fecha exacta
+
+lib/presupuestos_service.dart    Servicio wrapper de ApiClient para presupuestos
+lib/services/api_client.dart     HTTP centralizado con timeout 55s
+lib/services/notification_service.dart  Notificaciones locales Android
+lib/theme/app_theme.dart         Tema Binance oscuro + TipoChip + LabelDivider
+
+================================================================================
+8. LO QUE SE HIZO EN ESTA SESIÓN (resumen por área)
+================================================================================
+
+DOCUMENTACIÓN:
+  - Comentarios exhaustivos en TODOS los archivos del proyecto
+  - database/schema.sql: bloques explicativos por tabla
+  - backend/server.js: JSDoc en todos los endpoints
+  - Todos los archivos Flutter: /// comentarios de clase y método
+
+AUDITORÍA Y BUGS CRÍTICOS CORREGIDOS:
+  1. calendario_eventos faltaba columna cobro_id
+     → FIX: ALTER TABLE + backend guarda cobro_id al crear evento de cobro
+  2. DELETE /gastos/:id y /ahorros/:id sin validar firebase_uid
+     → FIX: agrega WHERE firebase_uid en la query
+  3. Catches silenciosos en 6 pantallas Flutter → pantalla en blanco
+     → FIX: todos muestran SnackBar con el error
+  4. detalles_presupuesto: sin null-check en id de POST /gastos
+     → FIX: as int? con guard antes de crear movimiento
+  5. cobros_home FAB no actualizaba label al cambiar tab
+     → FIX: _tab.addListener(() => setState(()))
+  6. Tab Ventas completamente gris en release mode
+     → FIX CRÍTICO: Container(color: AppTheme.background) en todos los estados
+       + parseo seguro de todos los campos (int.tryParse, fallbacks)
+  7. pantalla venta_detalle en blanco cuando API falla
+     → FIX: estado de error explícito con botón Reintentar
+  8. http.get sin timeout → spinner infinito en cold start de Render
+     → FIX: timeout 55s en ApiClient para todos los métodos
+
+ÍCONOS DE INFORMACIÓN:
+  - Agregado Icons.info_outline en AppBar de TODAS las pantallas (11 total)
+  - Cada ícono muestra diálogo con explicación contextual del usuario final
+
+FASE 1 — CATÁLOGO DE PRODUCTOS (implementado):
+  - Nuevas tablas: productos, variantes_producto, pedido_items
+  - Backend: 11 nuevos endpoints para CRUD productos/variantes/pedido_items
+  - Backend: GET /ventas/:id ahora incluye items[] por cada cobro
+  - Flutter: nueva pantalla productos_screen.dart
+  - Flutter: cobros_home tiene 3 tabs (Productos | Producción | Ventas)
+  - Flutter: venta_detalle modal de cliente soporta catálogo de productos
+    con botones +/- por variante y cálculo de total en tiempo real
+
+FASE 3 — FECHA EXACTA DE COBRO (implementado):
+  - Backend: POST /ventas/:id/cobros acepta condicion_pago='fecha_especifica'
+    y crea automáticamente evento en calendario_eventos
+  - Flutter: venta_detalle modal tiene date picker para "Fecha exacta"
+  - Flutter: _ClienteTile muestra items del pedido si existen (nuevo formato)
+
+================================================================================
+9. FASES PENDIENTES DE IMPLEMENTAR
+================================================================================
+
+FASE 2 — Multi-presupuesto por venta (~6,000-8,000 tokens):
+  Qué hace: elimina la dependencia rígida de una venta a UN solo presupuesto de producción
+  Schema: nueva tabla venta_presupuestos (junction: venta_id, presupuesto_produccion_id)
+  Migration: INSERT INTO venta_presupuestos SELECT id, presupuesto_produccion_id FROM ventas WHERE presupuesto_produccion_id IS NOT NULL
+  Backend: GET /ventas/:id total_invertido suma N presupuestos vía JOIN a venta_presupuestos
+  Flutter: cobros_home._crearVenta() permite seleccionar múltiples presupuestos
+
+FASE 4 — Recetas de productos (~22,000-28,000 tokens):
+  Qué hace: define qué insumos se necesitan para producir una variante
+  Schema: recetas (id, variante_id, rendimiento, unidad, notas)
+          receta_insumos (id, receta_id, nombre, cantidad, unidad)
+  Backend: POST/GET/DELETE /variantes/:id/receta
+  Flutter: nueva pantalla receta_screen.dart
+  Fórmula: cantidad_insumo = base * total_vendido / rendimiento
+
+FASE 5 — Lista de compras automática (~12,000-16,000 tokens):
+  Qué hace: calcula cuánto comprar de cada insumo según los pedidos de una venta
+  Depende de: Fase 4 (recetas)
+  Backend: GET /ventas/:id/lista-compras (agrupa insumos de todos los pedido_items)
+  Flutter: nueva pantalla lista_compras_screen.dart + botón en venta_detalle
+
+FASE 6 — Budget integrado estimado vs real (~14,000-18,000 tokens):
+  Qué hace: compara costo estimado (desde recetas) vs costo real (del presupuesto manual)
+  Backend: modificar GET /ventas/:id resumen para incluir costo_estimado y costo_real
+  Flutter: nueva sección en venta_detalle con comparación visual
+
+FASE 7 — Resumen financiero completo (~8,000-12,000 tokens):
+  Qué hace: muestra todas las métricas: ingresos, costos, ganancia, margen estimado/real
+  Backend: ampliar el objeto resumen de GET /ventas/:id
+  Flutter: mejorar la gráfica de rentabilidad en venta_detalle
+
+================================================================================
+10. INSTRUCCIÓN PARA NUEVA SESIÓN
+================================================================================
+
+Al iniciar una nueva sesión, decir exactamente:
+
+"Continúa el proyecto Salarying en C:\Users\Ulises\proyectos\presupuestos-backend.
+Lee el archivo CLAUDE_CONTEXT.txt para ponerte al día. Luego implementa [FASE X]."
+
+IMPORTANTE para la nueva sesión:
+  1. SIEMPRE leer los archivos antes de modificarlos
+  2. Un commit por cambio (no commits gigantes)
+  3. Verificar con 'flutter analyze' que no haya errores antes de cada commit
+  4. El backend se despliega MANUALMENTE en Render (el usuario lo hace)
+  5. Las migraciones de BD se ejecutan MANUALMENTE en Clever Cloud
+  6. Siempre usar Container(color: AppTheme.background) en TabBarView children
+  7. Parsear campos JSON con int.tryParse/double.tryParse (MySQL puede retornar Strings)
+  8. Los catches deben mostrar SnackBar, no silenciarse
+
+================================================================================
+11. CONVENCIONES DEL PROYECTO
+================================================================================
+
+FLUTTER:
+  - Estado de carga: siempre con Container(color: AppTheme.background) como wrapper
+  - Errores de red: ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')))
+  - Campos numéricos de API: siempre double.tryParse(v?.toString() ?? '0') ?? 0.0
+  - Campos int de API: siempre int.tryParse(v?.toString() ?? '0') ?? 0
+  - Fechas: comparar como String 'YYYY-MM-DD', NUNCA con isSameDay() (bug de timezone)
+  - Navegación: pushAndRemoveUntil para logout, push normal para el resto
+
+BACKEND:
+  - Todos los endpoints validan firebase_uid
+  - DELETE siempre verifica propiedad con WHERE firebase_uid = ?
+  - try/catch en todos los endpoints con res.status(500)
+  - Fechas: comparar como strings ISO, no como Date objects (timezone issues)
+  - Pool de conexiones: createPool (NO createConnection)
+  - Cron job a medianoche Panama (UTC-5) para marcar eventos vencidos
+
+GIT:
+  - Rama: main
+  - Un commit por cambio/feature
+  - Formato: [tipo]: descripción en español
+    tipos: fix, feat, backend, schema, docs, audit
+  - Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+================================================================================
+12. ÚLTIMOS COMMITS EN EL REPOSITORIO
+================================================================================
+
+28c17c3 feat: venta_detalle soporta catálogo de productos y fecha exacta de cobro (Fase 1+3)
+a1836cd feat: cobros_home agrega pestaña Productos (Fase 1)
+4b6efcd feat: pantalla de catálogo de productos y variantes (Fase 1)
+fda7736 backend: POST /ventas/:id/cobros soporta fecha_especifica (Fase 3)
+03f7de9 backend: GET /ventas/:id incluye items[] por cobro (Fase 1)
+f63a11a backend: CRUD productos/variantes y endpoints pedido_items (Fase 1)
+616ebb3 schema: tablas productos, variantes_producto y pedido_items (Fase 1)
+546d70d fix: pestaña Ventas en blanco por fondo gris de Android y campos sin parsear
+b433c8c fix: pantalla de venta en blanco cuando _venta es null tras cargar
+d54484a fix: timeout de 55s en ApiClient para evitar pantallas colgadas
+[... varios commits anteriores de fixes y documentación]
+
+================================================================================
+FIN DEL ARCHIVO DE CONTEXTO
+================================================================================
