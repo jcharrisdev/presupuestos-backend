@@ -133,22 +133,22 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
 
   /// Abre el bottom sheet para crear una nueva venta.
   ///
+  /// Fase 2: permite seleccionar MÚLTIPLES presupuestos de producción mediante
+  /// checkboxes. El backend los vincula en la tabla venta_presupuestos y calcula
+  /// el total_invertido sumando todos los presupuestos seleccionados.
+  ///
   /// Campos:
   ///   - Nombre de la venta (requerido)
-  ///   - Presupuesto de producción (opcional): si se vincula, el backend
-  ///     calculará `ganancia = cobrado - invertido` en [VentaDetalle].
-  ///
-  /// Al confirmar llama POST /ventas y recarga la lista.
+  ///   - Presupuestos de producción (0 a N, opcional)
   void _crearVenta() {
     final nombreCtrl = TextEditingController();
-    int? prodId; // null si no se vincula a producción
+    final Set<int> selectedIds = {}; // IDs de presupuestos seleccionados (multi-select)
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      // StatefulBuilder necesario porque el dropdown modifica prodId localmente
-      builder: (_) => StatefulBuilder(builder: (ctx, setS) => Padding(
+      builder: (_) => StatefulBuilder(builder: (ctx, setS) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
@@ -157,26 +157,79 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
           const SizedBox(height: 20),
           TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(hintText: 'Ej: Venta mayo semana 1')),
-          const SizedBox(height: 16),
-          const Text('Presupuesto de producción (opcional)',
+          const SizedBox(height: 20),
+
+          // Multi-select de presupuestos de producción
+          const Text('Presupuestos de producción (opcional)',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<int>(
-            value: prodId, dropdownColor: AppTheme.surfaceAlt,
-            hint: const Text('Sin presupuesto de insumos', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(),
-            items: [
-              // Opción para no vincular presupuesto
-              const DropdownMenuItem<int>(value: null,
-                  child: Text('Sin presupuesto', style: TextStyle(color: AppTheme.textMuted))),
-              ..._producciones.map((p) => DropdownMenuItem<int>(
-                value: p['id'],
-                child: Text(p['nombre'], style: const TextStyle(color: AppTheme.textPrimary)),
-              )),
-            ],
-            onChanged: (v) => setS(() => prodId = v),
-          ),
+          const SizedBox(height: 4),
+          const Text('Selecciona uno o más para calcular la rentabilidad',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          const SizedBox(height: 10),
+
+          if (_producciones.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Sin presupuestos de insumos. Crea uno en la pestaña Producción.',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 12), textAlign: TextAlign.center),
+            )
+          else
+            ..._producciones.map((p) {
+              final pid = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '') ?? 0;
+              final total = double.tryParse(p['total_invertido']?.toString() ?? '0') ?? 0.0;
+              final seleccionado = selectedIds.contains(pid);
+              return GestureDetector(
+                onTap: () => setS(() {
+                  if (seleccionado) selectedIds.remove(pid); else selectedIds.add(pid);
+                }),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: seleccionado ? AppTheme.primary.withOpacity(0.08) : AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: seleccionado ? AppTheme.primary.withOpacity(0.4) : AppTheme.border,
+                      width: seleccionado ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(children: [
+                    Icon(
+                      seleccionado ? Icons.check_box : Icons.check_box_outline_blank,
+                      color: seleccionado ? AppTheme.primary : AppTheme.textMuted, size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(p['nombre']?.toString() ?? '',
+                        style: TextStyle(
+                          color: seleccionado ? AppTheme.textPrimary : AppTheme.textSecondary,
+                          fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal, fontSize: 13,
+                        ))),
+                    Text('\$${total.toStringAsFixed(2)}',
+                        style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ]),
+                ),
+              );
+            }),
+
+          // Resumen de costo total si hay varios seleccionados
+          if (selectedIds.length > 1) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(color: AppTheme.colorFijo.withOpacity(0.07), borderRadius: BorderRadius.circular(8)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('${selectedIds.length} presupuestos seleccionados',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                Text('\$${_producciones.where((p) {
+                  final pid = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '') ?? 0;
+                  return selectedIds.contains(pid);
+                }).fold(0.0, (s, p) => s + (double.tryParse(p['total_invertido']?.toString() ?? '0') ?? 0.0)).toStringAsFixed(2)} total',
+                    style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w700, fontSize: 12)),
+              ]),
+            ),
+          ],
+
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
@@ -186,8 +239,8 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                 'nombre': nombreCtrl.text.trim(),
                 'firebase_uid': widget.firebaseUid,
               };
-              // Solo incluir presupuesto_produccion_id si el usuario eligió uno
-              if (prodId != null) body['presupuesto_produccion_id'] = prodId;
+              // Fase 2: enviar array de IDs seleccionados
+              if (selectedIds.isNotEmpty) body['presupuesto_ids'] = selectedIds.toList();
               final res = await ApiClient.post('/ventas', body);
               if (res.statusCode == 201) _cargarVentas();
             },
