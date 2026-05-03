@@ -1270,7 +1270,7 @@ app.get('/ventas/:id', async (req, res) => {
     }
 
     // Fase 7: cálculo de todas las métricas financieras
-    const cobradosList  = cobros.filter(c => c.estado === 'cobrado');
+    const cobradosList   = cobros.filter(c => c.estado === 'cobrado');
     const pendientesList = cobros.filter(c => c.estado === 'pendiente');
 
     const totalCobrado   = cobradosList.reduce((s, c) => s + Number(c.monto_cobrado || c.monto), 0);
@@ -1278,26 +1278,49 @@ app.get('/ventas/:id', async (req, res) => {
     const totalPendiente = pendientesList.reduce((s, c) => s + Number(c.monto), 0);
     const invertido      = Number(venta.total_invertido);
 
-    const ganancia        = totalCobrado - invertido;
-    const margen          = invertido > 0 ? (ganancia / invertido * 100) : 0;
-    const margenEsperado  = invertido > 0 ? ((totalEsperado - invertido) / invertido * 100) : 0;
+    const ganancia          = totalCobrado - invertido;
+    const margen            = invertido > 0 ? (ganancia / invertido * 100) : 0;
+    const margenEsperado    = invertido > 0 ? ((totalEsperado - invertido) / invertido * 100) : 0;
     const porcentajeCobrado = totalEsperado > 0 ? (totalCobrado / totalEsperado * 100) : 0;
+
+    // Fase 6: costo estimado desde recetas × precios de insumos
+    // Solo se calcula si algún insumo tiene precio_unitario definido.
+    let costoEstimado = null;
+    if (cobros.length > 0) {
+      const cobroIds     = cobros.map(c => c.id);
+      const placeholders = cobroIds.map(() => '?').join(',');
+      const [[ceRow]] = await db.execute(
+        `SELECT SUM(ri.precio_unitario * ri.cantidad * pi.cantidad / r.rendimiento) AS costo_estimado
+         FROM cobros_clientes cc
+         JOIN pedido_items pi  ON pi.cobro_cliente_id = cc.id
+         JOIN recetas r        ON r.variante_id = pi.variante_id
+         JOIN receta_insumos ri ON ri.receta_id = r.id
+         WHERE cc.id IN (${placeholders})
+           AND pi.variante_id IS NOT NULL
+           AND ri.precio_unitario IS NOT NULL AND ri.precio_unitario > 0`,
+        cobroIds
+      );
+      if (ceRow?.costo_estimado != null)
+        costoEstimado = parseFloat(Number(ceRow.costo_estimado).toFixed(2));
+    }
 
     res.json({
       venta,
-      presupuestos,   // Fase 2: lista de presupuestos vinculados
+      presupuestos,   // Fase 2
       cobros,
       resumen: {
-        total_invertido:    invertido,
-        total_cobrado:      totalCobrado,
-        total_esperado:     totalEsperado,
-        total_pendiente:    totalPendiente,      // Fase 7
+        total_invertido:     invertido,
+        total_cobrado:       totalCobrado,
+        total_esperado:      totalEsperado,
+        total_pendiente:     totalPendiente,       // Fase 7
         ganancia,
         margen,
-        margen_esperado:    margenEsperado,      // Fase 7: margen si se cobran todos
-        porcentaje_cobrado: porcentajeCobrado,   // Fase 7: % del total ya cobrado
-        cobros_realizados:  cobradosList.length,
-        cobros_pendientes:  pendientesList.length,
+        margen_esperado:     margenEsperado,       // Fase 7
+        porcentaje_cobrado:  porcentajeCobrado,    // Fase 7
+        costo_estimado:      costoEstimado,        // Fase 6: null si no hay precios en recetas
+        diferencia_costo:    costoEstimado != null ? parseFloat((invertido - costoEstimado).toFixed(2)) : null,
+        cobros_realizados:   cobradosList.length,
+        cobros_pendientes:   pendientesList.length,
       }
     });
   } catch (err) {
@@ -1496,6 +1519,127 @@ app.delete('/ventas/:id/presupuestos/:pid', async (req, res) => {
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Vínculo no encontrado' });
     res.json({ message: 'Presupuesto desvinculado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================================================
+// MÓDULO: LISTA DE COMPRAS (Fase 5)
+// Calcula automáticamente cuánto insumo comprar para cubrir los pedidos de
+// una venta, usando las recetas de cada variante vendida.
+// Fórmula: cantidad_necesaria = cantidad_base_receta × unidades_vendidas / rendimiento
+// =============================================================================
+
+/**
+ * GET /ventas/:id/lista-compras?firebase_uid=
+ * Retorna la lista de compras agrupada por insumo para todos los pedidos de la venta.
+ *
+ * Respuesta:
+ *   insumos[]       — insumos con receta: { nombre, unidad, cantidad_total, fuentes, precio_estimado }
+ *   sin_receta[]    — variantes vendidas sin receta definida: { descripcion, cantidad_total }
+ *   resumen         — { total_insumos, variantes_sin_receta, costo_estimado_total }
+ *
+ * Solo considera pedido_items con variante_id (ignora ítems manuales sin variante).
+ * Si los insumos no tienen precio_unitario, precio_estimado es null.
+ */
+app.get('/ventas/:id/lista-compras', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Verificar propiedad de la venta
+    const [[venta]] = await db.execute(
+      `SELECT id, nombre FROM ventas WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    // Insumos con receta: agrupados por nombre+unidad
+    // fuentes: lista de "variante (N uds)" separadas por coma
+    const [insumos] = await db.execute(
+      `SELECT
+         ri.nombre,
+         ri.unidad,
+         ROUND(SUM(ri.cantidad * pi.cantidad / r.rendimiento), 3) AS cantidad_total,
+         ri.precio_unitario,
+         GROUP_CONCAT(
+           DISTINCT CONCAT(vp.nombre, ' × ', CAST(pi.cantidad AS CHAR))
+           ORDER BY vp.nombre SEPARATOR ', '
+         ) AS fuentes
+       FROM cobros_clientes cc
+       JOIN pedido_items pi    ON pi.cobro_cliente_id = cc.id
+       JOIN variantes_producto vp ON vp.id = pi.variante_id
+       JOIN recetas r           ON r.variante_id = pi.variante_id
+       JOIN receta_insumos ri   ON ri.receta_id = r.id
+       WHERE cc.venta_id = ? AND cc.firebase_uid = ?
+         AND pi.variante_id IS NOT NULL
+       GROUP BY ri.nombre, ri.unidad, ri.precio_unitario
+       ORDER BY ri.nombre`,
+      [id, firebase_uid]
+    );
+
+    // Combinar filas del mismo insumo (mismo nombre+unidad, distinto precio_unitario no debería ocurrir,
+    // pero si lo hace los agrupamos sumando cantidades y tomando el primer precio disponible)
+    const insumosMap = {};
+    insumos.forEach(row => {
+      const key = `${row.nombre}||${row.unidad}`;
+      if (!insumosMap[key]) {
+        insumosMap[key] = {
+          nombre: row.nombre,
+          unidad: row.unidad,
+          cantidad_total: 0,
+          precio_unitario: row.precio_unitario,
+          fuentes: new Set(),
+        };
+      }
+      insumosMap[key].cantidad_total = parseFloat(
+        (insumosMap[key].cantidad_total + Number(row.cantidad_total)).toFixed(3)
+      );
+      if (row.precio_unitario != null && insumosMap[key].precio_unitario == null)
+        insumosMap[key].precio_unitario = row.precio_unitario;
+      row.fuentes.split(', ').forEach(f => insumosMap[key].fuentes.add(f));
+    });
+
+    const insumosResult = Object.values(insumosMap).map(i => ({
+      nombre:          i.nombre,
+      unidad:          i.unidad,
+      cantidad_total:  i.cantidad_total,
+      precio_unitario: i.precio_unitario,
+      costo_estimado:  i.precio_unitario != null
+        ? parseFloat((Number(i.precio_unitario) * i.cantidad_total).toFixed(2))
+        : null,
+      fuentes: [...i.fuentes].join(', '),
+    }));
+
+    // Variantes vendidas sin receta definida
+    const [sinReceta] = await db.execute(
+      `SELECT pi.descripcion, SUM(pi.cantidad) AS cantidad_total
+       FROM cobros_clientes cc
+       JOIN pedido_items pi ON pi.cobro_cliente_id = cc.id
+       WHERE cc.venta_id = ? AND cc.firebase_uid = ?
+         AND pi.variante_id IS NOT NULL
+         AND pi.variante_id NOT IN (SELECT variante_id FROM recetas)
+       GROUP BY pi.descripcion
+       ORDER BY pi.descripcion`,
+      [id, firebase_uid]
+    );
+
+    const costoTotal = insumosResult.reduce(
+      (s, i) => s + (i.costo_estimado != null ? i.costo_estimado : 0), 0
+    );
+    const tieneCostos = insumosResult.some(i => i.costo_estimado != null);
+
+    res.json({
+      insumos: insumosResult,
+      sin_receta: sinReceta,
+      resumen: {
+        total_insumos:        insumosResult.length,
+        variantes_sin_receta: sinReceta.length,
+        costo_estimado_total: tieneCostos ? parseFloat(costoTotal.toFixed(2)) : null,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -1831,15 +1975,15 @@ app.delete('/recetas/:id', async (req, res) => {
 /**
  * POST /recetas/:id/insumos
  * Agrega un insumo (ingrediente) a una receta.
- * Body: { nombre, cantidad, unidad, firebase_uid }
+ * Body: { nombre, cantidad, unidad, precio_unitario?, firebase_uid }
+ * precio_unitario es opcional (Fase 6: permite calcular costo estimado).
  */
 app.post('/recetas/:id/insumos', async (req, res) => {
   const { id } = req.params;
-  const { nombre, cantidad, unidad, firebase_uid } = req.body;
+  const { nombre, cantidad, unidad, precio_unitario, firebase_uid } = req.body;
   if (!nombre || cantidad == null || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
   try {
-    // Verificar propiedad de la receta
     const [[receta]] = await db.execute(
       `SELECT r.id FROM recetas r
        JOIN variantes_producto vp ON vp.id = r.variante_id
@@ -1849,11 +1993,18 @@ app.post('/recetas/:id/insumos', async (req, res) => {
     );
     if (!receta) return res.status(404).json({ error: 'Receta no encontrada' });
 
+    const precio = precio_unitario != null && Number(precio_unitario) > 0
+      ? Number(precio_unitario) : null;
+
     const [result] = await db.execute(
-      `INSERT INTO receta_insumos (receta_id, nombre, cantidad, unidad) VALUES (?, ?, ?, ?)`,
-      [id, nombre, Number(cantidad), unidad || 'g']
+      `INSERT INTO receta_insumos (receta_id, nombre, cantidad, unidad, precio_unitario)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, nombre, Number(cantidad), unidad || 'g', precio]
     );
-    res.status(201).json({ id: result.insertId, nombre, cantidad: Number(cantidad), unidad: unidad || 'g' });
+    res.status(201).json({
+      id: result.insertId, nombre,
+      cantidad: Number(cantidad), unidad: unidad || 'g', precio_unitario: precio,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -1862,23 +2013,31 @@ app.post('/recetas/:id/insumos', async (req, res) => {
 
 /**
  * PUT /receta-insumos/:id
- * Edita nombre, cantidad o unidad de un insumo.
+ * Edita nombre, cantidad, unidad o precio_unitario de un insumo.
+ * precio_unitario: enviar null para borrar el precio (sin estimado para este insumo).
  */
 app.put('/receta-insumos/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, cantidad, unidad, firebase_uid } = req.body;
+  const { nombre, cantidad, unidad, precio_unitario, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // precio_unitario puede ser null explícito (borrar) o un número
+    const precio = precio_unitario === null ? null
+      : (precio_unitario != null && Number(precio_unitario) > 0 ? Number(precio_unitario) : undefined);
+
     await db.execute(
       `UPDATE receta_insumos ri
        JOIN recetas r ON r.id = ri.receta_id
        JOIN variantes_producto vp ON vp.id = r.variante_id
        JOIN productos p ON p.id = vp.producto_id
-       SET ri.nombre    = COALESCE(?, ri.nombre),
-           ri.cantidad  = COALESCE(?, ri.cantidad),
-           ri.unidad    = COALESCE(?, ri.unidad)
+       SET ri.nombre          = COALESCE(?, ri.nombre),
+           ri.cantidad        = COALESCE(?, ri.cantidad),
+           ri.unidad          = COALESCE(?, ri.unidad),
+           ri.precio_unitario = ${precio !== undefined ? '?' : 'ri.precio_unitario'}
        WHERE ri.id = ? AND p.firebase_uid = ?`,
-      [nombre || null, cantidad != null ? Number(cantidad) : null, unidad || null, id, firebase_uid]
+      precio !== undefined
+        ? [nombre || null, cantidad != null ? Number(cantidad) : null, unidad || null, precio, id, firebase_uid]
+        : [nombre || null, cantidad != null ? Number(cantidad) : null, unidad || null, id, firebase_uid]
     );
     res.json({ message: 'Insumo actualizado' });
   } catch (err) {
