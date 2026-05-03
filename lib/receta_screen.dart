@@ -162,11 +162,13 @@ class _RecetaScreenState extends State<RecetaScreen> {
   }
 
   /// Abre el bottom sheet para agregar un nuevo insumo a la receta.
+  /// precio_unitario es opcional (Fase 6: permite calcular costo estimado).
   void _modalAgregarInsumo() {
     if (_receta == null) return;
     final nombreCtrl   = TextEditingController();
     final cantidadCtrl = TextEditingController();
     final unidadCtrl   = TextEditingController(text: 'g');
+    final precioCtrl   = TextEditingController();
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
@@ -206,6 +208,17 @@ class _RecetaScreenState extends State<RecetaScreen> {
               ),
             )),
           ]),
+          const SizedBox(height: 12),
+          TextField(
+            controller: precioCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(
+              labelText: 'Precio por unidad (opcional)',
+              prefixText: '\$ ',
+              helperText: 'Permite calcular el costo estimado de producción',
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
@@ -216,12 +229,15 @@ class _RecetaScreenState extends State<RecetaScreen> {
               final recetaId = _receta!['id'] is int
                   ? _receta!['id'] as int
                   : int.tryParse(_receta!['id'].toString()) ?? 0;
-              final res = await ApiClient.post('/recetas/$recetaId/insumos', {
+              final precio = double.tryParse(precioCtrl.text);
+              final body = <String, dynamic>{
                 'nombre': nombre,
                 'cantidad': cantidad,
                 'unidad': unidadCtrl.text.trim().isEmpty ? 'g' : unidadCtrl.text.trim(),
                 'firebase_uid': widget.firebaseUid,
-              });
+              };
+              if (precio != null && precio > 0) body['precio_unitario'] = precio;
+              final res = await ApiClient.post('/recetas/$recetaId/insumos', body);
               if (res.statusCode == 201) _cargar();
               else if (mounted) ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Error al agregar insumo')),
@@ -235,12 +251,18 @@ class _RecetaScreenState extends State<RecetaScreen> {
   }
 
   /// Abre el bottom sheet para editar un insumo existente.
+  /// precio_unitario es opcional (Fase 6).
   void _modalEditarInsumo(Map<String, dynamic> insumo) {
     final nombreCtrl   = TextEditingController(text: insumo['nombre']?.toString() ?? '');
     final cantidadCtrl = TextEditingController(
       text: (double.tryParse(insumo['cantidad']?.toString() ?? '0') ?? 0).toString(),
     );
-    final unidadCtrl = TextEditingController(text: insumo['unidad']?.toString() ?? 'g');
+    final unidadCtrl  = TextEditingController(text: insumo['unidad']?.toString() ?? 'g');
+    final precioExist = insumo['precio_unitario'] != null
+        ? double.tryParse(insumo['precio_unitario'].toString()) : null;
+    final precioCtrl  = TextEditingController(
+      text: precioExist != null ? precioExist.toStringAsFixed(2) : '',
+    );
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
@@ -273,6 +295,17 @@ class _RecetaScreenState extends State<RecetaScreen> {
               decoration: const InputDecoration(labelText: 'Unidad'),
             )),
           ]),
+          const SizedBox(height: 12),
+          TextField(
+            controller: precioCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(
+              labelText: 'Precio por unidad (opcional)',
+              prefixText: '\$ ',
+              helperText: 'Dejar vacío para quitar el precio',
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
@@ -283,10 +316,13 @@ class _RecetaScreenState extends State<RecetaScreen> {
               final insumoId = insumo['id'] is int
                   ? insumo['id'] as int
                   : int.tryParse(insumo['id'].toString()) ?? 0;
+              final precio = double.tryParse(precioCtrl.text);
               await ApiClient.put('/receta-insumos/$insumoId', {
                 'nombre': nombre,
                 'cantidad': cantidad,
                 'unidad': unidadCtrl.text.trim().isEmpty ? 'g' : unidadCtrl.text.trim(),
+                // null explícito borra el precio; si viene número > 0 lo actualiza
+                'precio_unitario': (precio != null && precio > 0) ? precio : null,
                 'firebase_uid': widget.firebaseUid,
               });
               _cargar();
@@ -531,8 +567,10 @@ class _RecetaScreenState extends State<RecetaScreen> {
           else
             ...(_insumos.map((ins) {
               final insumoId = ins['id'] is int ? ins['id'] as int : int.tryParse(ins['id'].toString()) ?? 0;
-              final cant = double.tryParse(ins['cantidad']?.toString() ?? '0') ?? 0;
+              final cant   = double.tryParse(ins['cantidad']?.toString() ?? '0') ?? 0;
               final cantStr = cant % 1 == 0 ? cant.toInt().toString() : cant.toString();
+              final precio = ins['precio_unitario'] != null
+                  ? double.tryParse(ins['precio_unitario'].toString()) : null;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -554,9 +592,14 @@ class _RecetaScreenState extends State<RecetaScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      Expanded(child: Text(ins['nombre']?.toString() ?? '',
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
-                              fontWeight: FontWeight.w600))),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(ins['nombre']?.toString() ?? '',
+                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
+                                fontWeight: FontWeight.w600)),
+                        if (precio != null)
+                          Text('\$${precio.toStringAsFixed(2)} / ${ins['unidad'] ?? ''}',
+                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                      ])),
                       Text('$cantStr ${ins['unidad'] ?? ''}',
                           style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700,
                               fontSize: 14)),

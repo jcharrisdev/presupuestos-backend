@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'lista_compras_screen.dart';
 
 /// Detalle de venta con rentabilidad y lista de cobros a clientes.
 class VentaDetalle extends StatefulWidget {
@@ -500,6 +501,11 @@ class _VentaDetalleState extends State<VentaDetalle> {
     final pctCobrado     = double.tryParse(_resumen['porcentaje_cobrado']?.toString() ?? '0') ?? 0;
     final realizados     = int.tryParse(_resumen['cobros_realizados']?.toString() ?? '0') ?? 0;
     final pendientes     = int.tryParse(_resumen['cobros_pendientes']?.toString()  ?? '0') ?? 0;
+    // Fase 6: costo estimado desde recetas (null si no hay precios definidos en los insumos)
+    final costoEstimado   = _resumen['costo_estimado'] != null
+        ? double.tryParse(_resumen['costo_estimado'].toString()) : null;
+    final diferenciaCosto = _resumen['diferencia_costo'] != null
+        ? double.tryParse(_resumen['diferencia_costo'].toString()) : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -536,6 +542,17 @@ class _VentaDetalleState extends State<VentaDetalle> {
                 ],
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.shopping_cart_outlined, size: 20),
+            tooltip: 'Lista de compras',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ListaComprasScreen(
+                ventaId: widget.ventaId,
+                ventaNombre: nombre,
+                firebaseUid: widget.firebaseUid,
+              ),
+            )),
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
         ],
@@ -679,6 +696,77 @@ class _VentaDetalleState extends State<VentaDetalle> {
                         style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800, fontSize: 14)),
                   ]),
                 ),
+            ],
+
+            // ── COMPARACIÓN ESTIMADO vs REAL (Fase 6) ─────────────────────
+            // Solo visible cuando hay costo_estimado calculado desde recetas.
+            if (costoEstimado != null && costoEstimado > 0) ...[
+              const SizedBox(height: 16),
+              const LabelDivider('PRESUPUESTO: ESTIMADO vs REAL'),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Barra costo estimado (desde recetas)
+                  _barraComparativa(
+                    'Costo estimado (recetas)',
+                    costoEstimado,
+                    max(costoEstimado, invertido > 0 ? invertido : costoEstimado),
+                    AppTheme.colorAhorro,
+                    dashed: true,
+                  ),
+                  if (invertido > 0) ...[
+                    const SizedBox(height: 10),
+                    _barraComparativa(
+                      'Costo real (presupuesto)',
+                      invertido,
+                      max(costoEstimado, invertido),
+                      AppTheme.colorFijo,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  const Divider(color: AppTheme.border, height: 1),
+                  const SizedBox(height: 14),
+                  // Diferencia y badge de estado
+                  Row(children: [
+                    if (diferenciaCosto != null) ...[
+                      _statBox(
+                        diferenciaCosto >= 0 ? 'Sobre presupuesto' : 'Bajo presupuesto',
+                        '\$${diferenciaCosto.abs().toStringAsFixed(2)}',
+                        diferenciaCosto > 0 ? AppTheme.danger : AppTheme.success,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _statBox('Estimado\n(recetas)', '\$${costoEstimado.toStringAsFixed(2)}',
+                        AppTheme.colorAhorro),
+                    if (invertido > 0) ...[
+                      const SizedBox(width: 8),
+                      _statBox('Real\n(presupuesto)', '\$${invertido.toStringAsFixed(2)}',
+                          AppTheme.colorFijo),
+                    ],
+                  ]),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppTheme.colorAhorro.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.info_outline, color: AppTheme.colorAhorro, size: 12),
+                      const SizedBox(width: 7),
+                      const Expanded(child: Text(
+                        'El estimado se calcula con los precios definidos en las recetas de cada variante.',
+                        style: TextStyle(color: AppTheme.colorAhorro, fontSize: 10),
+                      )),
+                    ]),
+                  ),
+                ]),
+              ),
             ],
 
             const SizedBox(height: 16),
