@@ -291,6 +291,7 @@ lib/produccion_detalle.dart      Insumos de un presupuesto de producción
 lib/venta_detalle.dart           Detalle de venta: rentabilidad + cobros + presupuestos vinculados
                                  NUEVO: modal con catálogo productos y fecha exacta
 lib/receta_screen.dart           NUEVO (Fase 4): CRUD receta de variante + calculadora insumos
+lib/lista_compras_screen.dart    NUEVO (Fase 5): lista de compras automática por venta
 
 lib/presupuestos_service.dart    Servicio wrapper de ApiClient para presupuestos
 lib/services/api_client.dart     HTTP centralizado con timeout 55s
@@ -363,16 +364,17 @@ FASE 4 — IMPLEMENTADA ✓
   - Flutter: receta_screen.dart con calculadora de insumos (slider → tabla de cantidades)
              productos_screen.dart: botón 'Receta' por variante
 
-FASE 5 — Lista de compras automática (~12,000-16,000 tokens):
-  Qué hace: calcula cuánto comprar de cada insumo según los pedidos de una venta
-  Depende de: Fase 4 (recetas)
-  Backend: GET /ventas/:id/lista-compras (agrupa insumos de todos los pedido_items)
-  Flutter: nueva pantalla lista_compras_screen.dart + botón en venta_detalle
+FASE 5 — IMPLEMENTADA ✓
+  - Backend: GET /ventas/:id/lista-compras agrupa insumos (formula: cant_base×uds/rendimiento)
+             Retorna insumos[], sin_receta[], resumen{total_insumos, costo_estimado_total}
+  - Flutter: lista_compras_screen.dart con checkboxes, fuentes por insumo, aviso sin receta
+             Botón 🛒 en AppBar de venta_detalle
 
-FASE 6 — Budget integrado estimado vs real (~14,000-18,000 tokens):
-  Qué hace: compara costo estimado (desde recetas) vs costo real (del presupuesto manual)
-  Backend: modificar GET /ventas/:id resumen para incluir costo_estimado y costo_real
-  Flutter: nueva sección en venta_detalle con comparación visual
+FASE 6 — IMPLEMENTADA ✓
+  - Schema: receta_insumos.precio_unitario DECIMAL NULL (opcional, activa el estimado)
+  - Backend: GET /ventas/:id resumen incluye costo_estimado y diferencia_costo
+  - Flutter: sección PRESUPUESTO ESTIMADO vs REAL en venta_detalle (barras + diff color)
+             receta_screen modals incluyen campo precio por unidad
 
 FASE 7 — IMPLEMENTADA ✓
   - Backend: resumen ampliado con total_pendiente, margen_esperado, porcentaje_cobrado
@@ -428,6 +430,9 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
+073f110 feat: lista de compras automática y comparación estimado vs real (Fase 5 + 6)
+8d100f0 backend: GET /ventas/:id/lista-compras y costo_estimado en resumen (Fase 5 + 6)
+03c3713 schema: precio_unitario en receta_insumos para costo estimado (Fase 6)
 e9342dc feat: pantalla de recetas de variantes con calculadora de insumos (Fase 4)
 2baca23 backend: CRUD completo de recetas y receta_insumos (Fase 4)
 76d2e09 schema: tablas recetas y receta_insumos para recetas de variantes (Fase 4)
