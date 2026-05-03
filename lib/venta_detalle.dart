@@ -34,8 +34,12 @@ class _VentaDetalleState extends State<VentaDetalle> {
   Map<String, dynamic>? _venta;
   List<dynamic> _cobros = [];
 
-  /// Resumen financiero retornado por el backend:
-  /// total_invertido, total_cobrado, total_esperado, ganancia, margen,
+  /// Fase 2: presupuestos de producción vinculados a esta venta.
+  List<dynamic> _presupuestos = [];
+
+  /// Resumen financiero retornado por el backend (Fase 7 — ampliado):
+  /// total_invertido, total_cobrado, total_esperado, total_pendiente,
+  /// ganancia, margen, margen_esperado, porcentaje_cobrado,
   /// cobros_realizados, cobros_pendientes.
   Map<String, dynamic> _resumen = {};
   bool _loading = true;
@@ -51,10 +55,11 @@ class _VentaDetalleState extends State<VentaDetalle> {
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
-          _venta   = data['venta'];
-          _cobros  = data['cobros'] ?? [];
-          _resumen = data['resumen'] ?? {};
-          _loading = false;
+          _venta        = data['venta'];
+          _cobros       = data['cobros'] ?? [];
+          _presupuestos = data['presupuestos'] ?? [];   // Fase 2
+          _resumen      = data['resumen'] ?? {};
+          _loading      = false;
         });
       } else {
         setState(() => _loading = false);
@@ -484,14 +489,17 @@ class _VentaDetalleState extends State<VentaDetalle> {
       ])),
     );
 
-    final nombre    = _venta!['nombre'] ?? 'Venta';
-    final invertido = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
-    final cobrado   = double.tryParse(_resumen['total_cobrado']?.toString() ?? '0') ?? 0;
-    final esperado  = double.tryParse(_resumen['total_esperado']?.toString() ?? '0') ?? 0;
-    final ganancia  = double.tryParse(_resumen['ganancia']?.toString() ?? '0') ?? 0;
-    final margen    = double.tryParse(_resumen['margen']?.toString() ?? '0') ?? 0;
-    final realizados = _resumen['cobros_realizados'] ?? 0;
-    final pendientes = _resumen['cobros_pendientes'] ?? 0;
+    final nombre         = _venta!['nombre'] ?? 'Venta';
+    final invertido      = double.tryParse(_resumen['total_invertido']?.toString()    ?? '0') ?? 0;
+    final cobrado        = double.tryParse(_resumen['total_cobrado']?.toString()      ?? '0') ?? 0;
+    final esperado       = double.tryParse(_resumen['total_esperado']?.toString()     ?? '0') ?? 0;
+    final pendienteAmt   = double.tryParse(_resumen['total_pendiente']?.toString()    ?? '0') ?? 0;
+    final ganancia       = double.tryParse(_resumen['ganancia']?.toString()           ?? '0') ?? 0;
+    final margen         = double.tryParse(_resumen['margen']?.toString()             ?? '0') ?? 0;
+    final margenEsperado = double.tryParse(_resumen['margen_esperado']?.toString()    ?? '0') ?? 0;
+    final pctCobrado     = double.tryParse(_resumen['porcentaje_cobrado']?.toString() ?? '0') ?? 0;
+    final realizados     = int.tryParse(_resumen['cobros_realizados']?.toString() ?? '0') ?? 0;
+    final pendientes     = int.tryParse(_resumen['cobros_pendientes']?.toString()  ?? '0') ?? 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -547,7 +555,7 @@ class _VentaDetalleState extends State<VentaDetalle> {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            // ── GRÁFICA DE RENTABILIDAD ────────────────────────────────────
+            // ── GRÁFICA DE RENTABILIDAD (Fase 7 — ampliada) ───────────────
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -560,7 +568,6 @@ class _VentaDetalleState extends State<VentaDetalle> {
                   const Text('RENTABILIDAD',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
                   const Spacer(),
-                  // Badge de ganancia/pérdida
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -580,37 +587,99 @@ class _VentaDetalleState extends State<VentaDetalle> {
                 ]),
                 const SizedBox(height: 20),
 
-                // Barras comparativas: el máximo de cada barra se ajusta
-                // al mayor valor entre las 3 métricas para comparación proporcional.
+                // Barras comparativas (Invertido / Cobrado / Esperado)
                 if (invertido > 0) ...[
-                  _barraComparativa('Invertido', invertido, max(invertido, cobrado), AppTheme.colorFijo),
+                  _barraComparativa('Invertido', invertido,
+                      max(max(invertido, cobrado), max(esperado, 0.01)), AppTheme.colorFijo),
                   const SizedBox(height: 10),
                 ],
-                _barraComparativa('Cobrado', cobrado, max(max(invertido, cobrado), 0.01), AppTheme.success),
-                // Barra de Esperado solo si hay cobros pendientes (cobrado < esperado)
+                _barraComparativa('Cobrado', cobrado,
+                    max(max(invertido, cobrado), max(esperado, 0.01)), AppTheme.success),
                 if (esperado > cobrado) ...[
                   const SizedBox(height: 10),
-                  // dashed=true muestra la barra con borde punteado → indica "proyectado"
-                  _barraComparativa('Esperado', esperado, max(max(invertido, esperado), 0.01),
-                      AppTheme.primary, dashed: true),
+                  _barraComparativa('Esperado', esperado,
+                      max(max(invertido, esperado), 0.01), AppTheme.primary, dashed: true),
                 ],
 
                 const SizedBox(height: 20),
                 const Divider(color: AppTheme.border, height: 1),
                 const SizedBox(height: 16),
 
-                // Stats resumidos: ganancia neta, margen %, cobros X/Y
+                // Fila 1: Ganancia neta / Margen real / Cobrados
                 Row(children: [
                   _statBox('Ganancia neta', '\$${ganancia.abs().toStringAsFixed(2)}',
                       ganancia >= 0 ? AppTheme.success : AppTheme.danger),
                   const SizedBox(width: 8),
-                  _statBox('Margen', '${margen.toStringAsFixed(1)}%',
+                  _statBox('Margen real', '${margen.toStringAsFixed(1)}%',
                       margen >= 0 ? AppTheme.success : AppTheme.danger),
                   const SizedBox(width: 8),
                   _statBox('Cobrados', '$realizados / ${realizados + pendientes}', AppTheme.primary),
                 ]),
+
+                // Fila 2 (Fase 7): pendiente / % cobrado / margen esperado
+                if (esperado > 0 || invertido > 0) ...[
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    if (pendienteAmt > 0)
+                      _statBox('Por cobrar', '\$${pendienteAmt.toStringAsFixed(2)}', AppTheme.warning),
+                    if (pendienteAmt > 0) const SizedBox(width: 8),
+                    _statBox('% cobrado', '${pctCobrado.toStringAsFixed(1)}%', AppTheme.primary),
+                    if (invertido > 0) ...[
+                      const SizedBox(width: 8),
+                      _statBox('Margen esp.', '${margenEsperado.toStringAsFixed(1)}%',
+                          margenEsperado >= 0 ? AppTheme.success : AppTheme.danger),
+                    ],
+                  ]),
+                ],
               ]),
             ),
+
+            // ── PRESUPUESTOS DE PRODUCCIÓN VINCULADOS (Fase 2) ────────────
+            if (_presupuestos.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const LabelDivider('COSTOS DE PRODUCCIÓN'),
+              ..._presupuestos.map((pp) {
+                final ppTotal = double.tryParse(pp['total_invertido']?.toString() ?? '0') ?? 0;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: AppTheme.colorFijo.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.inventory_2_outlined, color: AppTheme.colorFijo, size: 16),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(pp['nombre']?.toString() ?? '',
+                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                    Text('\$${ppTotal.toStringAsFixed(2)}',
+                        style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ]),
+                );
+              }),
+              if (_presupuestos.length > 1)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.colorFijo.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.colorFijo.withOpacity(0.2)),
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Total invertido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                    Text('\$${invertido.toStringAsFixed(2)}',
+                        style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800, fontSize: 14)),
+                  ]),
+                ),
+            ],
 
             const SizedBox(height: 16),
             const LabelDivider('CLIENTES'),
