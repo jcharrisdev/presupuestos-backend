@@ -107,7 +107,12 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       } else {
         setState(() => _loading = false);
       }
-    } catch (_) { setState(() => _loading = false); }
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar eventos: $e')),
+      );
+    }
   }
 
   /// Filtra los eventos pendientes en los próximos 3 días y muestra notificación.
@@ -162,19 +167,21 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
     return tipo == 'cobro' ? AppTheme.primary : AppTheme.colorFijo;
   }
 
-  /// Marca un evento como pagado (o cobrado si es tipo 'cobro').
+  /// Marca un evento como pagado.
   ///
-  /// Para eventos tipo 'cobro' también actualiza el cobro en `cobros_clientes`
-  /// con el monto esperado como monto cobrado real.
+  /// Siempre usa estado 'pagado' (el ENUM de calendario_eventos solo acepta
+  /// 'pendiente','pagado','vencido' — 'cobrado' es inválido y causa error MySQL).
+  /// Para eventos tipo 'cobro' también actualiza cobros_clientes con el monto real.
   Future<void> _marcarPagado(Map<String, dynamic> evento) async {
-    final nuevoEstado = evento['tipo'] == 'cobro' ? 'cobrado' : 'pagado';
     if (evento['tipo'] == 'cobro' && evento['cobro_id'] != null) {
-      // Actualizar también la tabla cobros_clientes para mantener consistencia
-      await ApiClient.put('/cobros/${evento['cobro_id']}/cobrar',
-          {'monto_cobrado': evento['monto_esperado'], 'firebase_uid': widget.firebaseUid});
+      final monto = evento['monto_esperado'];
+      if (monto != null) {
+        await ApiClient.put('/cobros/${evento['cobro_id']}/cobrar',
+            {'monto_cobrado': monto, 'firebase_uid': widget.firebaseUid});
+      }
     }
     await ApiClient.put('/calendario/eventos/${evento['id']}/estado',
-        {'estado': nuevoEstado, 'firebase_uid': widget.firebaseUid});
+        {'estado': 'pagado', 'firebase_uid': widget.firebaseUid});
     _cargarEventos();
   }
 
@@ -263,7 +270,10 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Container(
+              color: AppTheme.background,
+              child: const Center(child: CircularProgressIndicator()),
+            )
           : TabBarView(
               controller: _tabCtrl,
               children: [_vistaCalendario(), _vistaLista()],
@@ -344,37 +354,42 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       ),
       const Divider(color: AppTheme.border, height: 1),
 
-      // Panel inferior: eventos del día seleccionado
+      // Panel inferior: eventos del día seleccionado.
+      // FIX: Container con fondo explícito — sin esto el panel aparece blanco
+      // en Android en release mode porque el Expanded no hereda el Scaffold color.
       Expanded(
-        child: eventosHoy.isEmpty
-            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.event_available, size: 40, color: AppTheme.textMuted.withOpacity(0.4)),
-                const SizedBox(height: 10),
-                Text(
-                  _selectedDay == null
-                      ? 'Selecciona un día'
-                      : 'Sin eventos — ${_fmtFecha(_selectedDay!)}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                ),
-              ]))
-            : ListView(
-                padding: const EdgeInsets.all(12),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(
-                      _selectedDay != null ? _fmtFechaLarga(_selectedDay!) : '',
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5),
-                    ),
+        child: Container(
+          color: AppTheme.background,
+          child: eventosHoy.isEmpty
+              ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.event_available, size: 40, color: AppTheme.textMuted.withOpacity(0.4)),
+                  const SizedBox(height: 10),
+                  Text(
+                    _selectedDay == null
+                        ? 'Selecciona un día'
+                        : 'Sin eventos — ${_fmtFecha(_selectedDay!)}',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                   ),
-                  ...eventosHoy.map((e) => _EventoCard(
-                    evento: e,
-                    colorEvento: _colorEvento(e),
-                    onPagar: () => _marcarPagado(e),
-                    onEliminar: () => _eliminarEvento(e),
-                  )),
-                ],
-              ),
+                ]))
+              : ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        _selectedDay != null ? _fmtFechaLarga(_selectedDay!) : '',
+                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5),
+                      ),
+                    ),
+                    ...eventosHoy.map((e) => _EventoCard(
+                      evento: e,
+                      colorEvento: _colorEvento(e),
+                      onPagar: () => _marcarPagado(e),
+                      onEliminar: () => _eliminarEvento(e),
+                    )),
+                  ],
+                ),
+        ),
       ),
     ]);
   }
@@ -411,28 +426,30 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       ),
       const Divider(color: AppTheme.border, height: 1),
       Expanded(
-        child: eventos.isEmpty
-            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textMuted.withOpacity(0.4)),
-                const SizedBox(height: 12),
-                const Text('Sin eventos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
-                const SizedBox(height: 6),
-                const Text('Crea gastos con fecha fija para verlos aquí',
-                    style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-              ]))
-            : ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: eventos.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                // showDate=true en la lista para mostrar la fecha junto al evento
-                itemBuilder: (_, i) => _EventoCard(
-                  evento: eventos[i],
-                  colorEvento: _colorEvento(eventos[i]),
-                  onPagar: () => _marcarPagado(eventos[i]),
-                  onEliminar: () => _eliminarEvento(eventos[i]),
-                  showDate: true,
+        child: Container(
+          color: AppTheme.background,
+          child: eventos.isEmpty
+              ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textMuted.withOpacity(0.4)),
+                  const SizedBox(height: 12),
+                  const Text('Sin eventos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                  const SizedBox(height: 6),
+                  const Text('Crea gastos con fecha fija para verlos aquí',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                ]))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: eventos.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) => _EventoCard(
+                    evento: eventos[i],
+                    colorEvento: _colorEvento(eventos[i]),
+                    onPagar: () => _marcarPagado(eventos[i]),
+                    onEliminar: () => _eliminarEvento(eventos[i]),
+                    showDate: true,
+                  ),
                 ),
-              ),
+        ),
       ),
     ]);
   }
