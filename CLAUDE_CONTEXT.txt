@@ -288,8 +288,9 @@ lib/cobros_home.dart             3 tabs: Productos | Producción | Ventas
                                  FAB contextual según tab activa
 lib/productos_screen.dart        NUEVO: catálogo productos/variantes (CRUD)
 lib/produccion_detalle.dart      Insumos de un presupuesto de producción
-lib/venta_detalle.dart           Detalle de venta: rentabilidad + cobros
+lib/venta_detalle.dart           Detalle de venta: rentabilidad + cobros + presupuestos vinculados
                                  NUEVO: modal con catálogo productos y fecha exacta
+lib/receta_screen.dart           NUEVO (Fase 4): CRUD receta de variante + calculadora insumos
 
 lib/presupuestos_service.dart    Servicio wrapper de ApiClient para presupuestos
 lib/services/api_client.dart     HTTP centralizado con timeout 55s
@@ -354,13 +355,13 @@ FASE 2 — IMPLEMENTADA ✓
              nuevos endpoints POST/DELETE /ventas/:id/presupuestos/:pid
   - Flutter: cobros_home multi-select checkboxes, venta_detalle sección COSTOS DE PRODUCCIÓN
 
-FASE 4 — Recetas de productos (~22,000-28,000 tokens):
-  Qué hace: define qué insumos se necesitan para producir una variante
-  Schema: recetas (id, variante_id, rendimiento, unidad, notas)
-          receta_insumos (id, receta_id, nombre, cantidad, unidad)
-  Backend: POST/GET/DELETE /variantes/:id/receta
-  Flutter: nueva pantalla receta_screen.dart
-  Fórmula: cantidad_insumo = base * total_vendido / rendimiento
+FASE 4 — IMPLEMENTADA ✓
+  - Schema: recetas (variante_id UNIQUE, rendimiento, unidad, notas)
+            receta_insumos (receta_id, nombre, cantidad, unidad)
+  - Backend: 7 endpoints CRUD (GET/POST /variantes/:id/receta, PUT/DELETE /recetas/:id,
+             POST /recetas/:id/insumos, PUT/DELETE /receta-insumos/:id)
+  - Flutter: receta_screen.dart con calculadora de insumos (slider → tabla de cantidades)
+             productos_screen.dart: botón 'Receta' por variante
 
 FASE 5 — Lista de compras automática (~12,000-16,000 tokens):
   Qué hace: calcula cuánto comprar de cada insumo según los pedidos de una venta
@@ -427,6 +428,9 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
+e9342dc feat: pantalla de recetas de variantes con calculadora de insumos (Fase 4)
+2baca23 backend: CRUD completo de recetas y receta_insumos (Fase 4)
+76d2e09 schema: tablas recetas y receta_insumos para recetas de variantes (Fase 4)
 ea8fc78 feat: venta_detalle muestra presupuestos vinculados y resumen financiero completo (Fase 2 + 7)
 9415283 feat: _crearVenta() permite seleccionar múltiples presupuestos de producción (Fase 2)
 e90ed11 backend: POST /ventas acepta N presupuestos y GET /ventas/:id calcula total_invertido desde venta_presupuestos (Fase 2)
