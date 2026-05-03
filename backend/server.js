@@ -1144,16 +1144,44 @@ app.get('/ventas', async (req, res) => {
   }
 });
 
-/** POST /ventas — Crea una nueva venta, opcionalmente vinculada a un presupuesto de producción */
+/**
+ * POST /ventas — Crea una nueva venta (Fase 2: acepta N presupuestos de producción).
+ *
+ * Body:
+ *   nombre              string  — requerido
+ *   firebase_uid        string  — requerido
+ *   presupuesto_ids     int[]   — opcional: IDs de presupuestos vinculados (Fase 2)
+ *   presupuesto_produccion_id int — opcional LEGACY: equivale a presupuesto_ids=[id]
+ *
+ * Los IDs se insertan en venta_presupuestos. El campo legacy presupuesto_produccion_id
+ * de ventas se rellena con el primer ID para mantener compat con GET /ventas (lista).
+ */
 app.post('/ventas', async (req, res) => {
-  const { nombre, presupuesto_produccion_id, firebase_uid } = req.body;
+  const { nombre, presupuesto_produccion_id, presupuesto_ids, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   try {
+    // Normalizar a array: presupuesto_ids tiene prioridad sobre el campo legacy
+    const ids = presupuesto_ids
+      ? (Array.isArray(presupuesto_ids) ? presupuesto_ids : [presupuesto_ids])
+      : (presupuesto_produccion_id ? [presupuesto_produccion_id] : []);
+
+    const legacyId = ids.length > 0 ? ids[0] : null;
+
     const [result] = await db.execute(
       `INSERT INTO ventas (firebase_uid, nombre, presupuesto_produccion_id) VALUES (?, ?, ?)`,
-      [firebase_uid, nombre, presupuesto_produccion_id || null]
+      [firebase_uid, nombre, legacyId]
     );
-    res.status(201).json({ id: result.insertId, nombre });
+    const ventaId = result.insertId;
+
+    // Insertar relaciones en la junction table
+    for (const pid of ids) {
+      await db.execute(
+        `INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id) VALUES (?, ?)`,
+        [ventaId, pid]
+      );
+    }
+
+    res.status(201).json({ id: ventaId, nombre });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1163,32 +1191,62 @@ app.post('/ventas', async (req, res) => {
  * GET /ventas/:id?firebase_uid=
  * Devuelve el detalle completo de una venta incluyendo:
  *   - Información de la venta
- *   - Lista de cobros/clientes
- *   - Resumen de rentabilidad (invertido, cobrado, ganancia, margen)
+ *   - presupuestos[] — lista de presupuestos de producción vinculados (Fase 2)
+ *   - Lista de cobros/clientes con sus items
+ *   - Resumen financiero ampliado (Fase 7):
+ *       total_invertido, total_cobrado, total_esperado, total_pendiente,
+ *       ganancia, margen, margen_esperado, porcentaje_cobrado,
+ *       cobros_realizados, cobros_pendientes
+ *
+ * total_invertido = SUM de todos los presupuestos en venta_presupuestos (Fase 2).
+ * Si la venta no tiene entradas en venta_presupuestos (datos legacy), cae al
+ * campo presupuesto_produccion_id de la tabla ventas como fallback.
  */
 app.get('/ventas/:id', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Obtenemos la venta con el total invertido en producción (JOIN a items)
+    // Fase 2: total_invertido se calcula sumando TODOS los presupuestos vinculados
+    // vía venta_presupuestos. Si no hay filas ahí, fallback al campo legacy.
     const [[venta]] = await db.execute(
-      `SELECT v.*, p.nombre AS produccion_nombre,
-              COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
+      `SELECT v.*,
+              COALESCE(
+                (SELECT SUM(i.cantidad * i.precio_unitario)
+                 FROM venta_presupuestos vp2
+                 JOIN items_produccion i ON i.presupuesto_produccion_id = vp2.presupuesto_produccion_id
+                 WHERE vp2.venta_id = v.id),
+                COALESCE(
+                  (SELECT SUM(i2.cantidad * i2.precio_unitario)
+                   FROM items_produccion i2
+                   WHERE i2.presupuesto_produccion_id = v.presupuesto_produccion_id),
+                  0
+                )
+              ) AS total_invertido
        FROM ventas v
-       LEFT JOIN presupuestos_produccion p ON v.presupuesto_produccion_id = p.id
-       LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = v.presupuesto_produccion_id
-       WHERE v.id = ? AND v.firebase_uid = ? GROUP BY v.id`,
+       WHERE v.id = ? AND v.firebase_uid = ?`,
       [id, firebase_uid]
     );
     if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    // Fase 2: lista de presupuestos vinculados con su costo individual
+    const [presupuestos] = await db.execute(
+      `SELECT pp.id, pp.nombre, pp.descripcion,
+              COALESCE(SUM(ip.cantidad * ip.precio_unitario), 0) AS total_invertido
+       FROM venta_presupuestos vp
+       JOIN presupuestos_produccion pp ON pp.id = vp.presupuesto_produccion_id
+       LEFT JOIN items_produccion ip ON ip.presupuesto_produccion_id = pp.id
+       WHERE vp.venta_id = ?
+       GROUP BY pp.id ORDER BY pp.id ASC`,
+      [id]
+    );
 
     const [cobros] = await db.execute(
       `SELECT * FROM cobros_clientes WHERE venta_id = ? AND firebase_uid = ? ORDER BY id ASC`,
       [id, firebase_uid]
     );
 
-    // Adjuntar ítems de pedido a cada cobro (Fase 1: detalle de productos por cliente)
+    // Adjuntar ítems de pedido a cada cobro (Fase 1)
     if (cobros.length > 0) {
       const cobroIds = cobros.map(c => c.id);
       const placeholders = cobroIds.map(() => '?').join(',');
@@ -1211,23 +1269,35 @@ app.get('/ventas/:id', async (req, res) => {
       cobros.forEach(c => { c.items = []; });
     }
 
-    // Calculamos la rentabilidad en el backend para no hacerlo en Flutter
-    const totalCobrado  = cobros.filter(c => c.estado === 'cobrado').reduce((s, c) => s + Number(c.monto_cobrado || c.monto), 0);
-    const totalEsperado = cobros.reduce((s, c) => s + Number(c.monto), 0);
-    const invertido     = Number(venta.total_invertido);
-    const ganancia      = totalCobrado - invertido;
-    const margen        = invertido > 0 ? (ganancia / invertido * 100) : 0;
+    // Fase 7: cálculo de todas las métricas financieras
+    const cobradosList  = cobros.filter(c => c.estado === 'cobrado');
+    const pendientesList = cobros.filter(c => c.estado === 'pendiente');
+
+    const totalCobrado   = cobradosList.reduce((s, c) => s + Number(c.monto_cobrado || c.monto), 0);
+    const totalEsperado  = cobros.reduce((s, c) => s + Number(c.monto), 0);
+    const totalPendiente = pendientesList.reduce((s, c) => s + Number(c.monto), 0);
+    const invertido      = Number(venta.total_invertido);
+
+    const ganancia        = totalCobrado - invertido;
+    const margen          = invertido > 0 ? (ganancia / invertido * 100) : 0;
+    const margenEsperado  = invertido > 0 ? ((totalEsperado - invertido) / invertido * 100) : 0;
+    const porcentajeCobrado = totalEsperado > 0 ? (totalCobrado / totalEsperado * 100) : 0;
 
     res.json({
-      venta, cobros,
+      venta,
+      presupuestos,   // Fase 2: lista de presupuestos vinculados
+      cobros,
       resumen: {
-        total_invertido: invertido,
-        total_cobrado: totalCobrado,
-        total_esperado: totalEsperado,
+        total_invertido:    invertido,
+        total_cobrado:      totalCobrado,
+        total_esperado:     totalEsperado,
+        total_pendiente:    totalPendiente,      // Fase 7
         ganancia,
         margen,
-        cobros_realizados: cobros.filter(c => c.estado === 'cobrado').length,
-        cobros_pendientes: cobros.filter(c => c.estado === 'pendiente').length,
+        margen_esperado:    margenEsperado,      // Fase 7: margen si se cobran todos
+        porcentaje_cobrado: porcentajeCobrado,   // Fase 7: % del total ya cobrado
+        cobros_realizados:  cobradosList.length,
+        cobros_pendientes:  pendientesList.length,
       }
     });
   } catch (err) {
@@ -1358,6 +1428,76 @@ app.delete('/cobros/:id', async (req, res) => {
     }
     res.json({ message: 'Cobro eliminado' });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================================================
+// MÓDULO: MULTI-PRESUPUESTO POR VENTA (Fase 2)
+// Endpoints para vincular / desvincular presupuestos de producción en una venta.
+// =============================================================================
+
+/**
+ * POST /ventas/:id/presupuestos
+ * Vincula un presupuesto de producción adicional a una venta existente.
+ * Útil cuando el usuario quiere agregar más insumos sin recrear la venta.
+ *
+ * Body: { presupuesto_produccion_id: int, firebase_uid: string }
+ */
+app.post('/ventas/:id/presupuestos', async (req, res) => {
+  const { id } = req.params;
+  const { presupuesto_produccion_id, firebase_uid } = req.body;
+  if (!presupuesto_produccion_id || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    // Verificar que la venta pertenece al usuario
+    const [[venta]] = await db.execute(
+      `SELECT id FROM ventas WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    // Verificar que el presupuesto pertenece al usuario
+    const [[pp]] = await db.execute(
+      `SELECT id FROM presupuestos_produccion WHERE id = ? AND firebase_uid = ?`,
+      [presupuesto_produccion_id, firebase_uid]
+    );
+    if (!pp) return res.status(404).json({ error: 'Presupuesto de producción no encontrado' });
+
+    await db.execute(
+      `INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id) VALUES (?, ?)`,
+      [id, presupuesto_produccion_id]
+    );
+    res.status(201).json({ message: 'Presupuesto vinculado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /ventas/:id/presupuestos/:pid?firebase_uid=
+ * Desvincula un presupuesto de producción de una venta.
+ */
+app.delete('/ventas/:id/presupuestos/:pid', async (req, res) => {
+  const { id, pid } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Verificar propiedad de la venta
+    const [[venta]] = await db.execute(
+      `SELECT id FROM ventas WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    const [result] = await db.execute(
+      `DELETE FROM venta_presupuestos WHERE venta_id = ? AND presupuesto_produccion_id = ?`,
+      [id, pid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Vínculo no encontrado' });
+    res.json({ message: 'Presupuesto desvinculado' });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
