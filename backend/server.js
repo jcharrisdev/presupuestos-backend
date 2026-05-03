@@ -1145,7 +1145,6 @@ app.get('/ventas', async (req, res) => {
 });
 
 /**
-/**
  * POST /ventas — Crea una nueva venta.
  *
  * Body:
@@ -1203,7 +1202,7 @@ app.put('/ventas/:id', async (req, res) => {
     : undefined;
 
   try {
-    await db.execute(
+    const [result] = await db.execute(
       `UPDATE ventas
        SET nombre    = COALESCE(?, nombre)
            ${inversionVal !== undefined ? ', inversion = ?' : ''}
@@ -1212,6 +1211,7 @@ app.put('/ventas/:id', async (req, res) => {
         ? [nombre || null, inversionVal, id, firebase_uid]
         : [nombre || null, id, firebase_uid]
     );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Venta no encontrada' });
     res.json({ message: 'Venta actualizada' });
   } catch (err) {
     console.error(err);
@@ -2122,6 +2122,12 @@ app.get('/cobros/:id/items', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // Verificar que el cobro pertenece al usuario antes de retornar sus ítems
+    const [[cobro]] = await db.execute(
+      `SELECT id FROM cobros_clientes WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!cobro) return res.status(404).json({ error: 'Cobro no encontrado' });
+
     const [rows] = await db.execute(
       `SELECT pi.*, vp.nombre AS variante_nombre, pr.nombre AS producto_nombre
        FROM pedido_items pi
@@ -2184,6 +2190,19 @@ app.post('/cobros/:id/items', async (req, res) => {
       [id, id]
     );
 
+    // Sincronizar monto_esperado en el evento de calendario vinculado.
+    // Cuando se agrega el primer ítem, el cobro tenía monto=0 (creado con catálogo),
+    // por lo que el evento quedó con monto_esperado=0. Aquí se corrige.
+    const [[cobroActualizado]] = await db.execute(
+      `SELECT monto, calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]
+    );
+    if (cobroActualizado?.calendario_evento_id) {
+      await db.execute(
+        `UPDATE calendario_eventos SET monto_esperado = ? WHERE id = ?`,
+        [cobroActualizado.monto, cobroActualizado.calendario_evento_id]
+      );
+    }
+
     res.status(201).json({ id: result.insertId, descripcion: desc, cantidad: cant, precio_unitario: precio, subtotal });
   } catch (err) {
     console.error(err);
@@ -2200,9 +2219,13 @@ app.delete('/pedido-items/:id', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Obtener el cobro_cliente_id antes de eliminar
+    // Obtener el cobro_cliente_id y verificar ownership en un solo JOIN
     const [[item]] = await db.execute(
-      `SELECT cobro_cliente_id FROM pedido_items WHERE id = ?`, [id]
+      `SELECT pi.cobro_cliente_id
+       FROM pedido_items pi
+       JOIN cobros_clientes cc ON cc.id = pi.cobro_cliente_id
+       WHERE pi.id = ? AND cc.firebase_uid = ?`,
+      [id, firebase_uid]
     );
     if (!item) return res.status(404).json({ error: 'Ítem no encontrado' });
 
