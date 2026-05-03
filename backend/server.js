@@ -1697,6 +1697,223 @@ app.delete('/variantes/:id', async (req, res) => {
 
 
 // =============================================================================
+// MÓDULO: RECETAS DE PRODUCTOS (Fase 4)
+// Define qué insumos necesita cada variante para producirse.
+// Fórmula: cantidad_necesaria = cantidad_base_receta * total_vendido / rendimiento
+// =============================================================================
+
+/**
+ * GET /variantes/:id/receta?firebase_uid=
+ * Retorna la receta de una variante con todos sus insumos.
+ * Si la variante no tiene receta, retorna 404.
+ */
+app.get('/variantes/:id/receta', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Verificar propiedad vía join con productos
+    const [[receta]] = await db.execute(
+      `SELECT r.* FROM recetas r
+       JOIN variantes_producto vp ON vp.id = r.variante_id
+       JOIN productos p ON p.id = vp.producto_id
+       WHERE r.variante_id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!receta) return res.status(404).json({ error: 'Receta no encontrada' });
+
+    const [insumos] = await db.execute(
+      `SELECT * FROM receta_insumos WHERE receta_id = ? ORDER BY id ASC`,
+      [receta.id]
+    );
+    res.json({ ...receta, insumos });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /variantes/:id/receta
+ * Crea o reemplaza la receta de una variante.
+ * Si ya existe una receta para esta variante, la actualiza (upsert).
+ *
+ * Body: { rendimiento, unidad, notas, firebase_uid }
+ */
+app.post('/variantes/:id/receta', async (req, res) => {
+  const { id } = req.params;
+  const { rendimiento, unidad, notas, firebase_uid } = req.body;
+  if (rendimiento == null || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    // Verificar propiedad
+    const [[vp]] = await db.execute(
+      `SELECT vp.id FROM variantes_producto vp
+       JOIN productos p ON p.id = vp.producto_id
+       WHERE vp.id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!vp) return res.status(404).json({ error: 'Variante no encontrada' });
+
+    const [result] = await db.execute(
+      `INSERT INTO recetas (variante_id, rendimiento, unidad, notas)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         rendimiento = VALUES(rendimiento),
+         unidad = VALUES(unidad),
+         notas = VALUES(notas)`,
+      [id, Number(rendimiento), unidad || 'tanda', notas || null]
+    );
+
+    // Si fue INSERT, insertId tiene el nuevo id; si fue UPDATE, obtenerlo
+    const recetaId = result.insertId || (await db.execute(
+      `SELECT id FROM recetas WHERE variante_id = ?`, [id]
+    ))[0][0]?.id;
+
+    res.status(201).json({ id: recetaId, message: 'Receta guardada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /recetas/:id
+ * Actualiza rendimiento, unidad o notas de una receta existente.
+ */
+app.put('/recetas/:id', async (req, res) => {
+  const { id } = req.params;
+  const { rendimiento, unidad, notas, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `UPDATE recetas r
+       JOIN variantes_producto vp ON vp.id = r.variante_id
+       JOIN productos p ON p.id = vp.producto_id
+       SET r.rendimiento = COALESCE(?, r.rendimiento),
+           r.unidad = COALESCE(?, r.unidad),
+           r.notas = ?
+       WHERE r.id = ? AND p.firebase_uid = ?`,
+      [rendimiento != null ? Number(rendimiento) : null,
+       unidad || null, notas !== undefined ? notas : null, id, firebase_uid]
+    );
+    res.json({ message: 'Receta actualizada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /recetas/:id?firebase_uid=
+ * Elimina una receta y todos sus insumos (CASCADE).
+ */
+app.delete('/recetas/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [result] = await db.execute(
+      `DELETE r FROM recetas r
+       JOIN variantes_producto vp ON vp.id = r.variante_id
+       JOIN productos p ON p.id = vp.producto_id
+       WHERE r.id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Receta no encontrada' });
+    res.json({ message: 'Receta eliminada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /recetas/:id/insumos
+ * Agrega un insumo (ingrediente) a una receta.
+ * Body: { nombre, cantidad, unidad, firebase_uid }
+ */
+app.post('/recetas/:id/insumos', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, cantidad, unidad, firebase_uid } = req.body;
+  if (!nombre || cantidad == null || !firebase_uid)
+    return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    // Verificar propiedad de la receta
+    const [[receta]] = await db.execute(
+      `SELECT r.id FROM recetas r
+       JOIN variantes_producto vp ON vp.id = r.variante_id
+       JOIN productos p ON p.id = vp.producto_id
+       WHERE r.id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!receta) return res.status(404).json({ error: 'Receta no encontrada' });
+
+    const [result] = await db.execute(
+      `INSERT INTO receta_insumos (receta_id, nombre, cantidad, unidad) VALUES (?, ?, ?, ?)`,
+      [id, nombre, Number(cantidad), unidad || 'g']
+    );
+    res.status(201).json({ id: result.insertId, nombre, cantidad: Number(cantidad), unidad: unidad || 'g' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /receta-insumos/:id
+ * Edita nombre, cantidad o unidad de un insumo.
+ */
+app.put('/receta-insumos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, cantidad, unidad, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `UPDATE receta_insumos ri
+       JOIN recetas r ON r.id = ri.receta_id
+       JOIN variantes_producto vp ON vp.id = r.variante_id
+       JOIN productos p ON p.id = vp.producto_id
+       SET ri.nombre    = COALESCE(?, ri.nombre),
+           ri.cantidad  = COALESCE(?, ri.cantidad),
+           ri.unidad    = COALESCE(?, ri.unidad)
+       WHERE ri.id = ? AND p.firebase_uid = ?`,
+      [nombre || null, cantidad != null ? Number(cantidad) : null, unidad || null, id, firebase_uid]
+    );
+    res.json({ message: 'Insumo actualizado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /receta-insumos/:id?firebase_uid=
+ * Elimina un insumo de una receta.
+ */
+app.delete('/receta-insumos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [result] = await db.execute(
+      `DELETE ri FROM receta_insumos ri
+       JOIN recetas r ON r.id = ri.receta_id
+       JOIN variantes_producto vp ON vp.id = r.variante_id
+       JOIN productos p ON p.id = vp.producto_id
+       WHERE ri.id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Insumo no encontrado' });
+    res.json({ message: 'Insumo eliminado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================================================
 // MÓDULO: PEDIDO ITEMS (Fase 1)
 // Detalle de productos por cliente. Permite calcular el total del cliente
 // automáticamente desde los productos pedidos.
