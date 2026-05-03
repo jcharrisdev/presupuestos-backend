@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-02 (sesión 2)
+Última actualización: 2026-05-03 (sesión 3)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -302,10 +302,17 @@ lib/services/notification_service.dart  Notificaciones locales Android
 lib/theme/app_theme.dart         Tema Binance oscuro + TipoChip + LabelDivider
 
 ================================================================================
-8. LO QUE SE HIZO EN ESTA SESIÓN (resumen por área)
+8. LO QUE SE HIZO EN SESIONES ANTERIORES (resumen acumulado)
 ================================================================================
 
-DOCUMENTACIÓN:
+SESIÓN 3 (2026-05-03):
+  - flutter analyze: corregido único error real (test/widget_test.dart importaba
+    presupuestos_service.dart y usaba MyApp → reemplazado con test placeholder)
+  - APK release generado: build\app\outputs\flutter-apk\app-release.apk (22.2 MB)
+  - 182 infos restantes son solo estilo (withOpacity deprecated, curly_braces, etc.)
+    no bloquean el build ni el funcionamiento
+
+SESIÓN 2 (2026-05-02) — DOCUMENTACIÓN:
   - Comentarios exhaustivos en TODOS los archivos del proyecto
   - database/schema.sql: bloques explicativos por tabla
   - backend/server.js: JSDoc en todos los endpoints
@@ -458,23 +465,16 @@ GIT:
 12. ÚLTIMOS COMMITS EN EL REPOSITORIO
 ================================================================================
 
-7a9a32a fix: Bug 1 (cobrado optimistic), Bug 2 (inversión manual), Mejora 1 (tamaño), Mejora 2 (reporte)
+2fdebf7 fix: restaurar presupuesto de producción y corregir parseo decimal en inversión
+e41985c fix: auditoría completa del módulo de cobros — inversión, ganancia y UX
+c05ab3c docs: actualizar CLAUDE_CONTEXT con Bug 1, Bug 2, Mejora 1 y Mejora 2
+7a9a32a fix: cobrado desde venta actualiza totales al instante (Bug 1)
+329add2 docs: actualizar CLAUDE_CONTEXT con Fases 5 y 6 implementadas
 073f110 feat: lista de compras automática y comparación estimado vs real (Fase 5 + 6)
 8d100f0 backend: GET /ventas/:id/lista-compras y costo_estimado en resumen (Fase 5 + 6)
 03c3713 schema: precio_unitario en receta_insumos para costo estimado (Fase 6)
 e9342dc feat: pantalla de recetas de variantes con calculadora de insumos (Fase 4)
 2baca23 backend: CRUD completo de recetas y receta_insumos (Fase 4)
-76d2e09 schema: tablas recetas y receta_insumos para recetas de variantes (Fase 4)
-ea8fc78 feat: venta_detalle muestra presupuestos vinculados y resumen financiero completo (Fase 2 + 7)
-9415283 feat: _crearVenta() permite seleccionar múltiples presupuestos de producción (Fase 2)
-e90ed11 backend: POST /ventas acepta N presupuestos y GET /ventas/:id calcula total_invertido desde venta_presupuestos (Fase 2)
-106690f schema: tabla venta_presupuestos para multi-presupuesto por venta (Fase 2)
-28c17c3 feat: venta_detalle soporta catálogo de productos y fecha exacta de cobro (Fase 1+3)
-a1836cd feat: cobros_home agrega pestaña Productos (Fase 1)
-4b6efcd feat: pantalla de catálogo de productos y variantes (Fase 1)
-fda7736 backend: POST /ventas/:id/cobros soporta fecha_especifica (Fase 3)
-03f7de9 backend: GET /ventas/:id incluye items[] por cobro (Fase 1)
-f63a11a backend: CRUD productos/variantes y endpoints pedido_items (Fase 1)
 [... commits anteriores]
 
 ================================================================================
