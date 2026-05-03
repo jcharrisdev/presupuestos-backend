@@ -46,6 +46,10 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
   /// cobros_realizados, cobros_pendientes.
   Map<String, dynamic> _resumen = {};
   bool _loading = true;
+  // true mientras se refresca en background — muestra barra delgada sin reemplazar la UI
+  bool _refreshing = false;
+  // Margen objetivo para la sección de planificación (local, no persiste en DB)
+  double _margenObjetivo = 0.25;
 
   @override
   void initState() { super.initState(); _cargar(); }
@@ -62,14 +66,22 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
     super.dispose();
   }
 
-  // Llamado cuando el usuario regresa a esta pantalla desde una ruta encima
-  // (ej: vuelve del Calendario tras marcar un cobro como pagado).
+  // Al volver desde otra pantalla refrescar en background para no interrumpir la UI.
   @override
-  void didPopNext() { _cargar(); }
+  void didPopNext() { _cargar(silencioso: true); }
 
-  /// Carga la venta, sus cobros y el resumen financiero desde GET /ventas/:id.
-  Future<void> _cargar() async {
-    setState(() => _loading = true);
+  /// Carga (o refresca) la venta desde el servidor.
+  ///
+  /// [silencioso] = false (defecto): muestra pantalla de carga completa — solo
+  ///   en la carga inicial cuando aún no hay datos.
+  /// [silencioso] = true: muestra solo una barra delgada en la parte superior,
+  ///   manteniendo la UI actual visible (refresh en background tras cobrar, etc.)
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (silencioso) {
+      if (mounted) setState(() => _refreshing = true);
+    } else {
+      setState(() { _loading = true; _refreshing = false; });
+    }
     try {
       final res = await ApiClient.get('/ventas/${widget.ventaId}?firebase_uid=${widget.firebaseUid}');
       if (res.statusCode == 200) {
@@ -77,17 +89,16 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
         setState(() {
           _venta        = data['venta'];
           _cobros       = data['cobros'] ?? [];
-          _presupuestos = data['presupuestos'] ?? [];   // Fase 2
+          _presupuestos = data['presupuestos'] ?? [];
           _resumen      = data['resumen'] ?? {};
           _loading      = false;
+          _refreshing   = false;
         });
       } else {
-        setState(() => _loading = false);
+        setState(() { _loading = false; _refreshing = false; });
       }
     } catch (e) {
-      // FIX: catch silencioso dejaba pantalla en blanco sin avisar al usuario.
-      // Ahora muestra SnackBar con el error de red o de parseo.
-      setState(() => _loading = false);
+      setState(() { _loading = false; _refreshing = false; });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al cargar venta: $e')),
@@ -523,7 +534,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                   };
                 });
               }
-              _cargar(); // confirmación desde servidor en background
+              _cargar(silencioso: true); // sincroniza con servidor sin reemplazar la UI
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.success, foregroundColor: AppTheme.background),
@@ -571,9 +582,8 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
     final esperado       = double.tryParse(_resumen['total_esperado']?.toString()     ?? '0') ?? 0;
     final pendienteAmt   = double.tryParse(_resumen['total_pendiente']?.toString()    ?? '0') ?? 0;
     final ganancia       = double.tryParse(_resumen['ganancia']?.toString()           ?? '0') ?? 0;
-    final margen         = double.tryParse(_resumen['margen']?.toString()             ?? '0') ?? 0;
-    final margenEsperado = double.tryParse(_resumen['margen_esperado']?.toString()    ?? '0') ?? 0;
-    final pctCobrado     = double.tryParse(_resumen['porcentaje_cobrado']?.toString() ?? '0') ?? 0;
+    final margen     = double.tryParse(_resumen['margen']?.toString()             ?? '0') ?? 0;
+    final pctCobrado = double.tryParse(_resumen['porcentaje_cobrado']?.toString() ?? '0') ?? 0;
     final realizados     = int.tryParse(_resumen['cobros_realizados']?.toString() ?? '0') ?? 0;
     final pendientes     = int.tryParse(_resumen['cobros_pendientes']?.toString()  ?? '0') ?? 0;
     // Fase 6: costo estimado desde recetas (null si no hay precios definidos en los insumos)
@@ -634,7 +644,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
               ),
             )),
           ),
-          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
+          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: () => _cargar(silencioso: true)),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -644,9 +654,17 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
         backgroundColor: AppTheme.primary,
         foregroundColor: AppTheme.background,
       ),
-      body: RefreshIndicator(
+      body: Column(children: [
+        // Barra delgada de refresh en background (no interrumpe la UI)
+        if (_refreshing)
+          const LinearProgressIndicator(
+            backgroundColor: AppTheme.surfaceAlt,
+            color: AppTheme.primary,
+            minHeight: 3,
+          ),
+        Expanded(child: RefreshIndicator(
         color: AppTheme.primary, backgroundColor: AppTheme.surface,
-        onRefresh: _cargar,
+        onRefresh: () => _cargar(silencioso: true),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -742,34 +760,77 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                   }),
                 ),
 
-                // Fila 1: Ganancia neta / Margen / Cobrados
+                // Fila 1: Ganancia / Margen / Cobrados
+                // FIX: ganancia y margen muestran $0/— cuando cobrado=0.
+                // Antes mostraba el invertido como pérdida sin haber vendido nada.
                 Row(children: [
-                  _statBox('Ganancia neta', '\$${ganancia.abs().toStringAsFixed(2)}',
-                      ganancia >= 0 ? AppTheme.success : AppTheme.danger),
+                  _statBox(
+                    'Ganancia',
+                    cobrado > 0 ? '\$${ganancia.abs().toStringAsFixed(2)}' : '\$0.00',
+                    cobrado > 0
+                        ? (ganancia >= 0 ? AppTheme.success : AppTheme.danger)
+                        : AppTheme.textMuted,
+                  ),
                   const SizedBox(width: 8),
-                  _statBox('Margen', '${margen.toStringAsFixed(1)}%',
-                      margen >= 0 ? AppTheme.success : AppTheme.danger),
+                  _statBox(
+                    'Margen',
+                    cobrado > 0 ? '${margen.toStringAsFixed(1)}%' : '—',
+                    cobrado > 0
+                        ? (margen >= 0 ? AppTheme.success : AppTheme.danger)
+                        : AppTheme.textMuted,
+                  ),
                   const SizedBox(width: 8),
                   _statBox('Cobrados', '$realizados / ${realizados + pendientes}', AppTheme.primary),
                 ]),
 
-                // Fila 2 (Fase 7): pendiente / % cobrado / margen esperado
-                if (esperado > 0 || invertido > 0) ...[
+                // Barra visual de progreso de cobros (% cobrado)
+                if (esperado > 0) ...[
+                  const SizedBox(height: 14),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('% Cobrado',
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                    Text(
+                      '${pctCobrado.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: pctCobrado >= 100
+                            ? AppTheme.success
+                            : pctCobrado > 0
+                                ? AppTheme.primary
+                                : AppTheme.textMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: (pctCobrado / 100).clamp(0.0, 1.0),
+                      minHeight: 8,
+                      backgroundColor: AppTheme.surfaceAlt,
+                      color: pctCobrado >= 100 ? AppTheme.success : AppTheme.primary,
+                    ),
+                  ),
+                ],
+
+                // Fila 2: Por cobrar + pendientes (solo cuando hay saldo pendiente)
+                if (pendienteAmt > 0) ...[
                   const SizedBox(height: 8),
                   Row(children: [
-                    if (pendienteAmt > 0)
-                      _statBox('Por cobrar', '\$${pendienteAmt.toStringAsFixed(2)}', AppTheme.warning),
-                    if (pendienteAmt > 0) const SizedBox(width: 8),
-                    _statBox('% cobrado', '${pctCobrado.toStringAsFixed(1)}%', AppTheme.primary),
-                    if (invertido > 0) ...[
-                      const SizedBox(width: 8),
-                      _statBox('Margen esp.', '${margenEsperado.toStringAsFixed(1)}%',
-                          margenEsperado >= 0 ? AppTheme.success : AppTheme.danger),
-                    ],
+                    _statBox('Por cobrar', '\$${pendienteAmt.toStringAsFixed(2)}', AppTheme.warning),
+                    const SizedBox(width: 8),
+                    _statBox('Pendientes', '$pendientes cobro${pendientes != 1 ? "s" : ""}',
+                        AppTheme.warning),
                   ]),
                 ],
               ]),
             ),
+
+            // ── OBJETIVO DE MARGEN ─────────────────────────────────────────
+            const SizedBox(height: 16),
+            const LabelDivider('OBJETIVO DE MARGEN'),
+            _seccionObjetivo(invertido, esperado),
 
             // ── PRESUPUESTOS DE PRODUCCIÓN VINCULADOS (Fase 2) ────────────
             if (_presupuestos.isNotEmpty) ...[
@@ -914,7 +975,8 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
             const SizedBox(height: 80), // espacio para el FAB
           ]),
         ),
-      ),
+      )),  // cierra Expanded + RefreshIndicator
+      ]),  // cierra Column del body
     );
   }
 
@@ -1114,20 +1176,18 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                   {'inversion': inversion, 'firebase_uid': widget.firebaseUid});
 
               if (!mounted) return;
-              if (res.statusCode == 404) {
+              if (res.statusCode != 200) {
+                String msg;
+                try {
+                  msg = json.decode(res.body)['error']?.toString() ?? 'Error al guardar';
+                } catch (_) {
+                  msg = 'Error ${res.statusCode} al guardar la inversión';
+                }
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('El servidor necesita ser actualizado. '
-                        'Ve a Render y haz Deploy Manual.'),
-                    duration: Duration(seconds: 5),
-                  ),
-                );
-              } else if (res.statusCode != 200) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error ${res.statusCode} al guardar la inversión')),
+                  SnackBar(content: Text(msg)),
                 );
               }
-              _cargar(); // sincronizar con servidor en background
+              _cargar(silencioso: true); // sincronizar con servidor en background
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.colorFijo,
                 foregroundColor: AppTheme.background),
@@ -1187,7 +1247,166 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
     });
 
     await ApiClient.delete('/cobros/$id?firebase_uid=${widget.firebaseUid}');
-    _cargar();
+    _cargar(silencioso: true);
+  }
+
+  /// Sección de planificación: el usuario elige un margen objetivo y la app
+  /// calcula cuánto necesita vender para alcanzarlo, comparándolo con las
+  /// ventas proyectadas actuales.
+  ///
+  /// Fórmula: ventas_necesarias = invertido / (1 − margen_objetivo)
+  /// Ejemplo: invertido=$100, objetivo=25% → necesitas vender $133.33
+  Widget _seccionObjetivo(double invertido, double esperado) {
+    const mrgValues = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60];
+    const mrgLabels = [
+      '10% – Mínimo', '15% – Básico', '20% – Razonable',
+      '25% – Sólido', '30% – Bueno', '35% – Muy bueno',
+      '40% – Excelente', '50% – Óptimo', '60% – Premium',
+    ];
+
+    final ventasNecesarias = invertido > 0 && _margenObjetivo < 1.0
+        ? invertido / (1.0 - _margenObjetivo)
+        : 0.0;
+    final brecha = ventasNecesarias > 0 ? (esperado - ventasNecesarias) : 0.0;
+    final pctAvance = ventasNecesarias > 0
+        ? (esperado / ventasNecesarias).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Selector de margen objetivo
+        Row(children: [
+          const Icon(Icons.flag_outlined, color: AppTheme.primary, size: 16),
+          const SizedBox(width: 8),
+          const Text('Meta de margen',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          const Spacer(),
+          DropdownButton<double>(
+            value: _margenObjetivo,
+            dropdownColor: AppTheme.surfaceAlt,
+            underline: const SizedBox(),
+            isDense: true,
+            style: const TextStyle(
+                color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 13),
+            items: List.generate(
+              mrgValues.length,
+              (i) => DropdownMenuItem(
+                value: mrgValues[i],
+                child: Text(mrgLabels[i],
+                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+              ),
+            ),
+            onChanged: (v) { if (v != null) setState(() => _margenObjetivo = v); },
+          ),
+        ]),
+
+        if (invertido <= 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+            child: const Row(children: [
+              Icon(Icons.info_outline, color: AppTheme.textMuted, size: 14),
+              SizedBox(width: 8),
+              Expanded(child: Text(
+                'Registra la inversión para calcular el objetivo de ventas.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              )),
+            ]),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          const Divider(color: AppTheme.border, height: 1),
+          const SizedBox(height: 12),
+
+          // Ventas necesarias para el margen objetivo
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Expanded(child: Text(
+              'Ventas para ${(_margenObjetivo * 100).toStringAsFixed(0)}% de margen',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            )),
+            const SizedBox(width: 8),
+            Text('\$${ventasNecesarias.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+          ]),
+
+          if (esperado > 0) ...[
+            const SizedBox(height: 10),
+            // Progreso hacia el objetivo
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Ventas proyectadas: \$${esperado.toStringAsFixed(2)}',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Text(
+                '${(pctAvance * 100).toStringAsFixed(0)}% del objetivo',
+                style: TextStyle(
+                  color: pctAvance >= 1.0 ? AppTheme.success : AppTheme.textSecondary,
+                  fontSize: 11, fontWeight: FontWeight.w600,
+                ),
+              ),
+            ]),
+            const SizedBox(height: 5),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: pctAvance,
+                minHeight: 7,
+                backgroundColor: AppTheme.surfaceAlt,
+                color: pctAvance >= 1.0 ? AppTheme.success : AppTheme.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Badge de brecha
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: brecha >= 0
+                    ? AppTheme.success.withOpacity(0.08)
+                    : AppTheme.danger.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: brecha >= 0
+                      ? AppTheme.success.withOpacity(0.2)
+                      : AppTheme.danger.withOpacity(0.2),
+                ),
+              ),
+              child: Row(children: [
+                Icon(
+                  brecha >= 0
+                      ? Icons.check_circle_outline
+                      : Icons.arrow_upward_outlined,
+                  color: brecha >= 0 ? AppTheme.success : AppTheme.danger,
+                  size: 14,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  brecha >= 0
+                      ? 'Superarás el objetivo en \$${brecha.abs().toStringAsFixed(2)}'
+                      : 'Faltan \$${brecha.abs().toStringAsFixed(2)} en ventas para el objetivo',
+                  style: TextStyle(
+                    color: brecha >= 0 ? AppTheme.success : AppTheme.danger,
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                  ),
+                )),
+              ]),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              'Agrega clientes para comparar con el objetivo.',
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+            ),
+          ],
+        ],
+      ]),
+    );
   }
 
   /// Barra horizontal comparativa para la gráfica de rentabilidad.
