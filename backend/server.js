@@ -1164,7 +1164,8 @@ app.post('/ventas', async (req, res) => {
       : (presupuesto_produccion_id ? [presupuesto_produccion_id] : []);
 
     const legacyId = ids.length > 0 ? ids[0] : null;
-    const inversionVal = (inversion != null && Number(inversion) >= 0) ? Number(inversion) : null;
+    // Solo guardar inversion si es > 0; 0 y null se tratan igual (sin inversión)
+    const inversionVal = (inversion != null && Number(inversion) > 0) ? Number(inversion) : null;
 
     const [result] = await db.execute(
       `INSERT INTO ventas (firebase_uid, nombre, presupuesto_produccion_id, inversion) VALUES (?, ?, ?, ?)`,
@@ -1191,16 +1192,21 @@ app.post('/ventas', async (req, res) => {
  */
 app.put('/ventas/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, inversion, firebase_uid } = req.body;
+  const { nombre, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const inversionVal = inversion === null ? null
-      : (inversion != null && Number(inversion) >= 0 ? Number(inversion) : undefined);
 
+  // inversion: undefined = no viene en el body (no tocar), null = borrar, número = guardar
+  // hasInversion flag evita la lógica confusa de undefined vs null en JS
+  const hasInversion = Object.prototype.hasOwnProperty.call(req.body, 'inversion');
+  const inversionVal = hasInversion
+    ? (req.body.inversion === null || Number(req.body.inversion) <= 0 ? null : Number(req.body.inversion))
+    : undefined;
+
+  try {
     await db.execute(
       `UPDATE ventas
-       SET nombre    = COALESCE(?, nombre),
-           inversion = ${inversionVal !== undefined ? '?' : 'inversion'}
+       SET nombre    = COALESCE(?, nombre)
+           ${inversionVal !== undefined ? ', inversion = ?' : ''}
        WHERE id = ? AND firebase_uid = ?`,
       inversionVal !== undefined
         ? [nombre || null, inversionVal, id, firebase_uid]

@@ -503,10 +503,11 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                       (double.tryParse(c['monto']?.toString() ?? '0') ?? 0));
                   final tPend     = pendts.fold(0.0, (s, c) => s +
                       (double.tryParse(c['monto']?.toString() ?? '0') ?? 0));
-                  final inv  = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
-                  final gan  = tCobrado - inv;
-                  final mrg  = tCobrado > 0 ? (gan / tCobrado * 100) : 0.0;
-                  final pct  = tEsperado > 0 ? (tCobrado / tEsperado * 100) : 0.0;
+                  final inv    = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
+                  final gan    = tCobrado - inv;
+                  final mrg    = tCobrado > 0 ? (gan / tCobrado * 100) : 0.0;
+                  final pct    = tEsperado > 0 ? (tCobrado / tEsperado * 100) : 0.0;
+                  final mrgEsp = tEsperado > 0 ? ((tEsperado - inv) / tEsperado * 100) : 0.0;
                   _resumen = {
                     ..._resumen,
                     'total_cobrado':    tCobrado,
@@ -514,6 +515,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                     'total_esperado':   tEsperado,
                     'ganancia':         gan,
                     'margen':           mrg,
+                    'margen_esperado':  mrgEsp,
                     'porcentaje_cobrado': pct,
                     'cobros_realizados': cobrados.length,
                     'cobros_pendientes': pendts.length,
@@ -699,29 +701,44 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 const Divider(color: AppTheme.border, height: 1),
                 const SizedBox(height: 16),
 
-                // Fila 0 (Bug 2): Inversión — siempre visible, editable con botón lápiz
+                // Inversión — siempre visible, editable.
+                // Distingue entre "nunca registrada" (null en venta.inversion)
+                // y "registrada en 0" o "calculada desde presupuestos".
                 GestureDetector(
                   onTap: _modalEditarInversion,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.colorFijo.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.colorFijo.withOpacity(0.25)),
-                    ),
-                    child: Row(children: [
-                      const Icon(Icons.savings_outlined, color: AppTheme.colorFijo, size: 16),
-                      const SizedBox(width: 10),
-                      const Text('Inversión:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                      const SizedBox(width: 6),
-                      Text('\$${invertido.toStringAsFixed(2)}',
-                          style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800,
-                              fontSize: 15)),
-                      const Spacer(),
-                      const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 14),
-                    ]),
-                  ),
+                  child: Builder(builder: (ctx) {
+                    final inversionRaw = _venta!['inversion'];
+                    final inversionEsManual = inversionRaw != null;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: inversionEsManual
+                            ? AppTheme.colorFijo.withOpacity(0.07)
+                            : AppTheme.surfaceAlt,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: inversionEsManual
+                            ? AppTheme.colorFijo.withOpacity(0.25)
+                            : AppTheme.border),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.savings_outlined,
+                            color: inversionEsManual ? AppTheme.colorFijo : AppTheme.textMuted,
+                            size: 16),
+                        const SizedBox(width: 10),
+                        const Text('Inversión:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        const SizedBox(width: 6),
+                        inversionEsManual
+                            ? Text('\$${invertido.toStringAsFixed(2)}',
+                                style: const TextStyle(color: AppTheme.colorFijo,
+                                    fontWeight: FontWeight.w800, fontSize: 15))
+                            : const Text('Sin registrar · toca para agregar',
+                                style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                        const Spacer(),
+                        const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 14),
+                      ]),
+                    );
+                  }),
                 ),
 
                 // Fila 1: Ganancia neta / Margen / Cobrados
@@ -1003,10 +1020,22 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
     );
   }
 
-  /// Bottom sheet para editar la inversión manual de la venta (Bug 2).
+  /// Bottom sheet para registrar o editar la inversión de la venta.
+  ///
+  /// FIX 1: Lee el campo `inversion` del objeto `_venta` directamente
+  ///        (no de `_resumen['total_invertido']` que podría venir de presupuestos).
+  /// FIX 2: Campo vacío → envía null (borra la inversión) en lugar de 0.
+  ///        0 en DB bloquea COALESCE(0,...) y oculta cálculo de presupuestos.
+  /// FIX 3: Optimistic update inmediato, sin esperar cold start de Render.
+  /// FIX 4: Muestra SnackBar si el PUT falla.
   void _modalEditarInversion() {
-    final invertidoActual = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
-    final ctrl = TextEditingController(text: invertidoActual > 0 ? invertidoActual.toStringAsFixed(2) : '');
+    // Leer el valor guardado en la BD (puede ser null si nunca se registró)
+    final inversionGuardada = _venta != null && _venta!['inversion'] != null
+        ? double.tryParse(_venta!['inversion'].toString()) : null;
+    final ctrl = TextEditingController(
+      text: inversionGuardada != null ? inversionGuardada.toStringAsFixed(2) : '',
+    );
+
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
@@ -1017,11 +1046,11 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
           Center(child: Container(width: 36, height: 4,
               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
-          const Text('Editar inversión', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17,
-              fontWeight: FontWeight.w700)),
+          const Text('Inversión de producción',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('¿Cuánto gastaste para producir esta venta?',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const Text('¿Cuánto gastaste para producir esta venta? (deja vacío para borrar)',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 20),
           TextField(
             controller: ctrl, autofocus: true,
@@ -1036,11 +1065,47 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () async {
-              final inversion = double.tryParse(ctrl.text) ?? 0;
+              // Campo vacío = borrar inversión (null). Número válido = guardar.
+              // NUNCA enviar 0 implícito: COALESCE(0,...) en MySQL devuelve 0
+              // y bloquea el fallback a presupuestos de producción.
+              final texto = ctrl.text.trim();
+              final inversion = texto.isEmpty ? null : double.tryParse(texto);
+              if (texto.isNotEmpty && inversion == null) return; // número inválido
+
               Navigator.pop(context);
-              await ApiClient.put('/ventas/${widget.ventaId}',
+
+              // Optimistic update: actualizar UI antes de que responda Render
+              if (mounted) {
+                final newInv = inversion ?? 0.0;
+                setState(() {
+                  if (_venta != null) {
+                    _venta = Map<String, dynamic>.from(_venta!)..['inversion'] = inversion;
+                  }
+                  final tCobrado = double.tryParse(_resumen['total_cobrado']?.toString() ?? '0') ?? 0;
+                  final tEsperado = double.tryParse(_resumen['total_esperado']?.toString() ?? '0') ?? 0;
+                  final gan = tCobrado - newInv;
+                  final mrg = tCobrado > 0 ? (gan / tCobrado * 100) : 0.0;
+                  final mrgEsp = tEsperado > 0 ? ((tEsperado - newInv) / tEsperado * 100) : 0.0;
+                  _resumen = {
+                    ..._resumen,
+                    'total_invertido': newInv,
+                    'ganancia':        gan,
+                    'margen':          mrg,
+                    'margen_esperado': mrgEsp,
+                  };
+                });
+              }
+
+              final res = await ApiClient.put('/ventas/${widget.ventaId}',
                   {'inversion': inversion, 'firebase_uid': widget.firebaseUid});
-              _cargar();
+
+              if (!mounted) return;
+              if (res.statusCode != 200) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error al guardar la inversión (${res.statusCode})')),
+                );
+              }
+              _cargar(); // sincronizar con servidor en background
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.colorFijo,
                 foregroundColor: AppTheme.background),
@@ -1051,7 +1116,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
     );
   }
 
-  /// Elimina un cobro (cliente) de la venta tras confirmación.
+  /// Elimina un cobro tras confirmación con optimistic update inmediato.
   Future<void> _eliminarCobro(int id) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -1070,6 +1135,35 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
       ),
     );
     if (ok != true) return;
+
+    // Optimistic update: quitar el cobro de la lista y recalcular resumen localmente
+    setState(() {
+      _cobros = _cobros.where((c) {
+        final cid = c['id'] is int ? c['id'] as int : int.tryParse(c['id'].toString()) ?? 0;
+        return cid != id;
+      }).toList();
+      final cobrados  = _cobros.where((c) => c['estado'] == 'cobrado').toList();
+      final pendts    = _cobros.where((c) => c['estado'] == 'pendiente').toList();
+      final tCobrado  = cobrados.fold(0.0, (s, c) => s +
+          (double.tryParse(c['monto_cobrado']?.toString() ?? c['monto']?.toString() ?? '0') ?? 0));
+      final tEsperado = _cobros.fold(0.0, (s, c) => s +
+          (double.tryParse(c['monto']?.toString() ?? '0') ?? 0));
+      final tPend     = pendts.fold(0.0, (s, c) => s +
+          (double.tryParse(c['monto']?.toString() ?? '0') ?? 0));
+      final inv    = double.tryParse(_resumen['total_invertido']?.toString() ?? '0') ?? 0;
+      final gan    = tCobrado - inv;
+      final mrg    = tCobrado > 0 ? (gan / tCobrado * 100) : 0.0;
+      final pct    = tEsperado > 0 ? (tCobrado / tEsperado * 100) : 0.0;
+      final mrgEsp = tEsperado > 0 ? ((tEsperado - inv) / tEsperado * 100) : 0.0;
+      _resumen = {
+        ..._resumen,
+        'total_cobrado': tCobrado, 'total_pendiente': tPend, 'total_esperado': tEsperado,
+        'ganancia': gan, 'margen': mrg, 'margen_esperado': mrgEsp,
+        'porcentaje_cobrado': pct,
+        'cobros_realizados': cobrados.length, 'cobros_pendientes': pendts.length,
+      };
+    });
+
     await ApiClient.delete('/cobros/$id?firebase_uid=${widget.firebaseUid}');
     _cargar();
   }
@@ -1170,12 +1264,20 @@ class _ClienteTile extends StatelessWidget {
         ? double.tryParse(cobro['monto_cobrado'].toString()) : null;
     final items = (cobro['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    // Etiqueta de condición de pago
+    // Etiqueta de condición de pago con fecha si aplica
     String condicion;
+    final fechaCobro = cobro['fecha_cobro']?.toString();
     switch (cobro['condicion_pago']) {
-      case 'plazo':            condicion = 'A plazo · ${cobro['dias_plazo']}d'; break;
-      case 'fecha_especifica': condicion = 'Fecha exacta'; break;
-      default:                 condicion = 'Contra entrega';
+      case 'plazo':
+        condicion = fechaCobro != null
+            ? 'Plazo · $fechaCobro'
+            : 'A plazo · ${cobro['dias_plazo'] ?? '?'}d';
+        break;
+      case 'fecha_especifica':
+        condicion = fechaCobro != null ? 'Fecha · $fechaCobro' : 'Fecha exacta';
+        break;
+      default:
+        condicion = 'Contra entrega';
     }
 
     return Container(

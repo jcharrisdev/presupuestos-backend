@@ -173,12 +173,14 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
             onPressed: () async {
               if (nombreCtrl.text.trim().isEmpty) return;
               Navigator.pop(context);
-              final inversion = double.tryParse(inversionCtrl.text);
+              // Solo enviar inversion si es un número MAYOR que 0.
+              // inversion = 0 en la BD bloquea el fallback COALESCE y muestra $0 siempre.
+              final inversion = double.tryParse(inversionCtrl.text.trim());
               final body = <String, dynamic>{
                 'nombre': nombreCtrl.text.trim(),
                 'firebase_uid': widget.firebaseUid,
               };
-              if (inversion != null && inversion >= 0) body['inversion'] = inversion;
+              if (inversion != null && inversion > 0) body['inversion'] = inversion;
               final res = await ApiClient.post('/ventas', body);
               if (res.statusCode == 201) _cargarVentas();
             },
