@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "750057422826-3o1qb8ktipid08qhukbou430ocjp8k3i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.salarying",
+            "certificate_hash": "0642b4e6cf30ae6d031c7df3926273efc145d2f6"
+          }
+        },
+        {
           "client_id": "750057422826-00pupm87b438ettnjqnd7qj1pgr7ji8u.apps.googleusercontent.com",
           "client_type": 3
         }
