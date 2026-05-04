@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-03 (sesión 3)
+Última actualización: 2026-05-03 (sesión 4 — Google Sign-In)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -271,9 +271,10 @@ DELETE /ventas/:id/presupuestos/:pid?firebase_uid=  — desvincula presupuesto
 7. ARCHIVOS FLUTTER Y SU PROPÓSITO
 ================================================================================
 
-lib/main.dart                    Inicialización: intl español, notificaciones, runApp
-lib/login_screen.dart            Login temporal con email como firebase_uid
-lib/main_menu.dart               Menú principal con 4 cards de navegación
+lib/main.dart                    Inicialización + _AuthGate (silentSignIn al arrancar)
+lib/login_screen.dart            Login con Google/Gmail (google_sign_in)
+lib/main_menu.dart               Menú principal con 4 cards + avatar Google + logout real
+lib/services/auth_service.dart   Wrapper de GoogleSignIn (signIn, silentSignIn, signOut)
 
 lib/lista_presupuestos.dart      Lista de presupuestos del usuario
 lib/crear_presupuesto.dart       Formulario crear presupuesto
@@ -304,6 +305,27 @@ lib/theme/app_theme.dart         Tema Binance oscuro + TipoChip + LabelDivider
 ================================================================================
 8. LO QUE SE HIZO EN SESIONES ANTERIORES (resumen acumulado)
 ================================================================================
+
+SESIÓN 4 (2026-05-03) — GOOGLE SIGN-IN:
+
+  AUTENTICACIÓN GOOGLE (google_sign_in ^6.2.1):
+    - Paquete agregado: google_sign_in: ^6.2.1 en pubspec.yaml
+    - Gradle configurado: google-services 4.4.2 en settings.gradle + app/build.gradle
+    - lib/services/auth_service.dart: nuevo servicio con signIn, silentSignIn, signOut
+    - lib/login_screen.dart: reemplazado por botón "Continuar con Google"
+      (diseño con logo G y colores Google, sin dependencias adicionales de assets)
+    - lib/main.dart: _AuthGate con FutureBuilder → silentSignIn al arrancar
+      · Si hay sesión activa → MainMenu directo (sin pasar por login)
+      · Si no hay sesión → LoginScreen
+      · Durante verificación → _SplashScreen (logo + spinner)
+    - lib/main_menu.dart: acepta displayName y photoUrl opcionales de Google
+      · Avatar muestra foto de perfil de Google o inicial del nombre
+      · Logout llama AuthService.signOut() antes de navegar a LoginScreen
+    - firebase_uid sigue siendo el EMAIL de la cuenta Google
+      → preserva todos los datos existentes en la BD sin migraciones
+
+  CONFIGURACIÓN EXTERNA REQUERIDA (pendiente por el usuario):
+    → Ver sección 13 de este archivo
 
 SESIÓN 3 (2026-05-03):
   - flutter analyze: corregido error real (test/widget_test.dart → test placeholder)
@@ -518,6 +540,51 @@ c05ab3c docs: actualizar CLAUDE_CONTEXT con Bug 1, Bug 2, Mejora 1 y Mejora 2
 e9342dc feat: pantalla de recetas de variantes con calculadora de insumos (Fase 4)
 2baca23 backend: CRUD completo de recetas y receta_insumos (Fase 4)
 [... commits anteriores]
+
+================================================================================
+13. CONFIGURACIÓN EXTERNA REQUERIDA — GOOGLE SIGN-IN
+================================================================================
+
+El código está 100% implementado. La app NO compilará en Android hasta que
+completes los siguientes 4 pasos en Google Cloud Console (o Firebase Console).
+
+PASO 1 — Crear proyecto en Google Cloud Console:
+  https://console.cloud.google.com/
+  Crear proyecto nuevo o usar uno existente.
+  Habilitar la API "Google Identity"
+
+PASO 2 — Obtener la huella SHA-1 del keystore de debug:
+  Ejecutar en PowerShell:
+  keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" `
+    -alias androiddebugkey -storepass android -keypass android
+
+  Copiar la línea que dice: "SHA1: XX:XX:XX:..."
+
+PASO 3 — Crear credenciales OAuth para Android:
+  En Google Cloud Console → API y servicios → Credenciales → Crear credencial
+  → ID de cliente OAuth
+  Tipo: Android
+  Nombre del paquete: com.example.salarying
+  Huella SHA-1: (la del paso anterior)
+  Guardar.
+
+PASO 4 — Descargar y colocar google-services.json:
+  En Google Cloud Console → Tu proyecto → Descargar google-services.json
+  (también disponible desde Firebase Console si prefieres usar Firebase)
+  Colocar el archivo en: android/app/google-services.json
+
+Una vez hecho:
+  flutter pub get
+  flutter run  (o flutter build apk --release)
+
+NOTA SOBRE firebase_uid:
+  El `firebase_uid` en la BD es actualmente el email del usuario.
+  Con Google Sign-In, account.email sigue siendo el identificador.
+  No se requiere ninguna migración de datos.
+
+NOTA PARA RELEASE:
+  Para el APK de producción, necesitas también crear una credencial OAuth
+  con la huella SHA-1 del keystore de RELEASE (no debug).
 
 ================================================================================
 FIN DEL ARCHIVO DE CONTEXTO

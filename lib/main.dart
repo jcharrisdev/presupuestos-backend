@@ -1,39 +1,24 @@
-/// Punto de entrada de la aplicación Salarying.
-///
-/// Secuencia de arranque:
-///   1. `initializeDateFormatting('es', null)` — registra los símbolos de fecha
-///      en español para que `DateFormat('EEEE, d MMMM', 'es')` funcione en el
-///      calendario (lunes, martes… enero, febrero…).
-///   2. `NotificationService.init()` — crea el canal de notificaciones de Android.
-///   3. `NotificationService.requestPermission()` — solicita permiso en Android 13+.
-///   4. `setSystemUIOverlayStyle` — status bar transparente con íconos blancos,
-///      coherente con el fondo oscuro de la app.
-///   5. `runApp(MyApp())` — inicia el árbol de widgets.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'theme/app_theme.dart';
 import 'login_screen.dart';
+import 'main_menu.dart';
+import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 
 // RouteObserver global: permite que VentaDetalle detecte cuando vuelve al foco
 // (didPopNext) y recargue datos — fix Bug 1 (cobrado desde calendario no actualizaba).
 final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
 
-/// Función principal asíncrona requerida por Flutter para operaciones
-/// de inicialización antes de mostrar la primera pantalla.
 void main() async {
-  // Necesario cuando se hacen awaits antes de runApp
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Carga los datos de localización en español (nombres de días y meses)
   await initializeDateFormatting('es', null);
-
-  // Inicializa el canal de notificaciones locales y pide permiso
   await NotificationService.init();
   await NotificationService.requestPermission();
 
-  // Hace la barra de estado transparente con íconos claros (tema oscuro)
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -42,13 +27,6 @@ void main() async {
   runApp(const MyApp());
 }
 
-/// Widget raíz de la aplicación.
-///
-/// Configura el [MaterialApp] con:
-/// - Título de la app en el task manager del SO
-/// - Tema oscuro estilo Binance de [AppTheme]
-/// - Pantalla inicial: [LoginScreen]
-/// - Debug banner oculto
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
@@ -59,7 +37,71 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
       navigatorObservers: [routeObserver],
-      home: const LoginScreen(),
+      home: const _AuthGate(),
+    );
+  }
+}
+
+/// Decide la pantalla inicial revisando si hay sesión activa de Google.
+///
+/// - Muestra un splash mientras resuelve el silent sign-in.
+/// - Si hay sesión → va directo a [MainMenu] (evita el login manual).
+/// - Si no → muestra [LoginScreen].
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<GoogleSignInAccount?>(
+      future: AuthService.silentSignIn(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _SplashScreen();
+        }
+        final account = snapshot.data;
+        if (account != null) {
+          return MainMenu(
+            firebaseUid: account.email,
+            displayName: account.displayName,
+            photoUrl: account.photoUrl,
+          );
+        }
+        return const LoginScreen();
+      },
+    );
+  }
+}
+
+/// Pantalla de carga mientras se verifica la sesión de Google.
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppTheme.primary,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.account_balance_wallet, color: AppTheme.background, size: 38),
+            ),
+            const SizedBox(height: 28),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(color: AppTheme.primary, strokeWidth: 2.5),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
