@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "750057422826",
+    "project_id": "salary-bi",
+    "storage_bucket": "salary-bi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:750057422826:android:662e11649502791ca4fc93",
+        "android_client_info": {
+          "package_name": "com.example.salarying"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASCqXhVSOmgsoKzjrPs9DvLirPktGQN1o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
