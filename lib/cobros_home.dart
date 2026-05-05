@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'services/cache_service.dart';
 import 'produccion_detalle.dart';
 import 'venta_detalle.dart';
 import 'productos_screen.dart';
@@ -31,6 +32,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
   List<dynamic> _producciones = [];
   List<dynamic> _ventas = [];
   bool _loadProd = true, _loadVentas = true;
+  bool _refreshingVentas = false;
 
   // Labels e íconos de las 3 pestañas
   static const _tabs = [
@@ -70,22 +72,35 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
     }
   }
 
-  /// Carga las ventas del usuario con resumen de cobros.
-  Future<void> _cargarVentas() async {
-    setState(() => _loadVentas = true);
+  /// Carga las ventas con patrón cache-first.
+  Future<void> _cargarVentas({bool silencioso = false}) async {
+    final cacheKey = '${widget.firebaseUid}_ventas';
+    final cached = CacheService.get(cacheKey);
+
+    if (cached != null && !silencioso) {
+      setState(() { _ventas = List<dynamic>.from(cached); _loadVentas = false; _refreshingVentas = true; });
+    } else if (!silencioso) {
+      setState(() => _loadVentas = true);
+    } else {
+      setState(() => _refreshingVentas = true);
+    }
+
     try {
       final res = await ApiClient.get('/ventas?firebase_uid=${widget.firebaseUid}');
       if (res.statusCode == 200) {
-        setState(() { _ventas = json.decode(res.body); _loadVentas = false; });
+        final data = json.decode(res.body) as List;
+        await CacheService.set(cacheKey, data);
+        if (mounted) setState(() { _ventas = data; _loadVentas = false; _refreshingVentas = false; });
       } else {
-        setState(() => _loadVentas = false);
+        if (mounted) setState(() { _loadVentas = false; _refreshingVentas = false; });
       }
     } catch (e) {
-      // FIX: igual que arriba — ahora notifica al usuario en lugar de silenciar el error.
-      setState(() => _loadVentas = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar ventas: $e')),
-      );
+      if (mounted) {
+        setState(() { _loadVentas = false; _refreshingVentas = false; });
+        if (_ventas.isEmpty) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar ventas: $e')),
+        );
+      }
     }
   }
 
@@ -468,9 +483,12 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
     );
     return Container(
       color: AppTheme.background,
-      child: RefreshIndicator(
+      child: Column(children: [
+        if (_refreshingVentas)
+          const LinearProgressIndicator(minHeight: 2, color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt),
+        Expanded(child: RefreshIndicator(
         color: AppTheme.primary, backgroundColor: AppTheme.surface,
-        onRefresh: _cargarVentas,
+        onRefresh: () => _cargarVentas(silencioso: true),
         child: ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: _ventas.length,
@@ -543,7 +561,8 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
             );
           },
         ),
-      ),
+      )),  // cierra Expanded + RefreshIndicator
+      ]),  // cierra Column
     );
   }
 
