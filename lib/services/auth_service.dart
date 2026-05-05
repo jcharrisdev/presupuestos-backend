@@ -1,4 +1,5 @@
 import 'package:google_sign_in/google_sign_in.dart';
+import 'cache_service.dart';
 
 /// Wrapper de Google Sign-In.
 ///
@@ -20,8 +21,12 @@ class AuthService {
     }
   }
 
-  /// Cierra la sesión del usuario actual.
-  static Future<void> signOut() => _googleSignIn.signOut();
+  /// Cierra la sesión del usuario actual y limpia el caché local del usuario.
+  static Future<void> signOut() async {
+    final user = _googleSignIn.currentUser;
+    if (user != null) await CacheService.clearForUser(user.email);
+    return _googleSignIn.signOut();
+  }
 
   /// Usuario actualmente autenticado, o null si no hay sesión.
   static GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
