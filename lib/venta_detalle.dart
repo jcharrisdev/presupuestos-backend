@@ -18,8 +18,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'dart:math';
+import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'services/pdf_service.dart';
 import 'lista_compras_screen.dart';
 import 'cliente_estado_cuenta_screen.dart';
 import 'main.dart' show routeObserver;
@@ -628,6 +630,18 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 ],
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+            tooltip: 'Exportar PDF',
+            onPressed: () async {
+              try {
+                final bytes = await PdfService.generarPdfVenta(_venta!, _cobros, _resumen);
+                await Printing.layoutPdf(onLayout: (_) => bytes);
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al generar PDF: $e')));
+              }
+            },
           ),
           IconButton(
             icon: const Icon(Icons.summarize_outlined, size: 20),

@@ -22,8 +22,10 @@
 /// cuando recibe un gasto con `tipo_fecha = 'fija'`.
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'services/pdf_service.dart';
 import 'editar_presupuesto.dart';
 
 /// Pantalla de detalle de un presupuesto con movimientos del período activo.
@@ -642,6 +644,18 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                 ),
               ));
               _cargar();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+            tooltip: 'Exportar PDF',
+            onPressed: () async {
+              try {
+                final bytes = await PdfService.generarPdfPresupuesto(widget.presupuesto, movimientos);
+                await Printing.layoutPdf(onLayout: (_) => bytes);
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al generar PDF: $e')));
+              }
             },
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
