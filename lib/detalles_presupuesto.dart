@@ -27,6 +27,7 @@ import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/pdf_service.dart';
 import 'editar_presupuesto.dart';
+import 'widgets/presupuestos/balance_card.dart';
 
 /// Pantalla de detalle de un presupuesto con movimientos del período activo.
 class DetallesPresupuesto extends StatefulWidget {
@@ -707,40 +708,12 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                   const SizedBox(height: 20),
 
                   // ── BALANCE PRINCIPAL ─────────────────────────────────────
-                  Container(
-                    width: double.infinity, padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.border),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Presupuesto total', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                      const SizedBox(height: 6),
-                      Text('\$${montoTotal.toStringAsFixed(2)}',
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 32,
-                              fontWeight: FontWeight.w800, letterSpacing: -1)),
-                      const SizedBox(height: 20),
-                      // Barra de progreso del gasto (cambia de color según nivel)
-                      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(
-                        value: pctGasto, minHeight: 8,
-                        backgroundColor: AppTheme.surfaceAlt, color: barColor,
-                      )),
-                      const SizedBox(height: 10),
-                      Row(children: [
-                        Text('Gastado \$${totalGastado.toStringAsFixed(2)}',
-                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                        const Spacer(),
-                        Text(
-                          disponible >= 0
-                              ? 'Disponible \$${disponible.toStringAsFixed(2)}'
-                              : 'Excedido \$${(-disponible).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: disponible >= 0 ? AppTheme.success : AppTheme.danger,
-                            fontSize: 12, fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ]),
-                    ]),
+                  BalanceCard(
+                    montoTotal: montoTotal,
+                    totalGastado: totalGastado,
+                    disponible: disponible,
+                    pctGasto: pctGasto,
+                    barColor: barColor,
                   ),
 
                   const SizedBox(height: 14),
