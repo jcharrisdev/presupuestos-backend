@@ -11,6 +11,7 @@ import 'crear_presupuesto.dart';
 import 'presupuestos_service.dart';
 import 'services/api_client.dart';
 import 'services/cache_service.dart';
+import 'widgets/widgets.dart';
 import 'detalles_presupuesto.dart';
 
 /// Pantalla de lista de presupuestos con FAB para crear uno nuevo.
@@ -147,21 +148,11 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
     );
   }
 
-  /// Pantalla vacía cuando el usuario no tiene presupuestos todavía.
-  Widget _empty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.account_balance_wallet_outlined, size: 64, color: AppTheme.textMuted.withOpacity(0.5)),
-          const SizedBox(height: 16),
-          const Text('Sin presupuestos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          const Text('Crea tu primer presupuesto', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-        ],
-      ),
-    );
-  }
+  Widget _empty() => EmptyState(
+    icon: Icons.account_balance_wallet_outlined,
+    title: 'Sin presupuestos',
+    subtitle: 'Crea tu primer presupuesto',
+  );
 }
 
 /// Tarjeta visual para un presupuesto individual.

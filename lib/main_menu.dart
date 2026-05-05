@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import 'cobros_home.dart';
 import 'services/auth_service.dart';
 import 'dashboard_screen.dart';
+import 'widgets/widgets.dart';
 
 /// Menú principal (home) de Salarying.
 ///
@@ -109,7 +110,7 @@ class MainMenu extends StatelessWidget {
               ),
 
               const SizedBox(height: 32),
-              const Text('PANEL PRINCIPAL', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+              const SectionHeader('PANEL PRINCIPAL'),
               const SizedBox(height: 14),
 
               _NavCard(
@@ -164,7 +165,7 @@ class MainMenu extends StatelessWidget {
 
               const SizedBox(height: 32),
 
-              const Text('ESTADO DEL SISTEMA', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+              const SectionHeader('ESTADO DEL SISTEMA'),
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,

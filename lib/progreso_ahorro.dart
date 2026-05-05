@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/savings_service.dart';
+import 'widgets/widgets.dart';
 
 /// Lista de metas de ahorro con progreso.
 class ProgresoAhorroScreen extends StatefulWidget {
@@ -49,23 +50,8 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
   }
 
   Future<void> _eliminar(int id) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar meta', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Confirmas eliminar esta meta de ahorro?', style: TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    final ok = await showConfirmDialog(context, title: 'Eliminar meta', content: '¿Confirmas eliminar esta meta de ahorro?');
+    if (!ok) return;
     try {
       await SavingsService.deleteAhorro(id, widget.firebaseUid);
       _cargar();

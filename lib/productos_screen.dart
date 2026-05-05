@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'receta_screen.dart';
+import 'widgets/widgets.dart';
 
 class ProductosScreen extends StatefulWidget {
   final String firebaseUid;
@@ -125,26 +126,9 @@ class _ProductosScreenState extends State<ProductosScreen> {
     );
   }
 
-  /// Confirmación y eliminación de un producto.
   Future<void> _eliminarProducto(int id, String nombre) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar producto', style: TextStyle(color: AppTheme.textPrimary)),
-        content: Text('¿Eliminar "$nombre" y todas sus variantes?',
-            style: const TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    final ok = await showConfirmDialog(context, title: 'Eliminar producto', content: '¿Eliminar "$nombre" y todas sus variantes?');
+    if (!ok) return;
     await ApiClient.delete('/productos/$id?firebase_uid=${widget.firebaseUid}');
     setState(() { _variantes.remove(id); _expandidos.remove(id); });
     _cargar();
@@ -296,23 +280,8 @@ class _ProductosScreenState extends State<ProductosScreen> {
   }
 
   Future<void> _eliminarVariante(int productoId, int varianteId, String nombre) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar variante', style: TextStyle(color: AppTheme.textPrimary)),
-        content: Text('¿Eliminar "$nombre"?', style: const TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    final ok = await showConfirmDialog(context, title: 'Eliminar variante', content: '¿Eliminar "$nombre"?');
+    if (!ok) return;
     await ApiClient.delete('/variantes/$varianteId?firebase_uid=${widget.firebaseUid}');
     _cargarVariantes(productoId);
   }
