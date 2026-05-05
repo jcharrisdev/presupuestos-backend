@@ -28,6 +28,7 @@ import 'services/api_client.dart';
 import 'services/pdf_service.dart';
 import 'editar_presupuesto.dart';
 import 'widgets/presupuestos/balance_card.dart';
+import 'widgets/presupuestos/pago_form_sheet.dart';
 
 /// Pantalla de detalle de un presupuesto con movimientos del período activo.
 class DetallesPresupuesto extends StatefulWidget {
@@ -220,51 +221,11 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
 
   /// Modal para confirmar el monto real de un pago.
   ///
-  /// Pre-rellena el monto presupuestado. El usuario puede cambiarlo si
-  /// pagó un monto diferente (gasto variable o con ajuste).
-  void _modalPago(int mid, double sugerido) {
-    final ctrl = TextEditingController(text: sugerido.toStringAsFixed(2));
-    showModalBottomSheet(
-      context: context, isScrollControlled: true,
-      backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Text('Registrar pago',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            IconButton(
-                icon: const Icon(Icons.close, color: AppTheme.textSecondary, size: 20),
-                onPressed: () => Navigator.pop(context)),
-          ]),
-          const SizedBox(height: 4),
-          const Text('Ingresa el monto real pagado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: ctrl, autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700),
-            decoration: const InputDecoration(
-              prefixText: '\$ ',
-              prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 24, fontWeight: FontWeight.w700),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () {
-              final m = double.tryParse(ctrl.text) ?? 0;
-              if (m <= 0) return;
-              Navigator.pop(context);
-              _pagar(mid, m);
-            },
-            child: const Text('Confirmar pago'),
-          )),
-        ]),
-      ),
-    );
-  }
+  void _modalPago(int mid, double sugerido) => PagoFormSheet.show(
+    context,
+    sugerido: sugerido,
+    onPagar: (m) => _pagar(mid, m),
+  );
 
   /// Modal para crear un gasto nuevo directamente desde el detalle del presupuesto.
   ///
