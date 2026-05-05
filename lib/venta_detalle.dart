@@ -21,6 +21,7 @@ import 'dart:math';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'lista_compras_screen.dart';
+import 'cliente_estado_cuenta_screen.dart';
 import 'main.dart' show routeObserver;
 
 /// Detalle de venta con rentabilidad y lista de cobros a clientes.
@@ -970,6 +971,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 cobro: c,
                 onCobrar: () => _modalCobrar(c),
                 onEliminar: () => _eliminarCobro(c['id']),
+                firebaseUid: widget.firebaseUid,
               ))),
 
             const SizedBox(height: 80), // espacio para el FAB
@@ -1495,7 +1497,8 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
 class _ClienteTile extends StatelessWidget {
   final Map<String, dynamic> cobro;
   final VoidCallback onCobrar, onEliminar;
-  const _ClienteTile({required this.cobro, required this.onCobrar, required this.onEliminar});
+  final String firebaseUid;
+  const _ClienteTile({required this.cobro, required this.onCobrar, required this.onEliminar, required this.firebaseUid});
 
   @override
   Widget build(BuildContext context) {
@@ -1550,10 +1553,21 @@ class _ClienteTile extends StatelessWidget {
 
         // Info del cliente
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(cobro['nombre_cliente'] ?? '', style: TextStyle(
-            color: cobrado ? AppTheme.textSecondary : AppTheme.textPrimary,
-            fontWeight: FontWeight.w600, fontSize: 14,
-          )),
+          Row(children: [
+            Expanded(child: Text(cobro['nombre_cliente'] ?? '', style: TextStyle(
+              color: cobrado ? AppTheme.textSecondary : AppTheme.textPrimary,
+              fontWeight: FontWeight.w600, fontSize: 14,
+            ))),
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => ClienteEstadoCuentaScreen(
+                  firebaseUid: firebaseUid,
+                  nombreCliente: cobro['nombre_cliente'] ?? '',
+                ),
+              )),
+              child: const Icon(Icons.account_circle_outlined, color: AppTheme.textMuted, size: 18),
+            ),
+          ]),
           const SizedBox(height: 3),
           Row(children: [
             Container(
