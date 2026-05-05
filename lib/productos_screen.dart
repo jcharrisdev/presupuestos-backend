@@ -384,11 +384,90 @@ class _ProductosScreenState extends State<ProductosScreen> {
                               ),
                             ));
                           },
+                          onVerHistorialPrecios: (v) => _mostrarHistorialPrecios(v),
                           variantesActivas: variantesActivas,
                         );
                       },
                     ),
                   ),
+      ),
+    );
+  }
+
+  void _mostrarHistorialPrecios(Map<String, dynamic> variante) {
+    final varId = variante['id'] is int ? variante['id'] as int : int.tryParse(variante['id'].toString()) ?? 0;
+    final nombre = variante['nombre']?.toString() ?? 'Variante';
+    final precioActual = double.tryParse(variante['precio']?.toString() ?? '0') ?? 0;
+
+    showModalBottomSheet(
+      context: context, isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _handle(),
+          Text('Historial de precios — $nombre',
+            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+          const SizedBox(height: 4),
+          Text('Precio actual: \$${precioActual.toStringAsFixed(2)}',
+            style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(height: 16),
+          FutureBuilder(
+            future: ApiClient.get('/variantes/$varId/historial-precios?firebase_uid=${widget.firebaseUid}'),
+            builder: (ctx, snap) {
+              if (!snap.hasData) return const LinearProgressIndicator(minHeight: 2);
+              final body = json.decode(snap.data!.body) as Map<String, dynamic>;
+              final historial = (body['historial'] as List? ?? []).cast<Map<String, dynamic>>();
+              if (historial.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: Text('Sin cambios de precio registrados', style: TextStyle(color: AppTheme.textSecondary))),
+                );
+              }
+              return ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.4),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: historial.length,
+                  separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
+                  itemBuilder: (_, i) {
+                    final h = historial[i];
+                    final antes = double.tryParse(h['precio_anterior'].toString()) ?? 0;
+                    final nuevo = double.tryParse(h['precio_nuevo'].toString()) ?? 0;
+                    final variacion = antes > 0 ? ((nuevo - antes) / antes * 100) : 0.0;
+                    final subio = nuevo >= antes;
+                    final fecha = h['changed_at']?.toString() ?? '';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(fecha.length >= 16 ? fecha.substring(0, 16) : fecha,
+                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                          const SizedBox(height: 3),
+                          Text('\$${antes.toStringAsFixed(2)} → \$${nuevo.toStringAsFixed(2)}',
+                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                        ])),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: (subio ? AppTheme.success : AppTheme.danger).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${subio ? '+' : ''}${variacion.toStringAsFixed(1)}%',
+                            style: TextStyle(color: subio ? AppTheme.success : AppTheme.danger, fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ]),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+        ]),
       ),
     );
   }
@@ -414,14 +493,14 @@ class _ProductoCard extends StatelessWidget {
   final bool expandido;
   final int variantesActivas;
   final VoidCallback onExpand, onEliminarProducto, onAgregarVariante;
-  final void Function(Map<String, dynamic>) onEditarVariante, onEliminarVariante, onVerReceta;
+  final void Function(Map<String, dynamic>) onEditarVariante, onEliminarVariante, onVerReceta, onVerHistorialPrecios;
 
   const _ProductoCard({
     required this.producto, required this.variantes, required this.expandido,
     required this.variantesActivas, required this.onExpand,
     required this.onEliminarProducto, required this.onAgregarVariante,
     required this.onEditarVariante, required this.onEliminarVariante,
-    required this.onVerReceta,
+    required this.onVerReceta, required this.onVerHistorialPrecios,
   });
 
   @override
@@ -546,6 +625,11 @@ class _ProductoCard extends StatelessWidget {
                             style: TextStyle(color: AppTheme.colorAhorro, fontSize: 10,
                                 fontWeight: FontWeight.w700)),
                       ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => onVerHistorialPrecios(v),
+                      child: const Icon(Icons.history, color: AppTheme.textMuted, size: 16),
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
