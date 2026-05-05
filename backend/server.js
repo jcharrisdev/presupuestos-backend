@@ -681,7 +681,8 @@ app.get('/ahorros', async (req, res) => {
   try {
     const [ahorros] = await db.execute(
       `SELECT g.id, g.descripcion AS nombre, g.monto AS monto_meta,
-              COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado
+              COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado,
+              COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total_aportaciones
        FROM gastos g
        LEFT JOIN movimientos m ON m.gasto_id = g.id AND m.pagado = 1
        WHERE g.firebase_uid = ? AND g.tipo = 'ahorro'
@@ -692,6 +693,77 @@ app.get('/ahorros', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener ahorros' });
+  }
+});
+
+/**
+ * POST /ahorros/:id/aportaciones
+ * Registra una aportación manual a una meta de ahorro.
+ */
+app.post('/ahorros/:id/aportaciones', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, monto, nota, fecha } = req.body;
+  if (!firebase_uid || !monto || !fecha) return res.status(400).json({ error: 'Datos incompletos' });
+  if (Number(monto) <= 0) return res.status(400).json({ error: 'Monto debe ser mayor a 0' });
+  try {
+    const [[gasto]] = await db.execute(
+      `SELECT id FROM gastos WHERE id = ? AND firebase_uid = ? AND tipo = 'ahorro'`,
+      [id, firebase_uid]
+    );
+    if (!gasto) return res.status(404).json({ error: 'Meta de ahorro no encontrada' });
+    const [result] = await db.execute(
+      `INSERT INTO aportaciones_ahorro (gasto_id, firebase_uid, monto, nota, fecha) VALUES (?, ?, ?, ?, ?)`,
+      [id, firebase_uid, monto, nota || null, fecha]
+    );
+    res.status(201).json({ id: result.insertId, gasto_id: Number(id), monto, nota, fecha });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /ahorros/:id/aportaciones?firebase_uid=
+ * Lista las aportaciones manuales de una meta de ahorro.
+ */
+app.get('/ahorros/:id/aportaciones', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [aportaciones] = await db.execute(
+      `SELECT * FROM aportaciones_ahorro WHERE gasto_id = ? AND firebase_uid = ? ORDER BY fecha DESC`,
+      [id, firebase_uid]
+    );
+    const total = aportaciones.reduce((s, a) => s + Number(a.monto), 0);
+    res.json({ aportaciones, total_aportado: total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /aportaciones/:id?firebase_uid=
+ * Elimina una aportación manual.
+ */
+app.delete('/aportaciones/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[ap]] = await db.execute(
+      `SELECT a.id FROM aportaciones_ahorro a
+       JOIN gastos g ON g.id = a.gasto_id
+       WHERE a.id = ? AND a.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!ap) return res.status(404).json({ error: 'Aportación no encontrada' });
+    await db.execute(`DELETE FROM aportaciones_ahorro WHERE id = ?`, [id]);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
