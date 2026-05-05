@@ -1968,6 +1968,23 @@ app.put('/variantes/:id', async (req, res) => {
   const { nombre, tamano, precio, unidad, activo, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // Si viene precio nuevo, registrar historial si cambió
+    if (precio !== undefined && precio !== null) {
+      const [[varActual]] = await db.execute(
+        `SELECT v.precio FROM variantes_producto v
+         JOIN productos p ON p.id = v.producto_id
+         WHERE v.id = ? AND p.firebase_uid = ?`,
+        [id, firebase_uid]
+      );
+      if (varActual && Number(varActual.precio) !== Number(precio)) {
+        await db.execute(
+          `INSERT INTO historial_precios_variante (variante_id, firebase_uid, precio_anterior, precio_nuevo)
+           VALUES (?, ?, ?, ?)`,
+          [id, firebase_uid, varActual.precio, precio]
+        );
+      }
+    }
+
     await db.execute(
       `UPDATE variantes_producto v
        JOIN productos p ON p.id = v.producto_id
@@ -1983,6 +2000,38 @@ app.put('/variantes/:id', async (req, res) => {
        id, firebase_uid]
     );
     res.json({ message: 'Variante actualizada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /variantes/:id/historial-precios?firebase_uid=
+ * Retorna el historial de cambios de precio de una variante.
+ */
+app.get('/variantes/:id/historial-precios', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    // Verificar propiedad via JOIN con productos
+    const [[variante]] = await db.execute(
+      `SELECT v.id, v.nombre, v.precio FROM variantes_producto v
+       JOIN productos p ON p.id = v.producto_id
+       WHERE v.id = ? AND p.firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!variante) return res.status(404).json({ error: 'Variante no encontrada' });
+
+    const [historial] = await db.execute(
+      `SELECT * FROM historial_precios_variante
+       WHERE variante_id = ? AND firebase_uid = ?
+       ORDER BY changed_at DESC
+       LIMIT 20`,
+      [id, firebase_uid]
+    );
+    res.json({ variante, historial });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
