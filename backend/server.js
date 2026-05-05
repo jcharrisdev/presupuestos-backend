@@ -1170,6 +1170,9 @@ app.get('/ventas', async (req, res) => {
 app.post('/ventas', async (req, res) => {
   const { nombre, presupuesto_produccion_id, presupuesto_ids, inversion, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
   try {
     const ids = presupuesto_ids
       ? (Array.isArray(presupuesto_ids) ? presupuesto_ids : [presupuesto_ids])
@@ -1179,21 +1182,25 @@ app.post('/ventas', async (req, res) => {
     // Solo guardar inversion si es > 0; 0 y null se tratan igual (sin inversión)
     const inversionVal = (inversion != null && Number(inversion) > 0) ? Number(inversion) : null;
 
-    const [result] = await db.execute(
+    const [result] = await conn.execute(
       `INSERT INTO ventas (firebase_uid, nombre, presupuesto_produccion_id, inversion) VALUES (?, ?, ?, ?)`,
       [firebase_uid, nombre, legacyId, inversionVal]
     );
     const ventaId = result.insertId;
 
     for (const pid of ids) {
-      await db.execute(
+      await conn.execute(
         `INSERT IGNORE INTO venta_presupuestos (venta_id, presupuesto_produccion_id) VALUES (?, ?)`,
         [ventaId, pid]
       );
     }
 
+    await conn.commit();
+    conn.release();
     res.status(201).json({ id: ventaId, nombre });
   } catch (err) {
+    await conn.rollback();
+    conn.release();
     res.status(500).json({ error: err.message });
   }
 });
