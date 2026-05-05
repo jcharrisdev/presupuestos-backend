@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import 'main_menu.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
+import 'services/cache_service.dart';
 
 // RouteObserver global: permite que VentaDetalle detecte cuando vuelve al foco
 // (didPopNext) y recargue datos — fix Bug 1 (cobrado desde calendario no actualizaba).
@@ -16,6 +17,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await initializeDateFormatting('es', null);
+  await CacheService.init();
   await NotificationService.init();
   await NotificationService.requestPermission();
 
