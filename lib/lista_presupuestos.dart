@@ -5,9 +5,12 @@
 /// Al crear uno nuevo navega a [CrearPresupuesto] y recarga al regresar.
 /// Soporta pull-to-refresh para recargar manualmente.
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'crear_presupuesto.dart';
 import 'presupuestos_service.dart';
+import 'services/api_client.dart';
+import 'services/cache_service.dart';
 import 'detalles_presupuesto.dart';
 
 /// Pantalla de lista de presupuestos con FAB para crear uno nuevo.
@@ -23,6 +26,7 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
   List<dynamic> presupuestos = [];
   final _service = PresupuestoService();
   bool isLoading = true;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -30,19 +34,36 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
     _cargar();
   }
 
-  /// Carga (o recarga) la lista de presupuestos desde el backend.
-  /// Muestra spinner durante la carga y SnackBar si hay error de red.
-  Future<void> _cargar() async {
-    setState(() => isLoading = true);
+  Future<void> _cargar({bool silencioso = false}) async {
+    final cacheKey = '${widget.firebaseUid}_presupuestos';
+    final cached = CacheService.get(cacheKey);
+
+    if (cached != null && !silencioso) {
+      setState(() { presupuestos = List<dynamic>.from(cached); isLoading = false; _refreshing = true; });
+    } else if (!silencioso) {
+      setState(() => isLoading = true);
+    } else {
+      setState(() => _refreshing = true);
+    }
+
     try {
-      final datos = await _service.obtenerPresupuestos(widget.firebaseUid);
-      setState(() { presupuestos = datos; isLoading = false; });
-    } catch (_) {
-      setState(() => isLoading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al cargar presupuestos')),
-      );
+      final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body) as List;
+        await CacheService.set(cacheKey, data);
+        if (mounted) setState(() { presupuestos = data; isLoading = false; _refreshing = false; });
+      } else {
+        if (mounted) setState(() { isLoading = false; _refreshing = false; });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { isLoading = false; _refreshing = false; });
+        if (presupuestos.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sin conexión. Mostrando datos guardados.')),
+          );
+        }
+      }
     }
   }
 
@@ -79,34 +100,40 @@ class _ListaPresupuestosState extends State<ListaPresupuestos> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : presupuestos.isEmpty
-              ? _empty()
-              : RefreshIndicator(
-                  color: AppTheme.primary,
-                  backgroundColor: AppTheme.surface,
-                  onRefresh: _cargar,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: presupuestos.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _PresupuestoCard(
-                      presupuesto: presupuestos[i],
-                      onTap: () async {
-                        // Espera a que el usuario regrese de DetallesPresupuesto
-                        // y recarga en caso de que haya modificado datos.
-                        await Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => DetallesPresupuesto(
+      body: Column(
+        children: [
+          if (_refreshing)
+            const LinearProgressIndicator(minHeight: 2, color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt),
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : presupuestos.isEmpty
+                    ? _empty()
+                    : RefreshIndicator(
+                        color: AppTheme.primary,
+                        backgroundColor: AppTheme.surface,
+                        onRefresh: () => _cargar(silencioso: true),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: presupuestos.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (_, i) => _PresupuestoCard(
                             presupuesto: presupuestos[i],
-                            firebaseUid: widget.firebaseUid,
+                            onTap: () async {
+                              await Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => DetallesPresupuesto(
+                                  presupuesto: presupuestos[i],
+                                  firebaseUid: widget.firebaseUid,
+                                ),
+                              ));
+                              _cargar(silencioso: true);
+                            },
                           ),
-                        ));
-                        _cargar();
-                      },
-                    ),
-                  ),
-                ),
+                        ),
+                      ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await Navigator.push(context, MaterialPageRoute(
