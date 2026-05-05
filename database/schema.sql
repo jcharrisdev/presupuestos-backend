@@ -396,6 +396,25 @@ CREATE TABLE IF NOT EXISTS receta_insumos (
 );
 
 
+-- -----------------------------------------------------------------------------
+-- TABLA: aportaciones_ahorro  (Prompt 13)
+-- Aportaciones manuales a metas de ahorro. Complementa los movimientos
+-- automáticos tipo='ahorro' generados al cierre de período.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS aportaciones_ahorro (
+  id           INT PRIMARY KEY AUTO_INCREMENT,
+  gasto_id     INT NOT NULL,
+  firebase_uid VARCHAR(255) NOT NULL,
+  monto        DECIMAL(10,2) NOT NULL,
+  nota         VARCHAR(255) NULL,
+  fecha        DATE NOT NULL,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (gasto_id) REFERENCES gastos(id) ON DELETE CASCADE,
+  INDEX idx_gasto (gasto_id),
+  INDEX idx_uid (firebase_uid)
+);
+
+
 -- =============================================================================
 -- MIGRACIONES — Ejecutar UNA SOLA VEZ sobre la BD en producción (Clever Cloud)
 -- Estas sentencias adaptan tablas existentes sin perder datos.
