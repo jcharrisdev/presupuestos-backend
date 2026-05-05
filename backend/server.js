@@ -870,7 +870,7 @@ app.put('/movimientos/:id/pagar', async (req, res) => {
     return res.status(400).json({ error: 'Monto pagado real inválido' });
 
   try {
-    const [[movimiento]] = await db.execute(`SELECT id FROM movimientos WHERE id = ?`, [id]);
+    const [[movimiento]] = await db.execute(`SELECT id FROM movimientos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
     if (!movimiento) return res.status(404).json({ error: 'Movimiento no encontrado' });
 
     await db.execute(
@@ -879,9 +879,9 @@ app.put('/movimientos/:id/pagar', async (req, res) => {
            monto_pagado_real = ?,
            pagado_por_uid = ?,
            fecha_pagado = CASE WHEN ? = 1 THEN NOW() ELSE NULL END
-       WHERE id = ?`,
+       WHERE id = ? AND firebase_uid = ?`,
       [pagado, pagado ? monto_pagado_real : null,
-       pagado ? firebase_uid : null, pagado, id]
+       pagado ? firebase_uid : null, pagado, id, firebase_uid]
     );
     res.json({ message: 'Movimiento actualizado correctamente' });
   } catch (error) {
