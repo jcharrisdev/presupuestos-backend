@@ -25,7 +25,7 @@ class AuthService {
   static Future<void> signOut() async {
     final user = _googleSignIn.currentUser;
     if (user != null) await CacheService.clearForUser(user.email);
-    return _googleSignIn.signOut();
+    await _googleSignIn.signOut();
   }
 
   /// Usuario actualmente autenticado, o null si no hay sesión.
