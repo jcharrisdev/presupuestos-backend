@@ -594,11 +594,15 @@ app.get('/presupuestos/:id/gastos', async (req, res) => {
 /** PUT /gastos/:id — Actualiza el campo 'pagado' de un gasto (uso legacy) */
 app.put('/gastos/:id', async (req, res) => {
   const { id } = req.params;
-  const { pagado } = req.body;
+  const { pagado, firebase_uid } = req.body;
   if (pagado === undefined) return res.status(400).json({ error: 'Campo pagado es obligatorio' });
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   const pagadoValue = pagado === true || pagado === 1 ? 1 : 0;
   try {
-    const [result] = await db.execute(`UPDATE gastos SET pagado = ? WHERE id = ?`, [pagadoValue, id]);
+    const [result] = await db.execute(
+      `UPDATE gastos SET pagado = ? WHERE id = ? AND firebase_uid = ?`,
+      [pagadoValue, id, firebase_uid]
+    );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Gasto no encontrado' });
     res.json({ message: 'Estado actualizado', id, pagado: pagadoValue });
   } catch (error) {
