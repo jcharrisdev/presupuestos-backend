@@ -6,6 +6,7 @@ import 'calendario.dart';
 import 'login_screen.dart';
 import 'cobros_home.dart';
 import 'services/auth_service.dart';
+import 'dashboard_screen.dart';
 
 /// Menú principal (home) de Salarying.
 ///
@@ -111,6 +112,16 @@ class MainMenu extends StatelessWidget {
               const Text('PANEL PRINCIPAL', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
               const SizedBox(height: 14),
 
+              _NavCard(
+                icon: Icons.dashboard_outlined,
+                title: 'Dashboard',
+                subtitle: 'Resumen de tu actividad',
+                color: AppTheme.primary,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => DashboardScreen(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
               _NavCard(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Mis Presupuestos',
