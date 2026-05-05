@@ -934,6 +934,11 @@ app.post('/calendario/generar', async (req, res) => {
   const { gasto_id, firebase_uid } = req.body;
   if (!gasto_id || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   try {
+    const [[gasto]] = await db.execute(
+      `SELECT id FROM gastos WHERE id = ? AND firebase_uid = ?`,
+      [gasto_id, firebase_uid]
+    );
+    if (!gasto) return res.status(404).json({ error: 'Gasto no encontrado' });
     const count = await generarEventosCalendario(gasto_id, firebase_uid);
     res.json({ message: `${count} eventos generados`, count });
   } catch (error) {
