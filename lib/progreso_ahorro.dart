@@ -15,9 +15,8 @@
 ///   - 75–99% → "Casi listo" (amarillo)
 ///   - 100%   → "Completado" (verde)
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'theme/app_theme.dart';
-import 'services/api_client.dart';
+import 'services/savings_service.dart';
 
 /// Lista de metas de ahorro con progreso.
 class ProgresoAhorroScreen extends StatefulWidget {
@@ -35,17 +34,12 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
   @override
   void initState() { super.initState(); _cargar(); }
 
-  /// Carga las metas de ahorro desde el backend.
   Future<void> _cargar() async {
     setState(() => isLoading = true);
     try {
-      final res = await ApiClient.get('/ahorros?firebase_uid=${widget.firebaseUid}');
-      setState(() {
-        ahorros = res.statusCode == 200 ? json.decode(res.body) : [];
-        isLoading = false;
-      });
+      final data = await SavingsService.getAhorros(widget.firebaseUid);
+      setState(() { ahorros = data; isLoading = false; });
     } catch (e) {
-      // FIX: catch silencioso mostraba lista vacía sin avisar al usuario.
       setState(() => isLoading = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,10 +48,6 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
     }
   }
 
-  /// Elimina una meta de ahorro tras confirmación del usuario.
-  ///
-  /// Muestra un diálogo de confirmación antes de llamar DELETE /ahorros/:id.
-  /// Al confirmar, recarga la lista.
   Future<void> _eliminar(int id) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -76,9 +66,13 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
       ),
     );
     if (ok != true) return;
-    // FIX: se agrega firebase_uid al query para que el backend valide propiedad del recurso
-    final res = await ApiClient.delete('/ahorros/$id?firebase_uid=${widget.firebaseUid}');
-    if (res.statusCode == 200) _cargar();
+    try {
+      await SavingsService.deleteAhorro(id, widget.firebaseUid);
+      _cargar();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 
   @override

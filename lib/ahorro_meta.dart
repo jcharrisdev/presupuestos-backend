@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'services/savings_service.dart';
 import 'progreso_ahorro.dart';
 
 /// Pantalla de creación de metas de ahorro con cálculo de cuota en tiempo real.
@@ -85,7 +86,6 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
     return tipo == 'quincenal' ? 'quincena' : 'mes';
   }
 
-  /// Carga los presupuestos del usuario para el selector de presupuesto asociado.
   Future<void> _cargarPresupuestos() async {
     try {
       final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
@@ -96,7 +96,6 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
         });
       } else throw Exception();
     } catch (e) {
-      // FIX: catch silencioso dejaba el dropdown vacío sin feedback al usuario.
       setState(() => _cargando = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al cargar presupuestos: $e')),
