@@ -2304,6 +2304,56 @@ cron.schedule('0 0 * * *', async () => {
 
 
 // =============================================================================
+// MÓDULO: ESTADO DE CUENTA POR CLIENTE (Prompt 6)
+// =============================================================================
+
+/**
+ * GET /clientes/:nombre/estado-cuenta?firebase_uid=
+ * Historial completo de cobros de un cliente a través de TODAS sus ventas.
+ * Retorna totales de cobrado, pendiente y cantidad de ventas distintas.
+ */
+app.get('/clientes/:nombre/estado-cuenta', async (req, res) => {
+  const { nombre } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [cobros] = await db.execute(
+      `SELECT
+         cc.id, cc.nombre_cliente, cc.monto, cc.estado, cc.fecha_cobro,
+         cc.monto_cobrado, cc.fecha_cobrado, cc.condicion_pago,
+         v.nombre AS venta_nombre, v.id AS venta_id
+       FROM cobros_clientes cc
+       JOIN ventas v ON v.id = cc.venta_id
+       WHERE cc.firebase_uid = ? AND LOWER(cc.nombre_cliente) = LOWER(?)
+       ORDER BY cc.created_at DESC`,
+      [firebase_uid, nombre]
+    );
+
+    if (cobros.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    const totalCobrado  = cobros
+      .filter(c => c.estado === 'cobrado')
+      .reduce((s, c) => s + Number(c.monto_cobrado || 0), 0);
+    const totalPendiente = cobros
+      .filter(c => c.estado === 'pendiente')
+      .reduce((s, c) => s + Number(c.monto || 0), 0);
+    const ventasIds = [...new Set(cobros.map(c => c.venta_id))];
+
+    res.json({
+      nombre_cliente: cobros[0].nombre_cliente,
+      cobros,
+      total_cobrado: totalCobrado,
+      total_pendiente: totalPendiente,
+      cantidad_ventas: ventasIds.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
 const PORT = process.env.PORT || 3002;
