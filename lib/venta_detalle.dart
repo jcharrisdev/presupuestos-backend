@@ -25,6 +25,8 @@ import 'services/pdf_service.dart';
 import 'lista_compras_screen.dart';
 import 'main.dart' show routeObserver;
 import 'widgets/ventas/cliente_tile.dart';
+import 'widgets/ventas/margen_objetivo_card.dart';
+import 'widgets/ventas/costos_produccion_card.dart';
 
 /// Detalle de venta con rentabilidad y lista de cobros a clientes.
 class VentaDetalle extends StatefulWidget {
@@ -851,47 +853,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
             if (_presupuestos.isNotEmpty) ...[
               const SizedBox(height: 16),
               const LabelDivider('COSTOS DE PRODUCCIÓN'),
-              ..._presupuestos.map((pp) {
-                final ppTotal = double.tryParse(pp['total_invertido']?.toString() ?? '0') ?? 0;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: AppTheme.colorFijo.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.inventory_2_outlined, color: AppTheme.colorFijo, size: 16),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(pp['nombre']?.toString() ?? '',
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
-                    Text('\$${ppTotal.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w700, fontSize: 13)),
-                  ]),
-                );
-              }),
-              if (_presupuestos.length > 1)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.colorFijo.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.colorFijo.withOpacity(0.2)),
-                  ),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Total invertido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                    Text('\$${invertido.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800, fontSize: 14)),
-                  ]),
-                ),
+              CostosProduccionCard(presupuestos: _presupuestos, invertido: invertido),
             ],
 
             // ── COMPARACIÓN ESTIMADO vs REAL (Fase 6) ─────────────────────
