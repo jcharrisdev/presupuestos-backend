@@ -57,7 +57,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     // Inicializar el día seleccionado sin hora (solo año/mes/día)
     _selectedDay = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
     _cargarEventos();
@@ -266,6 +266,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
           tabs: const [
             Tab(icon: Icon(Icons.calendar_month, size: 18), text: 'Calendario'),
             Tab(icon: Icon(Icons.list, size: 18), text: 'Lista'),
+            Tab(icon: Icon(Icons.waterfall_chart, size: 18), text: 'Flujo'),
           ],
         ),
       ),
@@ -276,7 +277,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
             )
           : TabBarView(
               controller: _tabCtrl,
-              children: [_vistaCalendario(), _vistaLista()],
+              children: [_vistaCalendario(), _vistaLista(), _buildFlujoTab()],
             ),
     );
   }
@@ -474,6 +475,141 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
   String _fmtFechaLarga(DateTime d) {
     try { return DateFormat('EEEE, d MMMM', 'es').format(d); }
     catch (_) { return _fmtFecha(d); }
+  }
+
+  double _parseMonto(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0.0;
+
+  Widget _flujoChip(String label, double val, Color color) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(children: [
+        Text(label, style: TextStyle(color: color, fontSize: 9, letterSpacing: 0.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 3),
+        Text('\$${val.toStringAsFixed(0)}', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+      ]),
+    ),
+  );
+
+  Widget _buildFlujoTab() {
+    if (_eventos.isEmpty) return Container(
+      color: AppTheme.background,
+      child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.waterfall_chart, size: 48, color: AppTheme.textMuted),
+        SizedBox(height: 12),
+        Text('Sin eventos este mes', style: TextStyle(color: AppTheme.textSecondary)),
+      ])),
+    );
+
+    final ingresos = _eventos
+      .where((e) => e['tipo'] == 'cobro')
+      .fold<double>(0.0, (sum, e) => sum + _parseMonto(e['monto_esperado']));
+    final gastos = _eventos
+      .where((e) => e['tipo'] == 'pago')
+      .fold<double>(0.0, (sum, e) => sum + _parseMonto(e['monto_esperado']));
+    final balance = ingresos - gastos;
+
+    final Map<String, List<Map<String, dynamic>>> porFecha = {};
+    for (final e in _eventos) {
+      final fecha = _fechaEvStr(e['fecha_evento']);
+      porFecha.putIfAbsent(fecha, () => []).add(e);
+    }
+    final fechasOrdenadas = porFecha.keys.toList()..sort();
+
+    return Container(
+      color: AppTheme.background,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(children: [
+            _flujoChip('INGRESOS', ingresos, AppTheme.success),
+            const SizedBox(width: 8),
+            _flujoChip('GASTOS', gastos, AppTheme.danger),
+            const SizedBox(width: 8),
+            _flujoChip('BALANCE', balance, balance >= 0 ? AppTheme.success : AppTheme.danger),
+          ]),
+          const SizedBox(height: 20),
+          ...fechasOrdenadas.expand<Widget>((fecha) {
+            final items = porFecha[fecha]!;
+            return [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(fecha, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
+              ),
+              ...items.map((e) {
+                final cobro = e['tipo'] == 'cobro';
+                final monto = _parseMonto(e['monto_esperado']);
+                final estado = e['estado']?.toString() ?? 'pendiente';
+                Color estadoColor;
+                if (estado == 'pagado') estadoColor = AppTheme.success;
+                else if (estado == 'vencido') estadoColor = AppTheme.danger;
+                else estadoColor = AppTheme.primary;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(children: [
+                      Container(
+                        width: 3,
+                        decoration: BoxDecoration(
+                          color: cobro ? AppTheme.success : AppTheme.danger,
+                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Text(e['titulo']?.toString() ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                      )),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Text(
+                            '${cobro ? '+' : '-'}\$${monto.toStringAsFixed(2)}',
+                            style: TextStyle(color: cobro ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w700, fontSize: 14),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(color: estadoColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                            child: Text(estado, style: TextStyle(color: estadoColor, fontSize: 9, fontWeight: FontWeight.w600)),
+                          ),
+                        ]),
+                      ),
+                    ]),
+                  ),
+                );
+              }),
+            ];
+          }),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: balance >= 0 ? AppTheme.success.withOpacity(0.3) : AppTheme.danger.withOpacity(0.3)),
+            ),
+            child: Row(children: [
+              const Text('Balance total del mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              const Spacer(),
+              Text(
+                '${balance >= 0 ? '+' : ''}\$${balance.toStringAsFixed(2)}',
+                style: TextStyle(color: balance >= 0 ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
   }
 }
 
