@@ -2184,16 +2184,23 @@ app.post('/cobros/:id/items', async (req, res) => {
   const { variante_id, descripcion, cantidad, precio_unitario, firebase_uid } = req.body;
   if (!firebase_uid || (!variante_id && !descripcion) || !cantidad || precio_unitario == null)
     return res.status(400).json({ error: 'Datos incompletos' });
+
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
   try {
     let desc = descripcion;
     let precio = Number(precio_unitario);
 
     // Si viene variante_id, usar su nombre y precio actual como snapshot
     if (variante_id) {
-      const [[variante]] = await db.execute(
+      const [[variante]] = await conn.execute(
         `SELECT nombre, precio FROM variantes_producto WHERE id = ?`, [variante_id]
       );
-      if (!variante) return res.status(404).json({ error: 'Variante no encontrada' });
+      if (!variante) {
+        await conn.rollback();
+        conn.release();
+        return res.status(404).json({ error: 'Variante no encontrada' });
+      }
       desc = desc || variante.nombre;
       precio = precio || Number(variante.precio);
     }
@@ -2201,14 +2208,14 @@ app.post('/cobros/:id/items', async (req, res) => {
     const cant = Number(cantidad);
     const subtotal = parseFloat((cant * precio).toFixed(2));
 
-    const [result] = await db.execute(
+    const [result] = await conn.execute(
       `INSERT INTO pedido_items (cobro_cliente_id, variante_id, descripcion, cantidad, precio_unitario, subtotal)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [id, variante_id || null, desc, cant, precio, subtotal]
     );
 
     // Recalcular el monto del cobro desde los ítems y marcar como calculado
-    await db.execute(
+    await conn.execute(
       `UPDATE cobros_clientes
        SET monto = (SELECT COALESCE(SUM(subtotal), 0) FROM pedido_items WHERE cobro_cliente_id = ?),
            monto_manual = 0
@@ -2219,18 +2226,22 @@ app.post('/cobros/:id/items', async (req, res) => {
     // Sincronizar monto_esperado en el evento de calendario vinculado.
     // Cuando se agrega el primer ítem, el cobro tenía monto=0 (creado con catálogo),
     // por lo que el evento quedó con monto_esperado=0. Aquí se corrige.
-    const [[cobroActualizado]] = await db.execute(
+    const [[cobroActualizado]] = await conn.execute(
       `SELECT monto, calendario_evento_id FROM cobros_clientes WHERE id = ?`, [id]
     );
     if (cobroActualizado?.calendario_evento_id) {
-      await db.execute(
+      await conn.execute(
         `UPDATE calendario_eventos SET monto_esperado = ? WHERE id = ?`,
         [cobroActualizado.monto, cobroActualizado.calendario_evento_id]
       );
     }
 
+    await conn.commit();
+    conn.release();
     res.status(201).json({ id: result.insertId, descripcion: desc, cantidad: cant, precio_unitario: precio, subtotal });
   } catch (err) {
+    await conn.rollback();
+    conn.release();
     console.error(err);
     res.status(500).json({ error: err.message });
   }
