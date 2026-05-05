@@ -1397,6 +1397,8 @@ app.post('/ventas/:id/cobros', async (req, res) => {
   if (!nombre_cliente || monto == null || !condicion_pago || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
 
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
   try {
     // Calcular la fecha de cobro según el tipo de condición
     let fechaCobro = null;
@@ -1408,7 +1410,7 @@ app.post('/ventas/:id/cobros', async (req, res) => {
       fechaCobro = fecha_pago_especifica; // ya viene en formato YYYY-MM-DD
     }
 
-    const [result] = await db.execute(
+    const [result] = await conn.execute(
       `INSERT INTO cobros_clientes
        (venta_id, firebase_uid, nombre_cliente, monto, condicion_pago, dias_plazo, fecha_cobro)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -1419,22 +1421,26 @@ app.post('/ventas/:id/cobros', async (req, res) => {
     // Crear evento en calendario cuando hay fecha definida (plazo O fecha_especifica)
     const necesitaEvento = (condicion_pago === 'plazo' || condicion_pago === 'fecha_especifica') && fechaCobro;
     if (necesitaEvento) {
-      const [[venta]] = await db.execute(`SELECT nombre FROM ventas WHERE id = ?`, [id]);
+      const [[venta]] = await conn.execute(`SELECT nombre FROM ventas WHERE id = ?`, [id]);
       const titulo = `Cobro: ${nombre_cliente} (${venta?.nombre || 'Venta'})`;
 
-      const [evResult] = await db.execute(
+      const [evResult] = await conn.execute(
         `INSERT INTO calendario_eventos (firebase_uid, titulo, tipo, fecha_evento, monto_esperado, estado, cobro_id)
          VALUES (?, ?, 'cobro', ?, ?, 'pendiente', ?)`,
         [firebase_uid, titulo, fechaCobro, monto, cobroId]
       );
-      await db.execute(
+      await conn.execute(
         `UPDATE cobros_clientes SET calendario_evento_id = ? WHERE id = ?`,
         [evResult.insertId, cobroId]
       );
     }
 
+    await conn.commit();
+    conn.release();
     res.status(201).json({ id: cobroId, message: 'Cliente agregado' });
   } catch (err) {
+    await conn.rollback();
+    conn.release();
     console.error(err);
     res.status(500).json({ error: err.message });
   }
