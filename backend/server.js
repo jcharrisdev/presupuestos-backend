@@ -773,6 +773,46 @@ app.get('/presupuestos/:id/detalle', async (req, res) => {
 });
 
 /**
+ * GET /presupuestos/:id/historico?firebase_uid=
+ * Resumen de los últimos 6 períodos del presupuesto para la tab Historial.
+ * Retorna totales por tipo de gasto y avance de pagos por período.
+ */
+app.get('/presupuestos/:id/historico', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[presupuesto]] = await db.execute(
+      `SELECT id, nombre, monto_total FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    const [periodos] = await db.execute(
+      `SELECT
+         p.id, p.numero_periodo, p.fecha_inicio, p.fecha_fin, p.estado,
+         COALESCE(SUM(CASE WHEN m.tipo='fijo' OR m.tipo='fijo_x_periodo' THEN m.monto_pagado_real ELSE 0 END), 0) AS total_fijo,
+         COALESCE(SUM(CASE WHEN m.tipo='no fijo' THEN m.monto_pagado_real ELSE 0 END), 0) AS total_no_fijo,
+         COALESCE(SUM(CASE WHEN m.tipo='ahorro' THEN m.monto_pagado_real ELSE 0 END), 0) AS total_ahorro,
+         COALESCE(SUM(m.monto_pagado_real), 0) AS total_gastado,
+         COUNT(CASE WHEN m.pagado=1 THEN 1 END) AS movimientos_pagados,
+         COUNT(m.id) AS movimientos_total
+       FROM periodos p
+       LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
+       WHERE p.presupuesto_id = ? AND p.firebase_uid = ?
+       GROUP BY p.id
+       ORDER BY p.numero_periodo DESC
+       LIMIT 6`,
+      [id, firebase_uid]
+    );
+    res.json({ monto_total: presupuesto.monto_total, periodos });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /presupuestos/:id/movimientos
  * Crea movimientos manualmente desde una selección de gastos.
  * Para gastos 'no fijo': permite múltiples movimientos por período
