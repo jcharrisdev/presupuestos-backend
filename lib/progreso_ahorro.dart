@@ -15,8 +15,11 @@
 ///   - 75–99% → "Casi listo" (amarillo)
 ///   - 100%   → "Completado" (verde)
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:intl/intl.dart';
 import 'theme/app_theme.dart';
 import 'services/savings_service.dart';
+import 'services/api_client.dart';
 import 'widgets/widgets.dart';
 
 /// Lista de metas de ahorro con progreso.
@@ -111,7 +114,9 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) => _AhorroCard(
                       ahorro: ahorros[i],
+                      firebaseUid: widget.firebaseUid,
                       onDelete: () => _eliminar(ahorros[i]['id']),
+                      onAportado: _cargar,
                     ),
                   ),
                 ),
@@ -127,22 +132,142 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
   ]));
 }
 
-/// Tarjeta de una meta de ahorro con barra de progreso y estado.
-///
-/// Calcula el porcentaje en base a `monto_ahorrado / monto_meta`
-/// y asigna un color y etiqueta según el avance.
-class _AhorroCard extends StatelessWidget {
+class _AhorroCard extends StatefulWidget {
   final Map<String, dynamic> ahorro;
+  final String firebaseUid;
   final VoidCallback onDelete;
-  const _AhorroCard({required this.ahorro, required this.onDelete});
+  final VoidCallback onAportado;
+  const _AhorroCard({required this.ahorro, required this.firebaseUid, required this.onDelete, required this.onAportado});
+
+  @override
+  State<_AhorroCard> createState() => _AhorroCardState();
+}
+
+class _AhorroCardState extends State<_AhorroCard> {
+  void _modalAportaciones() {
+    final montoCtrl = TextEditingController();
+    final notaCtrl = TextEditingController();
+    DateTime fecha = DateTime.now();
+    final gastoId = widget.ahorro['id'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16, left: 130),
+                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2))),
+              Text('Aportaciones — ${widget.ahorro['nombre']}',
+                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: montoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(labelText: 'Monto', prefixText: '\$'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notaCtrl,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(labelText: 'Nota (opcional)', hintText: 'ej: bono de trabajo'),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx, initialDate: fecha,
+                    firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 1)),
+                  );
+                  if (picked != null) setModal(() => fecha = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6), border: Border.all(color: AppTheme.border)),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                    const SizedBox(width: 8),
+                    Text(DateFormat('dd/MM/yyyy').format(fecha), style: const TextStyle(color: AppTheme.textPrimary)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  final m = double.tryParse(montoCtrl.text);
+                  if (m == null || m <= 0) return;
+                  try {
+                    await ApiClient.post('/ahorros/$gastoId/aportaciones', {
+                      'firebase_uid': widget.firebaseUid,
+                      'monto': m,
+                      'nota': notaCtrl.text.isEmpty ? null : notaCtrl.text,
+                      'fecha': DateFormat('yyyy-MM-dd').format(fecha),
+                    });
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    widget.onAportado();
+                  } catch (e) {
+                    if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                },
+                child: const SizedBox(width: double.infinity, child: Center(child: Text('Registrar aportación'))),
+              ),
+              const SizedBox(height: 20),
+
+              // Lista de aportaciones anteriores
+              FutureBuilder(
+                future: ApiClient.get('/ahorros/$gastoId/aportaciones?firebase_uid=${widget.firebaseUid}'),
+                builder: (ctx, snap) {
+                  if (!snap.hasData) return const LinearProgressIndicator(minHeight: 2);
+                  final body = json.decode(snap.data!.body) as Map<String, dynamic>;
+                  final lista = (body['aportaciones'] as List? ?? []).cast<Map<String, dynamic>>();
+                  if (lista.isEmpty) return const SizedBox.shrink();
+                  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Historial', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+                    const SizedBox(height: 8),
+                    ...lista.map((a) => Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6)),
+                      child: Row(children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(a['fecha']?.toString().substring(0,10) ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                          if (a['nota'] != null) Text(a['nota'].toString(), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                        ])),
+                        Text('\$${double.tryParse(a['monto'].toString())?.toStringAsFixed(2) ?? '0'}',
+                          style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            await ApiClient.delete('/aportaciones/${a['id']}?firebase_uid=${widget.firebaseUid}');
+                            if (ctx.mounted) { Navigator.pop(ctx); widget.onAportado(); }
+                          },
+                          child: const Icon(Icons.close, size: 16, color: AppTheme.textMuted),
+                        ),
+                      ]),
+                    )),
+                  ]);
+                },
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final meta     = double.tryParse(ahorro['monto_meta'].toString()) ?? 0;
-    final ahorrado = double.tryParse(ahorro['monto_ahorrado'].toString()) ?? 0;
-    // Porcentaje completado, acotado a [0, 1] para no romper la barra
-    final pct      = meta > 0 ? (ahorrado / meta).clamp(0.0, 1.0) : 0.0;
-    final restante = meta - ahorrado;
+    final meta       = double.tryParse(widget.ahorro['monto_meta'].toString()) ?? 0;
+    final ahorrado   = double.tryParse(widget.ahorro['monto_ahorrado'].toString()) ?? 0;
+    final aportado   = double.tryParse(widget.ahorro['total_aportaciones']?.toString() ?? '0') ?? 0;
+    final totalReal  = ahorrado + aportado;
+    final pct        = meta > 0 ? (totalReal / meta).clamp(0.0, 1.0) : 0.0;
+    final restante   = meta - totalReal;
 
     // Determinar estado visual según el porcentaje
     Color statusColor;
@@ -168,7 +293,7 @@ class _AhorroCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(ahorro['nombre'], style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+            Text(widget.ahorro['nombre'], style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 2),
             // Badge de estado con color dinámico
             Container(
@@ -180,10 +305,14 @@ class _AhorroCard extends StatelessWidget {
               child: Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w600)),
             ),
           ])),
-          // Botón de eliminar meta
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: AppTheme.colorAhorro, size: 20),
+            tooltip: 'Agregar aportación',
+            onPressed: _modalAportaciones,
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 18),
-            onPressed: onDelete,
+            onPressed: widget.onDelete,
           ),
         ]),
 
@@ -194,7 +323,7 @@ class _AhorroCard extends StatelessWidget {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Ahorrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 2),
-            Text('\$${ahorrado.toStringAsFixed(2)}',
+            Text('\$${totalReal.toStringAsFixed(2)}',
                 style: const TextStyle(color: AppTheme.colorAhorro, fontSize: 18, fontWeight: FontWeight.w800)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -202,6 +331,8 @@ class _AhorroCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text('\$${meta.toStringAsFixed(2)}',
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 18, fontWeight: FontWeight.w700)),
+            if (aportado > 0) Text('+ \$${aportado.toStringAsFixed(2)} manual',
+                style: const TextStyle(color: AppTheme.colorAhorro, fontSize: 10)),
           ]),
         ]),
 
