@@ -36,25 +36,64 @@ class DetallesPresupuesto extends StatefulWidget {
   _DetallesPresupuestoState createState() => _DetallesPresupuestoState();
 }
 
-class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
+class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTickerProviderStateMixin {
   List<dynamic> movimientos = [];
   Map<String, dynamic>? periodo;
 
-  /// Totales por tipo para las stat cards.
   double totalFijo = 0, totalNoFijo = 0, totalAhorro = 0;
-
-  /// Monto límite del presupuesto (viene del widget.presupuesto).
   double montoTotal = 0;
-
-  /// Fracción de movimientos pagados (0.0 – 1.0) para el indicador circular.
   double porcentajePagados = 0;
   bool isLoading = true;
+
+  // Historial de períodos (tab Historial)
+  late TabController _tabController;
+  List<dynamic> _historico = [];
+  double _montoTotalHistorico = 0;
+  bool _loadingHistorico = false;
+  bool _historicoLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      // Lazy loading: cargar historial solo cuando el usuario toca la tab
+      if (_tabController.index == 1 && !_historicoLoaded && mounted) {
+        _cargarHistorico();
+      }
+    });
     montoTotal = _d(widget.presupuesto['monto_total']);
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarHistorico() async {
+    setState(() { _loadingHistorico = true; _historicoLoaded = true; });
+    try {
+      final res = await ApiClient.get(
+        '/presupuestos/${widget.presupuesto['id']}/historico?firebase_uid=${widget.firebaseUid}',
+      );
+      if (res.statusCode == 200) {
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        if (mounted) setState(() {
+          _historico = body['periodos'] as List? ?? [];
+          _montoTotalHistorico = _d(body['monto_total']);
+          _loadingHistorico = false;
+        });
+      } else {
+        if (mounted) setState(() => _loadingHistorico = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingHistorico = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al cargar historial: $e')));
+      }
+    }
   }
 
   /// Carga el detalle del período activo desde GET /presupuestos/:id/detalle.
@@ -607,9 +646,23 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Período'),
+            Tab(text: 'Historial'),
+          ],
+          indicatorColor: AppTheme.primary,
+          labelColor: AppTheme.primary,
+          unselectedLabelColor: AppTheme.textSecondary,
+        ),
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ── TAB 1: Período activo ─────────────────────────────────────────
+          isLoading
+          ? Container(color: AppTheme.background, child: const Center(child: CircularProgressIndicator()))
           : RefreshIndicator(
               color: AppTheme.primary,
               backgroundColor: AppTheme.surface,
@@ -762,8 +815,107 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> {
                 ]),
               ),
             ),
+          // ── TAB 2: Historial de períodos ──────────────────────────────────
+          _buildHistorialTab(),
+        ],
+      ),
     );
   }
+
+  Widget _buildHistorialTab() {
+    if (_loadingHistorico) return Container(
+      color: AppTheme.background,
+      child: const Center(child: CircularProgressIndicator()),
+    );
+    if (_historico.isEmpty) return Container(
+      color: AppTheme.background,
+      child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.history, size: 48, color: AppTheme.textMuted),
+        SizedBox(height: 12),
+        Text('Sin períodos anteriores', style: TextStyle(color: AppTheme.textSecondary)),
+      ])),
+    );
+    return Container(
+      color: AppTheme.background,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _historico.length,
+        itemBuilder: (_, i) {
+          final p = _historico[i] as Map<String, dynamic>;
+          final totalGastado = _d(p['total_gastado']);
+          final pct = _montoTotalHistorico > 0 ? (totalGastado / _montoTotalHistorico).clamp(0.0, 1.0) : 0.0;
+          final fijo = _d(p['total_fijo']);
+          final variable = _d(p['total_no_fijo']);
+          final ahorro = _d(p['total_ahorro']);
+          final pagados = int.tryParse(p['movimientos_pagados']?.toString() ?? '0') ?? 0;
+          final total = int.tryParse(p['movimientos_total']?.toString() ?? '0') ?? 0;
+          final activo = p['estado'] == 'activo';
+          Color barColor;
+          if (totalGastado > _montoTotalHistorico) barColor = AppTheme.danger;
+          else if (pct >= 0.80) barColor = AppTheme.primary;
+          else barColor = AppTheme.success;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: activo ? AppTheme.primary.withOpacity(0.4) : AppTheme.border),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(
+                  'Período #${p['numero_periodo']}  ·  ${_fmtDate(p['fecha_inicio'])} → ${_fmtDate(p['fecha_fin'])}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                )),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: activo ? AppTheme.primary.withOpacity(0.1) : AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(activo ? 'activo' : 'cerrado',
+                    style: TextStyle(color: activo ? AppTheme.primary : AppTheme.textMuted, fontSize: 10, fontWeight: FontWeight.w600)),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: pct,
+                backgroundColor: AppTheme.surfaceAlt,
+                valueColor: AlwaysStoppedAnimation(barColor),
+                borderRadius: BorderRadius.circular(3),
+                minHeight: 6,
+              ),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: Text('\$${totalGastado.toStringAsFixed(2)} de \$${_montoTotalHistorico.toStringAsFixed(2)}',
+                  style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15))),
+                Text('$pagados/$total pagados', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                _histChip('Fijo', fijo, AppTheme.colorFijo),
+                const SizedBox(width: 6),
+                _histChip('Variable', variable, AppTheme.colorNoFijo),
+                const SizedBox(width: 6),
+                _histChip('Ahorro', ahorro, AppTheme.colorAhorro),
+              ]),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _histChip(String label, double val, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text('$label \$${val.toStringAsFixed(0)}',
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+  );
 
   /// Formatea la fecha del backend truncando a "YYYY-MM-DD".
   String _fmtDate(dynamic d) {
