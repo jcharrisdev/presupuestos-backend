@@ -5,6 +5,7 @@ import 'ahorro_meta.dart';
 import 'calendario.dart';
 import 'login_screen.dart';
 import 'cobros_home.dart';
+import 'shared_budgets_list_screen.dart';
 import 'services/auth_service.dart';
 import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
@@ -160,6 +161,16 @@ class MainMenu extends StatelessWidget {
                 color: AppTheme.success,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CobrosHome(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
+              _NavCard(
+                icon: Icons.group_outlined,
+                title: 'Compartido',
+                subtitle: 'Presupuestos con otra persona',
+                color: AppTheme.info,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => SharedBudgetsListScreen(firebaseUid: firebaseUid),
                 )),
               ),
 

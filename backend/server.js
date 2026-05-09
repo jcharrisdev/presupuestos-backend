@@ -2515,6 +2515,492 @@ app.get('/clientes/:nombre/estado-cuenta', async (req, res) => {
 
 
 // =============================================================================
+// MÓDULO: PRESUPUESTOS COMPARTIDOS
+// =============================================================================
+
+function calcularSplits(monto, regla, miembros) {
+  // miembros: [{ firebase_uid, porcentaje, ingreso_declarado }]
+  if (regla === 'equitativo') {
+    const parte = Math.round((monto / miembros.length) * 100) / 100;
+    return miembros.map(m => ({ firebase_uid: m.firebase_uid, monto_responsabilidad: parte }));
+  }
+  if (regla === 'porcentual') {
+    return miembros.map(m => ({
+      firebase_uid: m.firebase_uid,
+      monto_responsabilidad: Math.round(monto * ((m.porcentaje || 50) / 100) * 100) / 100,
+    }));
+  }
+  if (regla === 'proporcional') {
+    const totalIngresos = miembros.reduce((s, m) => s + (parseFloat(m.ingreso_declarado) || 0), 0);
+    if (totalIngresos === 0) {
+      const parte = Math.round((monto / miembros.length) * 100) / 100;
+      return miembros.map(m => ({ firebase_uid: m.firebase_uid, monto_responsabilidad: parte }));
+    }
+    return miembros.map(m => ({
+      firebase_uid: m.firebase_uid,
+      monto_responsabilidad: Math.round(monto * ((parseFloat(m.ingreso_declarado) || 0) / totalIngresos) * 100) / 100,
+    }));
+  }
+  return [];
+}
+
+// POST /shared-budgets
+app.post('/shared-budgets', async (req, res) => {
+  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, firebase_uid } = req.body;
+  if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
+  try {
+    const [r] = await conn.execute(
+      `INSERT INTO shared_budgets (nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, estado, owner_uid)
+       VALUES (?, ?, ?, ?, 'waiting_for_members', ?)`,
+      [nombre, tipo_periodo || 'mensual', dia_inicio_periodo || 1, regla_reparto || 'equitativo', firebase_uid]
+    );
+    const budgetId = r.insertId;
+    const pct = regla_reparto === 'porcentual' ? (porcentaje_owner || 50) : 50;
+    const ingreso = regla_reparto === 'proporcional' ? (ingreso_owner || null) : null;
+    await conn.execute(
+      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado)
+       VALUES (?, ?, 'owner', ?, ?)`,
+      [budgetId, firebase_uid, pct, ingreso]
+    );
+    await conn.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'crear_presupuesto', ?)`,
+      [budgetId, firebase_uid, JSON.stringify({ nombre })]
+    );
+    await conn.commit();
+    conn.release();
+    res.status(201).json({ id: budgetId, nombre, estado: 'waiting_for_members' });
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /shared-budgets
+app.get('/shared-budgets', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT sb.id, sb.nombre, sb.tipo_periodo, sb.regla_reparto, sb.estado, sb.owner_uid, sb.created_at,
+              m.rol, m.porcentaje
+       FROM shared_budgets sb
+       JOIN shared_budget_members m ON m.shared_budget_id = sb.id AND m.firebase_uid = ?
+       ORDER BY sb.created_at DESC`,
+      [firebase_uid]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /shared-budgets/:id
+app.get('/shared-budgets/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[budget]] = await db.execute(
+      `SELECT sb.* FROM shared_budgets sb
+       JOIN shared_budget_members m ON m.shared_budget_id = sb.id AND m.firebase_uid = ?
+       WHERE sb.id = ?`,
+      [firebase_uid, id]
+    );
+    if (!budget) return res.status(404).json({ error: 'No encontrado' });
+    const [members] = await db.execute(
+      `SELECT firebase_uid, rol, porcentaje, ingreso_declarado, joined_at FROM shared_budget_members WHERE shared_budget_id = ?`,
+      [id]
+    );
+    // Calcular balance: lo que cada miembro debe al otro menos lo que ya pagó via settlements
+    const [splits] = await db.execute(
+      `SELECT ses.firebase_uid, ses.monto_responsabilidad, se.pagado_por
+       FROM shared_expense_splits ses
+       JOIN shared_expenses se ON se.id = ses.expense_id
+       WHERE se.shared_budget_id = ? AND se.es_personal = 0`,
+      [id]
+    );
+    const [settlements] = await db.execute(
+      `SELECT pagador_uid, receptor_uid, monto FROM shared_settlements WHERE shared_budget_id = ?`,
+      [id]
+    );
+    // balance neto: positivo = firebase_uid le debe a otro, negativo = otro le debe a firebase_uid
+    let debeAOtro = 0;
+    let otroLeDebe = 0;
+    for (const s of splits) {
+      if (s.firebase_uid === firebase_uid && s.pagado_por !== firebase_uid) {
+        debeAOtro += parseFloat(s.monto_responsabilidad);
+      }
+      if (s.firebase_uid !== firebase_uid && s.pagado_por === firebase_uid) {
+        otroLeDebe += parseFloat(s.monto_responsabilidad);
+      }
+    }
+    for (const st of settlements) {
+      if (st.pagador_uid === firebase_uid) debeAOtro -= parseFloat(st.monto);
+      if (st.receptor_uid === firebase_uid) otroLeDebe -= parseFloat(st.monto);
+    }
+    const balanceNeto = Math.round((debeAOtro - otroLeDebe) * 100) / 100;
+    res.json({ ...budget, members, balance_neto: balanceNeto });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /shared-budgets/:id
+app.patch('/shared-budgets/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, regla_reparto, tipo_periodo, dia_inicio_periodo, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[budget]] = await db.execute(
+      `SELECT id FROM shared_budgets WHERE id = ? AND owner_uid = ?`, [id, firebase_uid]
+    );
+    if (!budget) return res.status(403).json({ error: 'No autorizado' });
+    await db.execute(
+      `UPDATE shared_budgets SET
+        nombre = COALESCE(?, nombre),
+        regla_reparto = COALESCE(?, regla_reparto),
+        tipo_periodo = COALESCE(?, tipo_periodo),
+        dia_inicio_periodo = COALESCE(?, dia_inicio_periodo)
+       WHERE id = ?`,
+      [nombre || null, regla_reparto || null, tipo_periodo || null, dia_inicio_periodo || null, id]
+    );
+    res.json({ message: 'Actualizado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /shared-budgets/:id
+app.delete('/shared-budgets/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[budget]] = await db.execute(
+      `SELECT id FROM shared_budgets WHERE id = ? AND owner_uid = ?`, [id, firebase_uid]
+    );
+    if (!budget) return res.status(403).json({ error: 'No autorizado' });
+    await db.execute(`DELETE FROM shared_budgets WHERE id = ?`, [id]);
+    res.json({ message: 'Eliminado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-budgets/:id/invitations
+app.post('/shared-budgets/:id/invitations', async (req, res) => {
+  const { id } = req.params;
+  const { email_invitado, firebase_uid } = req.body;
+  if (!email_invitado || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [[budget]] = await db.execute(
+      `SELECT id FROM shared_budgets WHERE id = ? AND owner_uid = ?`, [id, firebase_uid]
+    );
+    if (!budget) return res.status(403).json({ error: 'No autorizado' });
+    // Cancelar invitaciones previas pendientes al mismo email
+    await db.execute(
+      `UPDATE shared_budget_invitations SET estado = 'cancelled'
+       WHERE shared_budget_id = ? AND email_invitado = ? AND estado = 'pending'`,
+      [id, email_invitado]
+    );
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await db.execute(
+      `INSERT INTO shared_budget_invitations (shared_budget_id, email_invitado, token, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      [id, email_invitado, token, expiresAt]
+    );
+    await db.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'invitar_usuario', ?)`,
+      [id, firebase_uid, JSON.stringify({ email_invitado })]
+    );
+    res.status(201).json({ token, email_invitado, expires_at: expiresAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /shared-budget-invitations
+app.get('/shared-budget-invitations', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT sbi.id, sbi.token, sbi.expires_at, sbi.created_at,
+              sb.nombre AS presupuesto_nombre, sb.owner_uid, sb.regla_reparto, sb.tipo_periodo
+       FROM shared_budget_invitations sbi
+       JOIN shared_budgets sb ON sb.id = sbi.shared_budget_id
+       WHERE sbi.email_invitado = ? AND sbi.estado = 'pending' AND sbi.expires_at > NOW()
+       ORDER BY sbi.created_at DESC`,
+      [firebase_uid]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-budget-invitations/:token/accept
+app.post('/shared-budget-invitations/:token/accept', async (req, res) => {
+  const { token } = req.params;
+  const { firebase_uid, ingreso_declarado } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
+  try {
+    const [[inv]] = await conn.execute(
+      `SELECT * FROM shared_budget_invitations WHERE token = ? AND estado = 'pending' AND expires_at > NOW()`,
+      [token]
+    );
+    if (!inv) { await conn.rollback(); conn.release(); return res.status(404).json({ error: 'Invitación no válida o expirada' }); }
+    if (inv.email_invitado !== firebase_uid) { await conn.rollback(); conn.release(); return res.status(403).json({ error: 'No autorizado' }); }
+    await conn.execute(
+      `UPDATE shared_budget_invitations SET estado = 'accepted' WHERE id = ?`, [inv.id]
+    );
+    // Obtener owner para calcular porcentaje del nuevo miembro
+    const [[ownerMember]] = await conn.execute(
+      `SELECT porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ? AND rol = 'owner'`,
+      [inv.shared_budget_id]
+    );
+    const [[budget]] = await conn.execute(`SELECT regla_reparto FROM shared_budgets WHERE id = ?`, [inv.shared_budget_id]);
+    const pctMember = budget.regla_reparto === 'porcentual' ? (100 - (ownerMember.porcentaje || 50)) : 50;
+    await conn.execute(
+      `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado)
+       VALUES (?, ?, 'member', ?, ?)`,
+      [inv.shared_budget_id, firebase_uid, pctMember, ingreso_declarado || null]
+    );
+    await conn.execute(
+      `UPDATE shared_budgets SET estado = 'active' WHERE id = ?`, [inv.shared_budget_id]
+    );
+    await conn.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'aceptar_invitacion', NULL)`,
+      [inv.shared_budget_id, firebase_uid]
+    );
+    await conn.commit();
+    conn.release();
+    res.json({ message: 'Invitación aceptada', shared_budget_id: inv.shared_budget_id });
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-budget-invitations/:token/reject
+app.post('/shared-budget-invitations/:token/reject', async (req, res) => {
+  const { token } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[inv]] = await db.execute(
+      `SELECT * FROM shared_budget_invitations WHERE token = ? AND estado = 'pending'`, [token]
+    );
+    if (!inv) return res.status(404).json({ error: 'Invitación no encontrada' });
+    if (inv.email_invitado !== firebase_uid) return res.status(403).json({ error: 'No autorizado' });
+    await db.execute(`UPDATE shared_budget_invitations SET estado = 'rejected' WHERE id = ?`, [inv.id]);
+    res.json({ message: 'Invitación rechazada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-budgets/:id/expenses
+app.post('/shared-budgets/:id/expenses', async (req, res) => {
+  const { id } = req.params;
+  const { descripcion, monto, pagado_por, regla_override, es_personal, firebase_uid_personal, fecha, firebase_uid } = req.body;
+  if (!descripcion || monto == null || !pagado_por || !fecha || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
+  try {
+    const [[budget]] = await conn.execute(
+      `SELECT sb.regla_reparto FROM shared_budgets sb
+       JOIN shared_budget_members m ON m.shared_budget_id = sb.id AND m.firebase_uid = ?
+       WHERE sb.id = ? AND sb.estado = 'active'`,
+      [firebase_uid, id]
+    );
+    if (!budget) { await conn.rollback(); conn.release(); return res.status(403).json({ error: 'No autorizado o presupuesto inactivo' }); }
+    const [r] = await conn.execute(
+      `INSERT INTO shared_expenses (shared_budget_id, descripcion, monto, pagado_por, regla_override, es_personal, firebase_uid_personal, fecha)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, descripcion, monto, pagado_por, regla_override || null, es_personal ? 1 : 0, firebase_uid_personal || null, fecha]
+    );
+    const expenseId = r.insertId;
+    if (!es_personal) {
+      const [members] = await conn.execute(
+        `SELECT firebase_uid, porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ?`, [id]
+      );
+      const regla = regla_override || budget.regla_reparto;
+      const splits = calcularSplits(parseFloat(monto), regla, members);
+      for (const sp of splits) {
+        await conn.execute(
+          `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
+          [expenseId, sp.firebase_uid, sp.monto_responsabilidad]
+        );
+      }
+    }
+    await conn.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'crear_gasto', ?)`,
+      [id, firebase_uid, JSON.stringify({ descripcion, monto })]
+    );
+    await conn.commit();
+    conn.release();
+    res.status(201).json({ id: expenseId, message: 'Gasto creado' });
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /shared-budgets/:id/expenses
+app.get('/shared-budgets/:id/expenses', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[member]] = await db.execute(
+      `SELECT id FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!member) return res.status(403).json({ error: 'No autorizado' });
+    const [expenses] = await db.execute(
+      `SELECT se.id, se.descripcion, se.monto, se.pagado_por, se.regla_override,
+              se.es_personal, se.firebase_uid_personal, se.fecha, se.created_at,
+              ses.monto_responsabilidad AS mi_responsabilidad
+       FROM shared_expenses se
+       LEFT JOIN shared_expense_splits ses ON ses.expense_id = se.id AND ses.firebase_uid = ?
+       WHERE se.shared_budget_id = ?
+       ORDER BY se.fecha DESC, se.created_at DESC`,
+      [firebase_uid, id]
+    );
+    res.json(expenses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /shared-expenses/:expenseId
+app.patch('/shared-expenses/:expenseId', async (req, res) => {
+  const { expenseId } = req.params;
+  const { descripcion, monto, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
+  try {
+    const [[expense]] = await conn.execute(
+      `SELECT se.*, sb.regla_reparto FROM shared_expenses se
+       JOIN shared_budgets sb ON sb.id = se.shared_budget_id
+       JOIN shared_budget_members m ON m.shared_budget_id = sb.id AND m.firebase_uid = ?
+       WHERE se.id = ?`,
+      [firebase_uid, expenseId]
+    );
+    if (!expense) { await conn.rollback(); conn.release(); return res.status(403).json({ error: 'No autorizado' }); }
+    await conn.execute(
+      `UPDATE shared_expenses SET
+        descripcion = COALESCE(?, descripcion),
+        monto = COALESCE(?, monto)
+       WHERE id = ?`,
+      [descripcion || null, monto || null, expenseId]
+    );
+    if (monto != null && !expense.es_personal) {
+      await conn.execute(`DELETE FROM shared_expense_splits WHERE expense_id = ?`, [expenseId]);
+      const [members] = await conn.execute(
+        `SELECT firebase_uid, porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ?`,
+        [expense.shared_budget_id]
+      );
+      const regla = expense.regla_override || expense.regla_reparto;
+      const splits = calcularSplits(parseFloat(monto), regla, members);
+      for (const sp of splits) {
+        await conn.execute(
+          `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
+          [expenseId, sp.firebase_uid, sp.monto_responsabilidad]
+        );
+      }
+    }
+    await conn.commit();
+    conn.release();
+    res.json({ message: 'Actualizado' });
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /shared-expenses/:expenseId
+app.delete('/shared-expenses/:expenseId', async (req, res) => {
+  const { expenseId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[expense]] = await db.execute(
+      `SELECT se.id FROM shared_expenses se
+       JOIN shared_budget_members m ON m.shared_budget_id = se.shared_budget_id AND m.firebase_uid = ?
+       WHERE se.id = ?`,
+      [firebase_uid, expenseId]
+    );
+    if (!expense) return res.status(403).json({ error: 'No autorizado' });
+    await db.execute(`DELETE FROM shared_expenses WHERE id = ?`, [expenseId]);
+    res.json({ message: 'Eliminado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-budgets/:id/settlements
+app.post('/shared-budgets/:id/settlements', async (req, res) => {
+  const { id } = req.params;
+  const { receptor_uid, monto, nota, fecha, firebase_uid } = req.body;
+  if (!receptor_uid || monto == null || !fecha || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  try {
+    const [[member]] = await db.execute(
+      `SELECT id FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!member) return res.status(403).json({ error: 'No autorizado' });
+    const [r] = await db.execute(
+      `INSERT INTO shared_settlements (shared_budget_id, pagador_uid, receptor_uid, monto, nota, fecha)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, firebase_uid, receptor_uid, monto, nota || null, fecha]
+    );
+    await db.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'registrar_pago', ?)`,
+      [id, firebase_uid, JSON.stringify({ receptor_uid, monto })]
+    );
+    res.status(201).json({ id: r.insertId, message: 'Pago registrado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /shared-budgets/:id/settlements
+app.get('/shared-budgets/:id/settlements', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[member]] = await db.execute(
+      `SELECT id FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!member) return res.status(403).json({ error: 'No autorizado' });
+    const [rows] = await db.execute(
+      `SELECT id, pagador_uid, receptor_uid, monto, nota, fecha, created_at
+       FROM shared_settlements WHERE shared_budget_id = ? ORDER BY fecha DESC`,
+      [id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
 const PORT = process.env.PORT || 3002;
