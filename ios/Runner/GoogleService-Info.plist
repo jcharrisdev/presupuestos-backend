@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>750057422826-d2rnfgqti1dqpn07ue7nki1ebenf80s7.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.750057422826-d2rnfgqti1dqpn07ue7nki1ebenf80s7</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>750057422826-3o1qb8ktipid08qhukbou430ocjp8k3i.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyADT4sbqruKa2Wf6yY6_OU59nQf836HYIo</string>
+	<key>GCM_SENDER_ID</key>
+	<string>750057422826</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.salarying</string>
+	<key>PROJECT_ID</key>
+	<string>salary-bi</string>
+	<key>STORAGE_BUCKET</key>
+	<string>salary-bi.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:750057422826:ios:e53061bb8f45d713a4fc93</string>
+</dict>
+</plist>

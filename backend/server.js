@@ -24,7 +24,8 @@
 const express = require('express');
 const mysql   = require('mysql2');
 const cors    = require('cors');
-const cron    = require('node-cron');  // Para el job diario de vencimientos
+const cron    = require('node-cron');
+const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
 const app = express();
 app.use(cors());          // Permite peticiones desde el app Flutter (cross-origin)
@@ -2518,6 +2519,40 @@ app.get('/clientes/:nombre/estado-cuenta', async (req, res) => {
 // MÓDULO: PRESUPUESTOS COMPARTIDOS
 // =============================================================================
 
+async function sendInvitationEmail({ emailInvitado, ownerUid, presupuestoNombre }) {
+  if (!process.env.BREVO_API_KEY) return;
+  try {
+    await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { email: process.env.BREVO_SENDER_EMAIL, name: 'Salarying' },
+        to: [{ email: emailInvitado }],
+        subject: 'Te invitaron a un presupuesto compartido en Salarying',
+        htmlContent: `
+          <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;background:#1E2026;color:#EAECEF;border-radius:12px;">
+            <h2 style="color:#F0B90B;margin-bottom:8px;">Salarying</h2>
+            <p style="font-size:16px;"><b>${ownerUid}</b> te invitó a gestionar el presupuesto compartido:</p>
+            <div style="background:#2B3139;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
+              <span style="font-size:20px;font-weight:bold;color:#F0B90B;">${presupuestoNombre}</span>
+            </div>
+            <p>Para aceptar o rechazar la invitación, abre la app <b>Salarying</b> y ve a:</p>
+            <p style="background:#2B3139;border-radius:8px;padding:12px;text-align:center;font-weight:bold;">
+              Menú principal → Compartido → ícono de sobre ✉️
+            </p>
+            <p style="color:#848E9C;font-size:13px;margin-top:16px;">La invitación expira en 7 días.</p>
+          </div>
+        `,
+      }),
+    });
+  } catch (err) {
+    console.error('Error enviando email de invitación:', err.message);
+  }
+}
+
 function calcularSplits(monto, regla, miembros) {
   // miembros: [{ firebase_uid, porcentaje, ingreso_declarado }]
   if (regla === 'equitativo') {
@@ -2719,6 +2754,8 @@ app.post('/shared-budgets/:id/invitations', async (req, res) => {
        VALUES (?, ?, 'invitar_usuario', ?)`,
       [id, firebase_uid, JSON.stringify({ email_invitado })]
     );
+    const [[budgetInfo]] = await db.execute(`SELECT nombre FROM shared_budgets WHERE id = ?`, [id]);
+    sendInvitationEmail({ emailInvitado: email_invitado, ownerUid: firebase_uid, presupuestoNombre: budgetInfo.nombre });
     res.status(201).json({ token, email_invitado, expires_at: expiresAt });
   } catch (err) {
     res.status(500).json({ error: err.message });

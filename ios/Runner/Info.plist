@@ -45,5 +45,25 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.750057422826-d2rnfgqti1dqpn07ue7nki1ebenf80s7</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Salarying necesita enviarte recordatorios de pagos y cobros pendientes</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Salarying usa el calendario para mostrar tus eventos de pago</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
