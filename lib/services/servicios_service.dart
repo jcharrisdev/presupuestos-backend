@@ -70,6 +70,11 @@ class ServiciosService {
     throw Exception('Error al registrar pago: ${res.statusCode}');
   }
 
+  static Future<void> deleteTeamMemberPayment(int jobId, int paymentId, String firebaseUid) async {
+    final res = await ApiClient.delete('/jobs/$jobId/team-member-payments/$paymentId?firebase_uid=$firebaseUid');
+    if (res.statusCode != 200) throw Exception('Error al eliminar pago: ${res.statusCode}');
+  }
+
   static Future<Map<String, dynamic>> getFinancialSummary(int jobId, String firebaseUid) async {
     final res = await ApiClient.get('/jobs/$jobId/financial-summary?firebase_uid=$firebaseUid');
     if (res.statusCode == 200) return json.decode(res.body);

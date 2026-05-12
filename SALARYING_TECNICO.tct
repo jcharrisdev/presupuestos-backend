@@ -1357,5 +1357,106 @@ ESTADO POST-FIX:
     (el codigo Flutter ya tenia las pantallas del modulo servicios)
 
 ================================================================================
+20. SESION 2026-05-12 (sesion 2) - PULIDO MODULO OFRECIMIENTO DE SERVICIOS
+================================================================================
+
+OBJETIVO:
+  Corregir gaps funcionales del modulo de servicios y agregar proyeccion de ganancia.
+
+BUG 13: No habia UI para registrar pago a colaborador [2026-05-12]
+  Problema: El endpoint POST /jobs/:id/team-member-payments existia en backend
+            y addTeamMemberPayment() existia en ServiciosService, pero ningun
+            widget Flutter llamaba a ese metodo. El usuario podia crear
+            colaboradores pero no registrar pagos hacia ellos.
+  Solucion: Nuevo metodo _pagarColaborador() en trabajo_detalle_screen.dart
+            que abre un BottomSheet con monto pre-relleno y nota opcional.
+            Tambien se agrego _eliminarPagoColab() y el endpoint DELETE en backend.
+
+CAMBIOS IMPLEMENTADOS:
+
+  1. backend/server.js — nuevo endpoint:
+       DELETE /jobs/:id/team-member-payments/:pid
+         - Valida que el job pertenece al firebase_uid
+         - Elimina el pago de team_member_payments
+         - Retorna { message: 'Pago eliminado' }
+
+  2. lib/services/servicios_service.dart — nuevo metodo:
+       deleteTeamMemberPayment(jobId, paymentId, firebaseUid)
+         → DELETE /jobs/:id/team-member-payments/:pid
+
+  3. lib/servicios/trabajo_detalle_screen.dart — refactorizacion completa:
+
+     _colaboradorTile() REFACTORIZADO:
+       - Ahora recibe montoTotal como parametro
+       - Muestra badge de estado: Pendiente (rojo) / Parcial (amarillo) / Pagado (verde)
+       - Boton + (add_circle_outline) para abrir BottomSheet de pago
+       - Sub-lista de pagos registrados con boton X para eliminar cada uno
+       - Badge desaparece cuando el colaborador esta completamente pagado
+
+     _pagarColaborador() NUEVO:
+       - BottomSheet con monto pre-relleno al saldo pendiente
+       - Muestra: acordado, ya pagado, pendiente como contexto
+       - Campo nota opcional
+       - Llama ServiciosService.addTeamMemberPayment()
+
+     _pagoColabSubTile() NUEVO:
+       - Muestra cada pago registrado al colaborador bajo su tile
+       - Boton X (Icons.close) para eliminar el pago
+       - Muestra nota y monto en verde
+
+     _calcMontoColaborador() NUEVO:
+       - Helper para calcular compensacion esperada segun tipo_compensacion:
+           fijo/por_horas/por_tarea → monto_calculado del backend
+           porcentual              → montoTotal * porcentaje / 100
+           ganancias               → 0 (circular, excluido de proyeccion)
+
+     _labelComp() MEJORADO:
+       - Ahora recibe Map<String, dynamic> en lugar de solo tipo+monto
+       - Muestra informacion mas detallada por tipo:
+           fijo     → 'Pago fijo: $500.00'
+           porcentual → 'Porcentual: 10.0% ($500.00)'
+           por_horas → 'Por horas: 8h × $15.00'
+           por_tarea → 'Por tarea: $200.00'
+           ganancias → '20.0% de ganancias'
+
+     _hintComp() NUEVO:
+       - Hint contextual en el BottomSheet de agregar colaborador segun tipo
+
+     _resumenCard() AMPLIADO — nueva seccion PROYECCION:
+       Titulo: "Proyeccion (si cobras todo el contrato)"
+       Formula:
+         totalColabAcordado = SUM(_calcMontoColaborador) de todos los teamMembers
+         gananciaProyectada = montoTotal - totalColabAcordado - gastos_actuales
+         margenProyectado   = gananciaProyectada / montoTotal * 100
+       UI:
+         - Fila: Ingresos esperados (monto_total del contrato)
+         - Fila: Costos laborales acordados (SUM compensaciones)
+         - Fila: Gastos operativos actuales (gastos reales ya registrados)
+         - Fila: Ganancia proyectada (verde si >= 0, rojo si negativo) en bold
+         - Barra LinearProgressIndicator con color segun margen:
+             >= 30% → verde (success)
+             >= 15% → amarillo (primary)
+             < 15%  → rojo (danger)
+         - Porcentaje de margen proyectado
+         - Nota: "* Excluye colaboradores a % de ganancias" si aplica
+
+     NOTA CRITICA SOBRE COLABORADORES CON "ganancias":
+       Los colaboradores con tipo_compensacion='ganancias' se excluyen de la
+       proyeccion porque su monto depende de la ganancia, lo que es circular.
+       Se muestra un aviso al usuario si tiene este tipo de colaborador.
+
+ENDPOINTS NUEVOS (total rutas /jobs ahora = 13):
+  DELETE /jobs/:id/team-member-payments/:pid  ← NUEVO
+
+VERIFICACION:
+  - Crear trabajo con colaborador fijo $500
+  - Badge muestra "Pendiente" (rojo), boton + visible
+  - Tocar + → BottomSheet con monto pre-relleno $500.00
+  - Confirmar → badge cambia a "Pagado" (verde), sub-tile muestra el pago
+  - Tocar X en el sub-tile → pago eliminado, badge vuelve a "Pendiente"
+  - Sin cobros del cliente → Resumen real muestra utilidad $0
+  - Proyeccion muestra ganancia esperada = monto_total - $500 - gastos
+
+================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING
 ================================================================================

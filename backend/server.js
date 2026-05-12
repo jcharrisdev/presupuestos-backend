@@ -3377,6 +3377,23 @@ app.post('/jobs/:id/team-member-payments', async (req, res) => {
   }
 });
 
+// DELETE /jobs/:id/team-member-payments/:pid — eliminar pago a colaborador
+app.delete('/jobs/:id/team-member-payments/:pid', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[payment]] = await db.execute(
+      'SELECT tmp.* FROM team_member_payments tmp JOIN jobs j ON j.id = tmp.job_id WHERE tmp.id = ? AND j.firebase_uid = ?',
+      [req.params.pid, firebase_uid]
+    );
+    if (!payment) return res.status(404).json({ error: 'Pago no encontrado' });
+    await db.execute('DELETE FROM team_member_payments WHERE id = ?', [req.params.pid]);
+    res.json({ message: 'Pago eliminado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /jobs/:id/financial-summary — resumen financiero
 app.get('/jobs/:id/financial-summary', async (req, res) => {
   const { firebase_uid } = req.query;
