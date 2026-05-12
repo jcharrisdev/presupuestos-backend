@@ -1,7 +1,7 @@
 ================================================================================
 SALARYING - DOCUMENTO TECNICO COMPLETO
 Generado:        2026-05-06
-Ultima actualizacion: 2026-05-11
+Ultima actualizacion: 2026-05-11 (sesion 2 - modulo servicios)
 Version App:     1.1.0+2
 ================================================================================
 
@@ -97,13 +97,13 @@ REST API (Express.js en Render)
 MySQL (Clever Cloud)
 
 COMPONENTES INTERNOS FLUTTER:
-  AuthService   → Google Sign-In
-  ApiClient     → cliente HTTP centralizado (base URL + timeout)
-  CacheService  → Hive (cache local 24h TTL)
-  NotifService  → notificaciones locales Android
-  PdfService    → generacion de PDF
+  AuthService        → Google Sign-In
+  ApiClient          → cliente HTTP centralizado (base URL + timeout)
+  CacheService       → Hive (cache local 24h TTL)
+  NotifService       → notificaciones locales Android
+  PdfService         → generacion de PDF
   SharedBudgetService → CRUD presupuestos compartidos
-  [X]Service    → capas de servicio por modulo
+  ServiciosService   → CRUD modulo Ofrecimiento de Servicios (jobs)
 
 ESTRATEGIA DE CACHE:
   - Lista presupuestos: cache-first (Hive, 24h TTL)
@@ -122,7 +122,8 @@ presupuestos-backend/
 ├── lib/
 │   ├── main.dart
 │   ├── login_screen.dart
-│   ├── main_menu.dart                      ← ACTUALIZADO: card expandible Presupuesto
+│   ├── main_menu.dart                      ← ACTUALIZADO: navega a VentasLandingScreen
+│   ├── ventas_landing_screen.dart          ← NUEVO: landing con 2 divisiones comerciales
 │   ├── dashboard_screen.dart               ← REDISEÑADO: dashboard Harvard completo
 │   ├── lista_presupuestos.dart
 │   ├── crear_presupuesto.dart
@@ -132,7 +133,7 @@ presupuestos-backend/
 │   ├── ahorro_meta.dart
 │   ├── progreso_ahorro.dart
 │   ├── calendario.dart
-│   ├── cobros_home.dart
+│   ├── cobros_home.dart                    ← SIN CAMBIOS (Venta de productos)
 │   ├── productos_screen.dart
 │   ├── produccion_detalle.dart
 │   ├── venta_detalle.dart
@@ -140,9 +141,16 @@ presupuestos-backend/
 │   ├── cliente_estado_cuenta_screen.dart
 │   ├── receta_screen.dart
 │   ├── shared_budget_detail.dart           ← REDISEÑADO: igual a presupuesto normal
-│   ├── shared_budget_create.dart           → crear presupuesto compartido
-│   ├── shared_budget_invitations.dart      → aceptar/rechazar invitaciones
-│   ├── shared_budgets_list_screen.dart     → lista de presupuestos compartidos
+│   ├── shared_budget_create.dart
+│   ├── shared_budget_invitations.dart
+│   ├── shared_budgets_list_screen.dart
+│   ├── servicios/                          ← NUEVO: modulo Ofrecimiento de Servicios
+│   │   ├── servicios_dashboard.dart        ← lista de trabajos con estados
+│   │   ├── crear_trabajo_screen.dart       ← formulario crear trabajo
+│   │   ├── trabajo_detalle_screen.dart     ← detalle con 4 secciones colapsables
+│   │   ├── registro_pago_cliente_screen.dart
+│   │   ├── registro_gastos_screen.dart
+│   │   └── financiero_dashboard_screen.dart ← metricas globales de utilidad neta
 │   ├── theme/
 │   │   └── app_theme.dart
 │   ├── services/
@@ -152,6 +160,7 @@ presupuestos-backend/
 │   │   ├── notification_service.dart
 │   │   ├── pdf_service.dart
 │   │   ├── shared_budget_service.dart      ← ACTUALIZADO: confirmarMiParte, requestDelete
+│   │   ├── servicios_service.dart          ← NUEVO: CRUD jobs/servicios
 │   │   ├── products_service.dart
 │   │   ├── sales_service.dart
 │   │   ├── savings_service.dart
@@ -171,10 +180,16 @@ presupuestos-backend/
 │           ├── costos_produccion_card.dart
 │           └── reporte_produccion_modal.dart
 ├── backend/
-│   ├── server.js
+│   ├── server.js                           ← ACTUALIZADO: +12 rutas modulo jobs
 │   ├── package.json
-│   ├── migration_shared_budgets.sql        ← ACTUALIZADO: columna delete_requested_by
+│   ├── migration_shared_budgets.sql
 │   └── .env
+├── database/
+│   └── migrations/
+│       ├── add_servicios_jobs.sql          ← NUEVO: 6 tablas del modulo servicios
+│       ├── add_indexes.sql
+│       ├── add_aportaciones_ahorro.sql
+│       └── add_historial_precios.sql
 ├── android/
 │   ├── app/
 │   │   ├── build.gradle
@@ -210,13 +225,20 @@ main()
     ├── AhorroMetaScreen
     │   └── ProgresoAhorroScreen (boton "ver progreso")
     ├── CalendarioScreen (3 tabs: Calendario / Lista / Flujo)
-    └── CobrosHome (3 tabs: Productos / Produccion / Ventas)
-        ├── [Tab Productos] → ProductosScreen
-        │   └── RecetaScreen (boton "Receta" en variante)
-        ├── [Tab Produccion] → ProduccionDetalle (tap tarjeta)
-        └── [Tab Ventas] → VentaDetalle (tap tarjeta)
-            ├── ListaComprasScreen (boton lista compras)
-            └── ClienteEstadoCuentaScreen (boton estado cuenta)
+    └── VentasLandingScreen                 ← NUEVO: elige entre 2 divisiones
+        ├── CobrosHome (3 tabs: Productos / Produccion / Ventas)  [Venta de productos]
+        │   ├── [Tab Productos] → ProductosScreen
+        │   │   └── RecetaScreen (boton "Receta" en variante)
+        │   ├── [Tab Produccion] → ProduccionDetalle (tap tarjeta)
+        │   └── [Tab Ventas] → VentaDetalle (tap tarjeta)
+        │       ├── ListaComprasScreen (boton lista compras)
+        │       └── ClienteEstadoCuentaScreen (boton estado cuenta)
+        └── ServiciosDashboard              [Ofrecimiento de servicios] ← NUEVO
+            ├── FinancieroDashboardScreen (icono grafico en AppBar)
+            └── CrearTrabajoScreen (FAB)
+                └── TrabajoDetalleScreen (tap tarjeta / tras crear)
+                    ├── RegistroPagoClienteScreen (boton + en pagos cliente)
+                    └── RegistroGastosScreen (boton + en gastos operativos)
 
 ================================================================================
 7. MODULOS Y PANTALLAS
@@ -526,6 +548,151 @@ APIs:
 (Sin cambios respecto a version anterior)
 
 ================================================================================
+7.14-7.20 MODULO OFRECIMIENTO DE SERVICIOS  [NUEVO 2026-05-11 sesion 2]
+================================================================================
+
+────────────────────────────────────────────────────────
+7.14 ventas_landing_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Landing intermedio entre MainMenu y los dos modulos comerciales
+
+Accede desde: MainMenu (tarjeta "Ventas")
+Navega a:
+  - CobrosHome (Venta de productos)
+  - ServiciosDashboard (Ofrecimiento de servicios)
+
+Elementos:
+  - AppBar "Ventas" + boton info_outline
+  - Titulo descriptivo
+  - 2 tarjetas _DivisionCard con icono, titulo, subtitulo y chevron
+  - Info dialog: explica las 2 divisiones
+
+────────────────────────────────────────────────────────
+7.15 servicios/servicios_dashboard.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Lista de trabajos/proyectos del modulo servicios
+
+Elementos:
+  - AppBar + boton dashboard financiero (icono bar_chart) + boton info
+  - FAB para crear nuevo trabajo
+  - Lista de trabajos con:
+      nombre, badge de estado (coloreado), nombre_cliente,
+      barra de progreso cobro (total_recibido / monto_total),
+      label de payment_status
+  - Pull-to-refresh
+  - Estado vacio con boton "Crear primer trabajo"
+
+Colores de estado:
+  draft=gris, pending=amarillo(primary), in_progress=azul(#0EA5E9),
+  completed=verde(success), cancelled=rojo(danger)
+
+APIs: GET /jobs?firebase_uid=xxx
+
+────────────────────────────────────────────────────────
+7.16 servicios/crear_trabajo_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Formulario para crear un nuevo trabajo/proyecto
+
+Campos:
+  - nombre (requerido)
+  - nombre_cliente (requerido)
+  - telefono_cliente (opcional)
+  - descripcion (opcional, multilinea)
+  - monto_total (requerido, numerico)
+  - estado (dropdown: draft/pending/in_progress)
+  - fecha_inicio / fecha_fin (DatePicker con tema oscuro)
+
+Flujo: Al crear exitosamente navega con pushReplacement a TrabajoDetalleScreen
+APIs: POST /jobs
+
+────────────────────────────────────────────────────────
+7.17 servicios/trabajo_detalle_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen (la mas compleja del modulo servicios)
+Funcion:    Vista completa de un trabajo con 4 secciones colapsables
+
+Secciones (ExpansionTile, initiallyExpanded: true):
+  1. Pagos del cliente   → lista + boton + → RegistroPagoClienteScreen
+  2. Colaboradores       → lista + boton + → bottom sheet agregar colaborador
+  3. Gastos operativos   → lista + boton + → RegistroGastosScreen
+  4. (header card siempre visible) Resumen financiero
+
+Resumen financiero siempre visible:
+  Total contratado / Total recibido / Saldo pendiente /
+  Gastos operativos / Pagos colaboradores / Utilidad neta / Margen %
+
+Header card:
+  - cliente, telefono, descripcion
+  - Dropdown de estado (cambia con PUT /jobs/:id)
+
+Eliminar items: Dismissible con swipe izquierda → fondo rojo con icono delete
+
+Bottom sheet colaboradores:
+  - Campo nombre, dropdown tipo_compensacion (5 opciones), campo monto
+  - Tipos: fijo, porcentual, por_horas, por_tarea, ganancias
+
+APIs:
+  GET  /jobs/:id?firebase_uid=xxx
+  PUT  /jobs/:id (cambio de estado)
+  POST /jobs/:id/team-members
+  DELETE /jobs/:id/team-members/:mid
+  DELETE /jobs/:id/customer-payments/:pid
+  DELETE /jobs/:id/expenses/:eid
+
+────────────────────────────────────────────────────────
+7.18 servicios/registro_pago_cliente_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Registrar un pago recibido del cliente
+
+Campos:
+  - tipo (dropdown: anticipo / pago_parcial / pago_final)
+  - monto (requerido, numerico)
+  - nota (opcional)
+
+Al guardar: actualiza automaticamente payment_status del job en el backend
+APIs: POST /jobs/:id/customer-payments
+
+────────────────────────────────────────────────────────
+7.19 servicios/registro_gastos_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Registrar un gasto operativo del trabajo
+
+Campos:
+  - descripcion (requerido)
+  - monto (requerido, numerico)
+  - categoria (chips seleccionables: materiales/transporte/equipo/alimentacion/otro)
+
+APIs: POST /jobs/:id/expenses
+
+────────────────────────────────────────────────────────
+7.20 servicios/financiero_dashboard_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Dashboard financiero global de todos los trabajos del usuario
+
+Metricas globales (suma de todos los jobs):
+  - Total contratado     = SUM(jobs.monto_total)
+  - Total recibido       = SUM(customer_payments.monto)
+  - Saldo pendiente      = total_contratado - total_recibido
+  - Gastos operativos    = SUM(operational_expenses.monto)
+  - Pagos colaboradores  = SUM(team_member_payments.monto)
+  - Utilidad neta        = recibido - gastos - pagos_colab
+  - Margen promedio      = promedio de margen de jobs con ingresos > 0
+
+Layout:
+  - Seccion Ingresos: 2 tarjetas (total contratado / total recibido) + 1 ancha (saldo)
+  - Seccion Costos: 2 tarjetas (gastos / pagos colab)
+  - Seccion Resultado: tarjeta grande utilidad + margen (borde verde/rojo segun valor)
+  - Lista de trabajos individuales con recibido y utilidad por trabajo
+
+APIs: GET /jobs?firebase_uid=xxx (reutiliza los datos agregados del listado)
+
+================================================================================
 8. SERVICIOS FLUTTER (lib/services/)
 ================================================================================
 
@@ -746,6 +913,89 @@ POST /shared-budgets/:id/request-delete                   [NUEVO]
 ────────────────────────────────────────────────────────
 (Sin cambios, ver version anterior del documento)
 
+────────────────────────────────────────────────────────
+10.8 OFRECIMIENTO DE SERVICIOS (JOBS)  [NUEVO 2026-05-11 sesion 2]
+────────────────────────────────────────────────────────
+
+GET /jobs?firebase_uid=xxx
+  Retorna: array de jobs con campos agregados:
+    id, firebase_uid, nombre, descripcion, nombre_cliente, telefono_cliente,
+    monto_total, estado, payment_status, fecha_inicio, fecha_fin, created_at,
+    total_recibido (SUM customer_payments),
+    total_gastos (SUM operational_expenses),
+    total_pagos_colaboradores (SUM team_member_payments)
+
+POST /jobs
+  Body: { firebase_uid, nombre, nombre_cliente, telefono_cliente?,
+          descripcion?, monto_total, estado?, fecha_inicio?, fecha_fin? }
+  Requeridos: firebase_uid, nombre, monto_total
+  Retorna: job recien creado
+  Efecto: crea registro en job_activity_logs (accion='created')
+
+GET /jobs/:id?firebase_uid=xxx
+  Retorna objeto completo:
+    {
+      job: { ...campos del trabajo },
+      teamMembers: [...],
+      customerPayments: [...],
+      expenses: [...],
+      teamPayments: [{ ...pago, nombre_colaborador }],
+      resumen: {
+        monto_total, total_recibido, saldo_pendiente,
+        total_gastos, total_pagos_colaboradores,
+        utilidad_neta, margen (%)
+      }
+    }
+  Formula utilidad_neta = total_recibido - total_gastos - total_pagos_colaboradores
+
+PUT /jobs/:id
+  Body: { firebase_uid, nombre?, descripcion?, nombre_cliente?,
+          telefono_cliente?, monto_total?, estado?, payment_status?,
+          fecha_inicio?, fecha_fin? }
+  Usa COALESCE para actualizar solo campos enviados
+  Si se envia estado: registra en job_activity_logs (accion='status_change')
+
+DELETE /jobs/:id?firebase_uid=xxx
+  Elimina trabajo y en cascada todos sus registros relacionados
+
+POST /jobs/:id/team-members
+  Body: { firebase_uid, nombre, tipo_compensacion,
+          monto_acordado?, porcentaje?, horas_trabajadas?, tarifa_hora? }
+  tipo_compensacion ENUM: fijo | porcentual | por_horas | por_tarea | ganancias
+  Calcula monto_calculado automaticamente:
+    fijo     → monto_acordado
+    por_horas → horas_trabajadas × tarifa_hora
+
+DELETE /jobs/:id/team-members/:mid?firebase_uid=xxx
+
+POST /jobs/:id/customer-payments
+  Body: { firebase_uid, monto, tipo?, nota? }
+  tipo ENUM: anticipo | pago_parcial | pago_final
+  Efectos:
+    1. Inserta pago en customer_payments
+    2. Recalcula payment_status del job:
+       recibido >= monto_total → 'paid'
+       recibido > 0            → 'partially_paid'
+       recibido = 0            → 'pending'
+    3. Registra en job_activity_logs (accion='customer_payment')
+
+DELETE /jobs/:id/customer-payments/:pid?firebase_uid=xxx
+
+POST /jobs/:id/expenses
+  Body: { firebase_uid, descripcion, monto, categoria? }
+  categoria libre: materiales | transporte | equipo | alimentacion | otro
+  Registra en job_activity_logs (accion='expense')
+
+DELETE /jobs/:id/expenses/:eid?firebase_uid=xxx
+
+POST /jobs/:id/team-member-payments
+  Body: { firebase_uid, team_member_id, monto, nota? }
+  Registra en job_activity_logs (accion='team_payment')
+  Retorna pago con nombre_colaborador del JOIN
+
+GET /jobs/:id/financial-summary?firebase_uid=xxx
+  Retorna resumen financiero puntual del trabajo (igual que resumen en GET /jobs/:id)
+
 ================================================================================
 11. BASE DE DATOS Y BACKEND CONFIG
 ================================================================================
@@ -786,6 +1036,35 @@ TABLAS COMPARTIDAS (shared_budgets module):
     Columna: pagado TINYINT(1) DEFAULT 0  ← activa desde 2026-05-11
   shared_settlements          → pagos de liquidacion entre usuarios
   shared_budget_activity_logs → historial de acciones
+
+TABLAS SERVICIOS (jobs module) [NUEVO 2026-05-11 sesion 2]:
+  jobs                  → trabajo/proyecto principal
+    id, firebase_uid, nombre, descripcion, nombre_cliente, telefono_cliente,
+    monto_total, estado ENUM(draft|pending|in_progress|completed|cancelled),
+    payment_status ENUM(pending|partially_paid|paid),
+    fecha_inicio, fecha_fin, created_at
+  job_team_members      → colaboradores asignados al trabajo
+    id, job_id, firebase_uid, nombre, tipo_compensacion ENUM(5 tipos),
+    monto_acordado, porcentaje, horas_trabajadas, tarifa_hora, monto_calculado
+    FK: job_id → jobs(id) ON DELETE CASCADE
+  customer_payments     → pagos recibidos del cliente
+    id, job_id, firebase_uid, monto, tipo ENUM(anticipo|pago_parcial|pago_final),
+    nota, fecha_pago
+    FK: job_id → jobs(id) ON DELETE CASCADE
+  team_member_payments  → pagos realizados a colaboradores
+    id, job_id, team_member_id, firebase_uid, monto, nota, fecha_pago
+    FK: job_id → jobs(id) ON DELETE CASCADE
+    FK: team_member_id → job_team_members(id) ON DELETE CASCADE
+  operational_expenses  → gastos operativos del trabajo
+    id, job_id, firebase_uid, descripcion, monto, categoria, fecha_gasto
+    FK: job_id → jobs(id) ON DELETE CASCADE
+  job_activity_logs     → historial de acciones del trabajo
+    id, job_id, firebase_uid, accion, detalle, created_at
+    FK: job_id → jobs(id) ON DELETE CASCADE
+
+MIGRACION EJECUTADA (2026-05-11 sesion 2):
+  database/migrations/add_servicios_jobs.sql → ejecutado en Clever Cloud OK
+  Las 6 tablas del modulo servicios ya existen en produccion.
 
 MIGRACION PENDIENTE (si no se ha ejecutado):
   ALTER TABLE shared_budgets
@@ -965,6 +1244,117 @@ LECCIONES APRENDIDAS:
   - Nunca borrar Pub Cache, NDK o Flutter SDK para liberar espacio (rompe builds)
   - Mantener al menos 5 GB libres en disco para generar APKs
   - Siempre revertir baseUrl a produccion antes de buildear APK de release
+
+================================================================================
+18. SESION 2026-05-11 (sesion 2) - MVP MODULO OFRECIMIENTO DE SERVICIOS
+================================================================================
+
+OBJETIVO:
+  Reestructurar el modulo Cobros en dos divisiones comerciales independientes:
+    1. Venta de productos  → CobrosHome existente (sin cambios internos)
+    2. Ofrecimiento de servicios → nuevo modulo completo (jobs)
+
+CAMBIOS IMPLEMENTADOS:
+  1. main_menu.dart
+       - Tarjeta "Cobros" renombrada a "Ventas" (icono storefront)
+       - Navegacion cambia de CobrosHome a VentasLandingScreen
+       - Texto del info dialog actualizado
+
+  2. ventas_landing_screen.dart (NUEVO)
+       - Landing con 2 tarjetas _DivisionCard
+       - Boton info_outline con explicacion de las 2 divisiones
+
+  3. servicios/ (directorio NUEVO con 6 pantallas)
+       - servicios_dashboard.dart
+       - crear_trabajo_screen.dart
+       - trabajo_detalle_screen.dart
+       - registro_pago_cliente_screen.dart
+       - registro_gastos_screen.dart
+       - financiero_dashboard_screen.dart
+
+  4. services/servicios_service.dart (NUEVO)
+       - 11 metodos estaticos para CRUD completo del modulo jobs
+
+  5. backend/server.js
+       - +12 rutas nuevas agrupadas bajo /jobs
+       - payment_status se recalcula automaticamente al registrar pago cliente
+       - job_activity_logs registra cada accion importante
+
+  6. database/migrations/add_servicios_jobs.sql (NUEVO)
+       - 6 tablas con IF NOT EXISTS y FK CASCADE
+       - EJECUTADO exitosamente en Clever Cloud (2026-05-11)
+
+  7. APK generado: build/app/outputs/flutter-apk/app-release.apk (24.4 MB)
+
+PATRON DE BOTONES INFO:
+  TODAS las pantallas del modulo servicios tienen boton info_outline en el AppBar.
+  Patron identico al resto de la app: showDialog → AlertDialog con
+  backgroundColor: AppTheme.surface, borderRadius: 12, accion "Entendido".
+
+MODELO FINANCIERO IMPLEMENTADO:
+  Ingreso bruto (total_recibido)
+  - Gastos operativos (operational_expenses)
+  - Pagos a colaboradores (team_member_payments)
+  = Utilidad neta
+  Margen % = (utilidad_neta / total_recibido) * 100
+
+REGLAS DE NEGOCIO IMPORTANTES:
+  - customer_payments y team_member_payments NUNCA se mezclan en calculos
+  - Cada pago del cliente actualiza automaticamente el payment_status del job
+  - Todos los DELETE son en cascada desde jobs
+  - firebase_uid requerido en todos los endpoints (GET query / POST/PUT/DELETE body)
+
+LECCIONES APRENDIDAS:
+  - El modulo CobrosHome no fue tocado internamente: VentasLandingScreen
+    actua como capa de navegacion sin modificar la logica existente
+  - mysql CLI en Windows permite ejecutar migraciones directamente desde la
+    terminal sin necesidad de entrar al panel de Clever Cloud
+  - El unused_import en main_menu.dart (cobros_home.dart) fue el unico warning
+    nuevo introducido, corregido de inmediato
+
+================================================================================
+19. SESION 2026-05-12 - FIX: COMMIT MODULO SERVICIOS (JOBS)
+================================================================================
+
+PROBLEMA DETECTADO:
+  Error al crear trabajo: 404 en POST /jobs desde la app.
+
+CAUSA RAIZ:
+  La sesion 2 del 2026-05-11 (modulo Ofrecimiento de Servicios) implemento
+  12 rutas en server.js y 6 pantallas Flutter, pero NINGUN archivo fue commiteado
+  ni pusheado a GitHub. Render deployó el ultimo commit (7b7e515) que no
+  incluia esas rutas → 404 en todos los endpoints /jobs.
+
+ARCHIVOS COMMITEADOS EN ESTA SESION (lo que faltaba de la sesion anterior):
+  backend/server.js                          → +12 rutas /jobs
+  lib/main_menu.dart                         → Ventas → VentasLandingScreen
+  lib/ventas_landing_screen.dart             → NUEVO
+  lib/services/servicios_service.dart        → NUEVO
+  lib/servicios/servicios_dashboard.dart     → NUEVO
+  lib/servicios/crear_trabajo_screen.dart    → NUEVO
+  lib/servicios/trabajo_detalle_screen.dart  → NUEVO
+  lib/servicios/registro_pago_cliente_screen.dart → NUEVO
+  lib/servicios/registro_gastos_screen.dart  → NUEVO
+  lib/servicios/financiero_dashboard_screen.dart  → NUEVO
+  lib/widgets/ventas/margen_objetivo_card.dart    → NUEVO
+  database/migrations/add_servicios_jobs.sql      → NUEVO
+  android/app/google-services.json               → google-services.json ahora presente
+  android/app/build.gradle                       → actualizado
+
+BUG 12: POST /jobs retorna 404 [2026-05-12]
+  Problema: Las rutas /jobs existian en server.js local pero nunca fueron
+            commiteadas. Render servia el codigo sin esas rutas.
+  Solucion: Commit + push de server.js y todos los archivos del modulo servicios.
+  Leccion:  Siempre verificar con "git status" antes de cerrar sesion para
+            asegurar que TODO el codigo nuevo quedo commiteado y pusheado.
+            El APK puede estar en produccion pero si el backend no fue pusheado,
+            la app fallara con 404 en los nuevos endpoints.
+
+ESTADO POST-FIX:
+  - Render auto-redespliega al recibir el push (1-3 minutos)
+  - Todos los endpoints /jobs quedan activos en produccion
+  - APK existente (24.4 MB, sesion 2026-05-11 sesion 2) sigue siendo valido
+    (el codigo Flutter ya tenia las pantallas del modulo servicios)
 
 ================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING

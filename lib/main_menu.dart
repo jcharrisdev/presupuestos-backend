@@ -4,7 +4,7 @@ import 'lista_presupuestos.dart';
 import 'ahorro_meta.dart';
 import 'calendario.dart';
 import 'login_screen.dart';
-import 'cobros_home.dart';
+import 'ventas_landing_screen.dart';
 import 'shared_budgets_list_screen.dart';
 import 'services/auth_service.dart';
 import 'dashboard_screen.dart';
@@ -56,7 +56,7 @@ class MainMenu extends StatelessWidget {
                   '1. Presupuesto — Individual (tus gastos personales) o Compartido (con otra persona).\n'
                   '2. Ahorro y Metas — define metas de ahorro y sigue su progreso.\n'
                   '3. Calendario — ve todos tus pagos y cobros programados.\n'
-                  '4. Cobros — gestiona producción, ventas y cobros a clientes.\n\n'
+                  '4. Ventas — elige entre Venta de productos (catálogo, producción y cobros) u Ofrecimiento de servicios (trabajos con colaboradores y utilidad neta).\n\n'
                   'Toca cualquier tarjeta para entrar al módulo.',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
                 ),
@@ -143,12 +143,12 @@ class MainMenu extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _NavCard(
-                icon: Icons.attach_money,
-                title: 'Cobros',
-                subtitle: 'Producción, ventas y cobros a clientes',
+                icon: Icons.storefront_outlined,
+                title: 'Ventas',
+                subtitle: 'Venta de productos y ofrecimiento de servicios',
                 color: AppTheme.success,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CobrosHome(firebaseUid: firebaseUid),
+                  builder: (_) => VentasLandingScreen(firebaseUid: firebaseUid),
                 )),
               ),
 

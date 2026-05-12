@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "750057422826-uk1ara66d751tiqqn8h1gi1edl5rk3gg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.salarying",
+            "certificate_hash": "d40a8975efa9c472de4004e4396d3b205d2dc459"
+          }
+        },
+        {
           "client_id": "750057422826-00pupm87b438ettnjqnd7qj1pgr7ji8u.apps.googleusercontent.com",
           "client_type": 3
         }

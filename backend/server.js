@@ -3096,6 +3096,326 @@ app.get('/shared-budgets/:id/settlements', async (req, res) => {
 });
 
 // =============================================================================
+// MÓDULO: OFRECIMIENTO DE SERVICIOS (JOBS)
+// =============================================================================
+
+// GET /jobs — lista de trabajos con resumen financiero
+app.get('/jobs', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [jobs] = await db.execute(
+      `SELECT j.*,
+        COALESCE(SUM(cp.monto), 0) AS total_recibido,
+        COALESCE(SUM(oe.monto), 0) AS total_gastos,
+        COALESCE(SUM(tmp.monto), 0) AS total_pagos_colaboradores
+       FROM jobs j
+       LEFT JOIN customer_payments cp ON cp.job_id = j.id
+       LEFT JOIN operational_expenses oe ON oe.job_id = j.id
+       LEFT JOIN team_member_payments tmp ON tmp.job_id = j.id
+       WHERE j.firebase_uid = ?
+       GROUP BY j.id
+       ORDER BY j.created_at DESC`,
+      [firebase_uid]
+    );
+    res.json(jobs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /jobs — crear trabajo
+app.post('/jobs', async (req, res) => {
+  const { firebase_uid, nombre, descripcion, nombre_cliente, telefono_cliente, monto_total, estado, fecha_inicio, fecha_fin } = req.body;
+  if (!firebase_uid || !nombre || monto_total === undefined) {
+    return res.status(400).json({ error: 'firebase_uid, nombre y monto_total son requeridos' });
+  }
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO jobs (firebase_uid, nombre, descripcion, nombre_cliente, telefono_cliente, monto_total, estado, fecha_inicio, fecha_fin)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, nombre, descripcion || null, nombre_cliente || null, telefono_cliente || null,
+       monto_total, estado || 'draft', fecha_inicio || null, fecha_fin || null]
+    );
+    await db.execute(
+      `INSERT INTO job_activity_logs (job_id, firebase_uid, accion, detalle) VALUES (?, ?, ?, ?)`,
+      [result.insertId, firebase_uid, 'created', `Trabajo "${nombre}" creado`]
+    );
+    const [[job]] = await db.execute('SELECT * FROM jobs WHERE id = ?', [result.insertId]);
+    res.status(201).json(job);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /jobs/:id — detalle completo
+app.get('/jobs/:id', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[job]] = await db.execute('SELECT * FROM jobs WHERE id = ? AND firebase_uid = ?', [req.params.id, firebase_uid]);
+    if (!job) return res.status(404).json({ error: 'Trabajo no encontrado' });
+
+    const [teamMembers] = await db.execute(
+      'SELECT * FROM job_team_members WHERE job_id = ? ORDER BY created_at ASC', [req.params.id]
+    );
+    const [customerPayments] = await db.execute(
+      'SELECT * FROM customer_payments WHERE job_id = ? ORDER BY fecha_pago DESC', [req.params.id]
+    );
+    const [expenses] = await db.execute(
+      'SELECT * FROM operational_expenses WHERE job_id = ? ORDER BY fecha_gasto DESC', [req.params.id]
+    );
+    const [teamPayments] = await db.execute(
+      'SELECT tmp.*, jtm.nombre AS nombre_colaborador FROM team_member_payments tmp JOIN job_team_members jtm ON jtm.id = tmp.team_member_id WHERE tmp.job_id = ? ORDER BY tmp.fecha_pago DESC',
+      [req.params.id]
+    );
+
+    const totalRecibido = customerPayments.reduce((s, p) => s + parseFloat(p.monto), 0);
+    const totalGastos = expenses.reduce((s, e) => s + parseFloat(e.monto), 0);
+    const totalPagosColab = teamPayments.reduce((s, p) => s + parseFloat(p.monto), 0);
+    const utilidadNeta = totalRecibido - totalGastos - totalPagosColab;
+    const margen = totalRecibido > 0 ? (utilidadNeta / totalRecibido) * 100 : 0;
+
+    res.json({
+      job,
+      teamMembers,
+      customerPayments,
+      expenses,
+      teamPayments,
+      resumen: {
+        monto_total: parseFloat(job.monto_total),
+        total_recibido: totalRecibido,
+        saldo_pendiente: parseFloat(job.monto_total) - totalRecibido,
+        total_gastos: totalGastos,
+        total_pagos_colaboradores: totalPagosColab,
+        utilidad_neta: utilidadNeta,
+        margen: parseFloat(margen.toFixed(2)),
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /jobs/:id — editar trabajo
+app.put('/jobs/:id', async (req, res) => {
+  const { firebase_uid, nombre, descripcion, nombre_cliente, telefono_cliente, monto_total, estado, payment_status, fecha_inicio, fecha_fin } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[job]] = await db.execute('SELECT id FROM jobs WHERE id = ? AND firebase_uid = ?', [req.params.id, firebase_uid]);
+    if (!job) return res.status(404).json({ error: 'Trabajo no encontrado' });
+
+    await db.execute(
+      `UPDATE jobs SET nombre=COALESCE(?,nombre), descripcion=COALESCE(?,descripcion),
+       nombre_cliente=COALESCE(?,nombre_cliente), telefono_cliente=COALESCE(?,telefono_cliente),
+       monto_total=COALESCE(?,monto_total), estado=COALESCE(?,estado),
+       payment_status=COALESCE(?,payment_status), fecha_inicio=COALESCE(?,fecha_inicio),
+       fecha_fin=COALESCE(?,fecha_fin) WHERE id = ?`,
+      [nombre||null, descripcion||null, nombre_cliente||null, telefono_cliente||null,
+       monto_total||null, estado||null, payment_status||null, fecha_inicio||null, fecha_fin||null, req.params.id]
+    );
+    if (estado) {
+      await db.execute(
+        `INSERT INTO job_activity_logs (job_id, firebase_uid, accion, detalle) VALUES (?, ?, ?, ?)`,
+        [req.params.id, firebase_uid, 'status_change', `Estado cambiado a "${estado}"`]
+      );
+    }
+    const [[updated]] = await db.execute('SELECT * FROM jobs WHERE id = ?', [req.params.id]);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /jobs/:id — eliminar trabajo
+app.delete('/jobs/:id', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[job]] = await db.execute('SELECT id FROM jobs WHERE id = ? AND firebase_uid = ?', [req.params.id, firebase_uid]);
+    if (!job) return res.status(404).json({ error: 'Trabajo no encontrado' });
+    await db.execute('DELETE FROM jobs WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /jobs/:id/team-members — agregar colaborador
+app.post('/jobs/:id/team-members', async (req, res) => {
+  const { firebase_uid, nombre, tipo_compensacion, monto_acordado, porcentaje, horas_trabajadas, tarifa_hora } = req.body;
+  if (!firebase_uid || !nombre || !tipo_compensacion) {
+    return res.status(400).json({ error: 'firebase_uid, nombre y tipo_compensacion son requeridos' });
+  }
+  try {
+    let calculado = 0;
+    if (tipo_compensacion === 'fijo') calculado = parseFloat(monto_acordado) || 0;
+    else if (tipo_compensacion === 'por_horas') calculado = (parseFloat(horas_trabajadas) || 0) * (parseFloat(tarifa_hora) || 0);
+
+    const [result] = await db.execute(
+      `INSERT INTO job_team_members (job_id, firebase_uid, nombre, tipo_compensacion, monto_acordado, porcentaje, horas_trabajadas, tarifa_hora, monto_calculado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.params.id, firebase_uid, nombre, tipo_compensacion,
+       monto_acordado || 0, porcentaje || 0, horas_trabajadas || 0, tarifa_hora || 0, calculado]
+    );
+    const [[member]] = await db.execute('SELECT * FROM job_team_members WHERE id = ?', [result.insertId]);
+    res.status(201).json(member);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /jobs/:id/team-members/:mid — eliminar colaborador
+app.delete('/jobs/:id/team-members/:mid', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute('DELETE FROM job_team_members WHERE id = ? AND job_id = ?', [req.params.mid, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /jobs/:id/customer-payments — registrar pago del cliente
+app.post('/jobs/:id/customer-payments', async (req, res) => {
+  const { firebase_uid, monto, tipo, nota } = req.body;
+  if (!firebase_uid || !monto) return res.status(400).json({ error: 'firebase_uid y monto son requeridos' });
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO customer_payments (job_id, firebase_uid, monto, tipo, nota) VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, firebase_uid, monto, tipo || 'pago_parcial', nota || null]
+    );
+    // Recalcular payment_status
+    const [[{ total_recibido }]] = await db.execute(
+      'SELECT COALESCE(SUM(monto),0) AS total_recibido FROM customer_payments WHERE job_id = ?', [req.params.id]
+    );
+    const [[job]] = await db.execute('SELECT monto_total FROM jobs WHERE id = ?', [req.params.id]);
+    const newStatus = parseFloat(total_recibido) >= parseFloat(job.monto_total) ? 'paid'
+      : parseFloat(total_recibido) > 0 ? 'partially_paid' : 'pending';
+    await db.execute('UPDATE jobs SET payment_status = ? WHERE id = ?', [newStatus, req.params.id]);
+    await db.execute(
+      `INSERT INTO job_activity_logs (job_id, firebase_uid, accion, detalle) VALUES (?, ?, ?, ?)`,
+      [req.params.id, firebase_uid, 'customer_payment', `Pago cliente: $${monto} (${tipo || 'pago_parcial'})`]
+    );
+    const [[payment]] = await db.execute('SELECT * FROM customer_payments WHERE id = ?', [result.insertId]);
+    res.status(201).json(payment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /jobs/:id/customer-payments/:pid — eliminar pago del cliente
+app.delete('/jobs/:id/customer-payments/:pid', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute('DELETE FROM customer_payments WHERE id = ? AND job_id = ?', [req.params.pid, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /jobs/:id/expenses — registrar gasto operativo
+app.post('/jobs/:id/expenses', async (req, res) => {
+  const { firebase_uid, descripcion, monto, categoria } = req.body;
+  if (!firebase_uid || !descripcion || !monto) {
+    return res.status(400).json({ error: 'firebase_uid, descripcion y monto son requeridos' });
+  }
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO operational_expenses (job_id, firebase_uid, descripcion, monto, categoria) VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, firebase_uid, descripcion, monto, categoria || null]
+    );
+    await db.execute(
+      `INSERT INTO job_activity_logs (job_id, firebase_uid, accion, detalle) VALUES (?, ?, ?, ?)`,
+      [req.params.id, firebase_uid, 'expense', `Gasto: ${descripcion} $${monto}`]
+    );
+    const [[expense]] = await db.execute('SELECT * FROM operational_expenses WHERE id = ?', [result.insertId]);
+    res.status(201).json(expense);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /jobs/:id/expenses/:eid — eliminar gasto
+app.delete('/jobs/:id/expenses/:eid', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute('DELETE FROM operational_expenses WHERE id = ? AND job_id = ?', [req.params.eid, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /jobs/:id/team-member-payments — registrar pago a colaborador
+app.post('/jobs/:id/team-member-payments', async (req, res) => {
+  const { firebase_uid, team_member_id, monto, nota } = req.body;
+  if (!firebase_uid || !team_member_id || !monto) {
+    return res.status(400).json({ error: 'firebase_uid, team_member_id y monto son requeridos' });
+  }
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO team_member_payments (job_id, team_member_id, firebase_uid, monto, nota) VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, team_member_id, firebase_uid, monto, nota || null]
+    );
+    await db.execute(
+      `INSERT INTO job_activity_logs (job_id, firebase_uid, accion, detalle) VALUES (?, ?, ?, ?)`,
+      [req.params.id, firebase_uid, 'team_payment', `Pago colaborador: $${monto}`]
+    );
+    const [[payment]] = await db.execute(
+      `SELECT tmp.*, jtm.nombre AS nombre_colaborador FROM team_member_payments tmp
+       JOIN job_team_members jtm ON jtm.id = tmp.team_member_id WHERE tmp.id = ?`,
+      [result.insertId]
+    );
+    res.status(201).json(payment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /jobs/:id/financial-summary — resumen financiero
+app.get('/jobs/:id/financial-summary', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[job]] = await db.execute('SELECT * FROM jobs WHERE id = ? AND firebase_uid = ?', [req.params.id, firebase_uid]);
+    if (!job) return res.status(404).json({ error: 'Trabajo no encontrado' });
+
+    const [[{ total_recibido }]] = await db.execute(
+      'SELECT COALESCE(SUM(monto),0) AS total_recibido FROM customer_payments WHERE job_id = ?', [req.params.id]
+    );
+    const [[{ total_gastos }]] = await db.execute(
+      'SELECT COALESCE(SUM(monto),0) AS total_gastos FROM operational_expenses WHERE job_id = ?', [req.params.id]
+    );
+    const [[{ total_pagos_colab }]] = await db.execute(
+      'SELECT COALESCE(SUM(monto),0) AS total_pagos_colab FROM team_member_payments WHERE job_id = ?', [req.params.id]
+    );
+
+    const rec = parseFloat(total_recibido);
+    const gas = parseFloat(total_gastos);
+    const cob = parseFloat(total_pagos_colab);
+    const utilidad = rec - gas - cob;
+    const margen = rec > 0 ? (utilidad / rec) * 100 : 0;
+
+    res.json({
+      monto_total: parseFloat(job.monto_total),
+      total_recibido: rec,
+      saldo_pendiente: parseFloat(job.monto_total) - rec,
+      total_gastos: gas,
+      total_pagos_colaboradores: cob,
+      utilidad_neta: utilidad,
+      margen: parseFloat(margen.toFixed(2)),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
 const PORT = process.env.PORT || 3002;

@@ -13,7 +13,11 @@ node_modules/
 android/.gradle/
 android/local.properties
 android/key.properties
+android/app/release.jks
 android/**/GeneratedPluginRegistrant.java
+
+# Credenciales encriptadas
+keystore-credentials.enc
 
 # iOS / macOS
 ios/Pods/
