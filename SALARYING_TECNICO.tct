@@ -1,0 +1,971 @@
+================================================================================
+SALARYING - DOCUMENTO TECNICO COMPLETO
+Generado:        2026-05-06
+Ultima actualizacion: 2026-05-11
+Version App:     1.1.0+2
+================================================================================
+
+================================================================================
+1. INFORMACION GENERAL
+================================================================================
+
+Nombre:              Salarying
+Descripcion:         Gestor de finanzas personales y pequeños negocios
+Version Flutter:     1.1.0+2
+Package ID Android:  com.example.salarying
+Plataformas:         Android (principal), iOS, Web, Windows, Linux, macOS
+
+URLs de Produccion:
+  Backend REST:      https://presupuestos-backend-h3l6.onrender.com
+  Base de datos:     bvmmbs7zrnufnskqoxwm-mysql.services.clever-cloud.com
+  Firebase Project:  salary-bi (proyecto: 750057422826)
+
+Repositorio:         https://github.com/jcharrisdev/presupuestos-backend
+
+================================================================================
+2. STACK TECNOLOGICO
+================================================================================
+
+FRONTEND (Flutter/Dart)
+  Framework:         Flutter SDK 3.29.3
+  Lenguaje:          Dart
+  Autenticacion:     google_sign_in ^6.2.1
+  HTTP:              http ^1.2.0
+  Cache local:       hive ^2.2.3 + hive_flutter ^1.1.0
+  Notificaciones:    flutter_local_notifications ^17.2.4
+  Generacion PDF:    pdf ^3.10.8 + printing ^5.12.0
+  Calendario UI:     table_calendar ^3.1.2
+  Fechas:            intl ^0.19.0
+
+BACKEND (Node.js)
+  Framework:         Express.js ^4.21.0
+  Base de datos:     mysql2 ^3.16.0 (con Promises y Pool)
+  CORS:              cors ^2.8.5
+  Cron jobs:         node-cron ^3.0.3
+  HTTP client:       node-fetch ^3.3.2
+  Puerto:            3002 (configurable por env PORT)
+  Version servidor:  2.5
+
+INFRAESTRUCTURA
+  Backend hosting:   Render (plan gratuito, duerme tras inactividad)
+  Base de datos:     Clever Cloud MySQL (max 5 conexiones por usuario)
+  Autenticacion:     Firebase / Google Sign-In
+  Keystore release:  android/app/release.jks (alias: salarying)
+
+================================================================================
+3. AUTENTICACION
+================================================================================
+
+Sistema: Google Sign-In (google_sign_in package)
+ID de usuario: email de la cuenta Google (usado como firebase_uid en todos los endpoints)
+
+FLUJO DE AUTENTICACION:
+  1. App inicia → main() ejecuta AuthService.silentSignIn()
+  2. Si hay sesion activa → ir directo a MainMenu (sin pantalla de login)
+  3. Si no hay sesion → mostrar LoginScreen
+  4. Usuario presiona "Sign in with Google" → abre selector de cuenta
+  5. Login exitoso → navegar a MainMenu con email y displayName
+  6. En logout: AuthService.signOut() → limpia cache Hive → volver a LoginScreen
+
+IDENTIFICADOR DE USUARIO:
+  - firebase_uid = email de Google (ej: usuario@gmail.com)
+  - Se pasa como query param en todos los GET y en el body de POST/PUT/DELETE
+  - Permite recuperar datos sin migracion si el usuario cambia de dispositivo
+
+ARCHIVOS RELACIONADOS:
+  lib/services/auth_service.dart    → wrapper Google Sign-In
+  lib/login_screen.dart             → pantalla de login
+  lib/main.dart (_AuthGate)         → puerta de autenticacion
+  android/app/google-services.json  → configuracion Firebase Android
+
+HUELLAS SHA-1 REGISTRADAS EN FIREBASE:
+  Debug:   06:42:B4:E6:CF:30:AE:6D:03:1C:7D:F3:92:62:73:EF:C1:45:D2:F6
+  Release: D4:0A:89:75:EF:A9:C4:72:DE:40:04:E4:39:6D:3B:20:5D:2D:C4:59
+
+================================================================================
+4. ARQUITECTURA
+================================================================================
+
+Flutter App
+    │
+    │ HTTP (ApiClient, timeout 55s)
+    ▼
+REST API (Express.js en Render)
+    │
+    │ mysql2 Pool (max 3 conexiones - limite Clever Cloud)
+    ▼
+MySQL (Clever Cloud)
+
+COMPONENTES INTERNOS FLUTTER:
+  AuthService   → Google Sign-In
+  ApiClient     → cliente HTTP centralizado (base URL + timeout)
+  CacheService  → Hive (cache local 24h TTL)
+  NotifService  → notificaciones locales Android
+  PdfService    → generacion de PDF
+  SharedBudgetService → CRUD presupuestos compartidos
+  [X]Service    → capas de servicio por modulo
+
+ESTRATEGIA DE CACHE:
+  - Lista presupuestos: cache-first (Hive, 24h TTL)
+  - Lista ventas: cache-first (Hive, 24h TTL)
+  - Detalles/detalle: siempre desde API (sin cache)
+  - Al logout: se limpia todo el cache del usuario
+
+TIMEOUT:
+  - 55 segundos en ApiClient (Render duerme tras inactividad, tarda ~50s en despertar)
+
+================================================================================
+5. ESTRUCTURA DE ARCHIVOS
+================================================================================
+
+presupuestos-backend/
+├── lib/
+│   ├── main.dart
+│   ├── login_screen.dart
+│   ├── main_menu.dart                      ← ACTUALIZADO: card expandible Presupuesto
+│   ├── dashboard_screen.dart               ← REDISEÑADO: dashboard Harvard completo
+│   ├── lista_presupuestos.dart
+│   ├── crear_presupuesto.dart
+│   ├── editar_presupuesto.dart
+│   ├── detalles_presupuesto.dart
+│   ├── presupuestos_service.dart
+│   ├── ahorro_meta.dart
+│   ├── progreso_ahorro.dart
+│   ├── calendario.dart
+│   ├── cobros_home.dart
+│   ├── productos_screen.dart
+│   ├── produccion_detalle.dart
+│   ├── venta_detalle.dart
+│   ├── lista_compras_screen.dart
+│   ├── cliente_estado_cuenta_screen.dart
+│   ├── receta_screen.dart
+│   ├── shared_budget_detail.dart           ← REDISEÑADO: igual a presupuesto normal
+│   ├── shared_budget_create.dart           → crear presupuesto compartido
+│   ├── shared_budget_invitations.dart      → aceptar/rechazar invitaciones
+│   ├── shared_budgets_list_screen.dart     → lista de presupuestos compartidos
+│   ├── theme/
+│   │   └── app_theme.dart
+│   ├── services/
+│   │   ├── auth_service.dart
+│   │   ├── api_client.dart
+│   │   ├── cache_service.dart
+│   │   ├── notification_service.dart
+│   │   ├── pdf_service.dart
+│   │   ├── shared_budget_service.dart      ← ACTUALIZADO: confirmarMiParte, requestDelete
+│   │   ├── products_service.dart
+│   │   ├── sales_service.dart
+│   │   ├── savings_service.dart
+│   │   └── calendar_service.dart
+│   └── widgets/
+│       ├── widgets.dart
+│       ├── confirm_dialog.dart
+│       ├── empty_state.dart
+│       ├── section_header.dart
+│       ├── presupuestos/
+│       │   ├── balance_card.dart
+│       │   ├── pago_form_sheet.dart
+│       │   └── gasto_form_sheet.dart
+│       └── ventas/
+│           ├── cliente_tile.dart
+│           ├── margen_objetivo_card.dart
+│           ├── costos_produccion_card.dart
+│           └── reporte_produccion_modal.dart
+├── backend/
+│   ├── server.js
+│   ├── package.json
+│   ├── migration_shared_budgets.sql        ← ACTUALIZADO: columna delete_requested_by
+│   └── .env
+├── android/
+│   ├── app/
+│   │   ├── build.gradle
+│   │   ├── google-services.json
+│   │   ├── release.jks
+│   │   └── src/main/AndroidManifest.xml
+│   └── key.properties
+├── pubspec.yaml
+├── keystore-credentials.enc
+└── SALARYING_TECNICO.tct
+
+================================================================================
+6. NAVEGACION (ARBOL DE RUTAS)
+================================================================================
+
+No usa router central. Navega con Navigator.push() directo.
+
+main()
+├── SplashScreen (verificando sesion)
+├── LoginScreen (sin sesion)
+└── MainMenu (con sesion)
+    ├── DashboardScreen                     ← REDISEÑADO completo
+    ├── [Card expandible: Presupuesto]      ← NUEVO: submenu con dos opciones
+    │   ├── ListaPresupuestos (Individual)
+    │   │   ├── CrearPresupuesto (FAB)
+    │   │   └── DetallesPresupuesto (tap tarjeta)
+    │   │       ├── EditarPresupuesto (boton editar)
+    │   │       └── [exportar PDF] (boton PDF)
+    │   └── SharedBudgetsListScreen (Compartido)
+    │       ├── SharedBudgetCreateScreen (FAB)
+    │       ├── SharedBudgetInvitationsScreen (icono buzón)
+    │       └── SharedBudgetDetailScreen (tap tarjeta) ← REDISEÑADO
+    ├── AhorroMetaScreen
+    │   └── ProgresoAhorroScreen (boton "ver progreso")
+    ├── CalendarioScreen (3 tabs: Calendario / Lista / Flujo)
+    └── CobrosHome (3 tabs: Productos / Produccion / Ventas)
+        ├── [Tab Productos] → ProductosScreen
+        │   └── RecetaScreen (boton "Receta" en variante)
+        ├── [Tab Produccion] → ProduccionDetalle (tap tarjeta)
+        └── [Tab Ventas] → VentaDetalle (tap tarjeta)
+            ├── ListaComprasScreen (boton lista compras)
+            └── ClienteEstadoCuentaScreen (boton estado cuenta)
+
+================================================================================
+7. MODULOS Y PANTALLAS
+================================================================================
+
+────────────────────────────────────────────────────────
+7.1 main.dart
+────────────────────────────────────────────────────────
+Tipo:       Core / punto de entrada
+Funcion:    Inicializa la app, verifica sesion, decide que pantalla mostrar
+
+Componentes:
+  routeObserver    → RouteObserver global (FIX bug cobros-calendario)
+  main()           → inicializa Hive, NotificationService, CacheService, intl español
+  MyApp            → MaterialApp con AppTheme
+  _AuthGate        → decide LoginScreen vs MainMenu
+  _SplashScreen    → pantalla de carga durante verificacion de sesion
+
+────────────────────────────────────────────────────────
+7.2 login_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Pantalla de autenticacion con Google
+
+Elementos:
+  - Logo de la app
+  - Boton "Sign in with Google" con logo Google (CustomPaint)
+  - Manejo de errores con SnackBar
+  - Navega a MainMenu tras autenticacion exitosa
+
+Servicios: AuthService.signIn()
+
+────────────────────────────────────────────────────────
+7.3 main_menu.dart  [ACTUALIZADO 2026-05-11]
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Menu principal con navegacion a modulos
+
+CAMBIO: El boton "Mis Presupuestos" y el boton "Compartido" fueron fusionados
+en un unico widget _PresupuestoExpandCard que se expande al tocarlo.
+
+Elementos:
+  - AppBar con avatar del usuario (foto Google o inicial)
+  - Card Dashboard
+  - _PresupuestoExpandCard (expandible con animacion)
+      → Sub-card "Presupuesto Individual" → ListaPresupuestos
+      → Sub-card "Presupuesto Compartido" → SharedBudgetsListScreen
+  - Card Ahorro y Metas
+  - Card Calendario
+  - Card Cobros
+  - Indicador de estado del sistema
+  - Boton logout
+
+Widgets nuevos en este archivo:
+  _PresupuestoExpandCard  → StatefulWidget con AnimationController y AnimatedSize
+  _SubCard                → tarjeta mas pequena para sub-opciones del menu
+  _NavCard                → tarjeta de navegacion principal (sin cambios)
+
+Datos propagados: firebaseUid (email), displayName, photoUrl a todas las pantallas
+
+────────────────────────────────────────────────────────
+7.4 dashboard_screen.dart  [REDISEÑADO 2026-05-11]
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Panel financiero de nivel Harvard con 7 cards
+
+CAMBIO CRITICO - CAMPOS CORRECTOS DE LA API:
+  Presupuesto:
+    - gastado NO viene del endpoint GET /presupuestos
+    - Se debe llamar GET /presupuestos/:id/detalle y calcular:
+        gastado = SUM(movimiento.monto_pagado_real) WHERE pagado=1
+    - fecha_inicio/fecha_fin vienen de detalle.periodo
+    - total_fijos/total_variables/total_ahorro vienen de detalle.resumen
+      (totalFijo, totalNoFijo, totalAhorro)
+  Ahorros:
+    - El campo meta se llama 'monto_meta' (NO 'monto')
+    - El campo ahorrado se llama 'monto_ahorrado' (NO 'total_ahorrado')
+    - El total real = monto_ahorrado + total_aportaciones
+
+Cards del dashboard (en orden):
+  1. SALUD FINANCIERA
+     - Score 0-100 con gauge circular
+     - Color: Excelente (≥90 verde), Buena (≥75 verde), Regular (≥60 amarillo),
+              Baja (≥40 naranja), Critica (<40 rojo)
+     - Insights automaticos: ritmo de gasto, tasa ahorro, deudas compartidas,
+       pagos urgentes
+     - Formula del score:
+         Control presupuesto  → 40 pts (segun diferencia gasto% vs periodo%)
+         Tasa de ahorro       → 30 pts (≥20%=30, ≥10%=20, ≥5%=10)
+         Balance compartido   → 20 pts (sin deuda=20, <$50=15, <$200=8)
+         Flujo positivo       → 10 pts (cobrado >= gastado)
+
+  2. PERIODO ACTUAL
+     - Nombre del presupuesto activo
+     - Monto grande (gastado) vs monto chico (presupuesto total)
+     - Barra de gasto (amarilla → roja al 90%)
+     - Barra del periodo transcurrido (gris)
+     - Indicador de ritmo: "Ritmo alto/ideal/bajo"
+
+  3. FLUJO NETO + TASA AHORRO (dos mini cards lado a lado)
+     - Flujo neto = total_cobrado (ventas) − gastado real
+     - Tasa ahorro = total_ahorro del presupuesto / monto_total × 100%
+
+  4. AHORRO Y METAS
+     - Meta con mayor progreso porcentual
+     - Barra de progreso coloreada
+     - Cantidad de metas restantes
+
+  5. DEUDAS COMPARTIDAS
+     - Balance neto de todos los presupuestos compartidos activos
+     - Desglose por presupuesto (max 3)
+
+  6. PROXIMOS 7 DIAS  [NUEVO: dividido en dos columnas]
+     - Columna izquierda "Gastos" con puntos ROJOS (tipo != 'cobro')
+     - Columna derecha "Ingresos" con puntos VERDES (tipo == 'cobro')
+     - Cada item: nombre, monto, dias restantes (Hoy/Mañana/N dias)
+
+  7. COBROS ACTIVOS
+     - Total de ventas activas y monto cobrado
+
+APIs que consume:
+  GET /presupuestos?firebase_uid=xxx               → lista para obtener ID activo
+  GET /presupuestos/:id/detalle?firebase_uid=xxx   → gastado real, fechas, breakdown
+  GET /ahorros?firebase_uid=xxx                    → metas de ahorro
+  GET /ventas?firebase_uid=xxx                     → ventas con total_cobrado
+  GET /calendario/eventos?firebase_uid=xxx&mes=M&anio=A → proximos 7 dias
+  SharedBudgetService.getAll(uid)                  → balance compartido
+
+Caracteristicas:
+  - Carga en paralelo (5 endpoints)
+  - Pull-to-refresh
+  - Cada card es clickeable y navega al modulo correspondiente
+
+────────────────────────────────────────────────────────
+7.5 lista_presupuestos.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Listado de presupuestos individuales del usuario
+
+Datos: id, nombre, monto_total, tipo_periodo, dia_inicio_periodo
+
+APIs:
+  GET /presupuestos?firebase_uid=xxx
+
+Caracteristicas:
+  - Cache-first (Hive, 24h TTL)
+  - Pull-to-refresh manual
+  - Tarjetas con badge de tipo (Quincenal / Mensual)
+  - FAB para crear nuevo presupuesto → CrearPresupuesto
+  - Tap tarjeta → DetallesPresupuesto
+
+────────────────────────────────────────────────────────
+7.6 detalles_presupuesto.dart  [PANTALLA MAS COMPLEJA]
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Detalle completo del periodo activo de un presupuesto
+
+Tabs:
+  Tab 1 → Periodo actual (movimientos, balance, pagos)
+  Tab 2 → Historial (ultimos 6 periodos, lazy loading)
+
+APIs:
+  GET /presupuestos/:id/detalle?firebase_uid=xxx
+  GET /presupuestos/:id/historico?firebase_uid=xxx
+  POST /presupuestos/:id/movimientos
+  PUT /movimientos/:id/pagar
+  PUT /presupuestos/:id/gastos/reanudar-fijos
+
+Respuesta del detalle:
+  {
+    periodo: { id, fecha_inicio, fecha_fin, estado },
+    movimientos: [{ id, descripcion, monto, tipo, pagado, monto_pagado_real }],
+    resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado, porcentajePagados }
+  }
+  NOTA: totalGastado en resumen usa m.monto (presupuestado), NO monto_pagado_real.
+        Para gastado real usar SUM(monto_pagado_real) WHERE pagado=1.
+
+────────────────────────────────────────────────────────
+7.7 shared_budgets_list_screen.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Lista de presupuestos compartidos del usuario
+
+Datos por tarjeta:
+  - nombre, estado (active/waiting_for_members/paused/closed)
+  - regla_reparto (equitativo/porcentual/proporcional)
+  - balance_neto (debes/te deben/sin deudas)
+
+APIs:
+  GET /shared-budgets?firebase_uid=xxx
+  GET /shared-budget-invitations?firebase_uid=xxx   → badge de invitaciones pendientes
+
+Acciones:
+  - FAB "Nuevo" → SharedBudgetCreateScreen
+  - Icono buzón → SharedBudgetInvitationsScreen
+  - Tap tarjeta → SharedBudgetDetailScreen
+
+────────────────────────────────────────────────────────
+7.8 shared_budget_detail.dart  [REDISEÑADO 2026-05-11]
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Detalle de presupuesto compartido, igual en estructura al individual
+
+CAMBIO: Rediseño completo. Antes tenia 2 tabs (Gastos/Balance).
+        Ahora es un scroll único igual al presupuesto normal.
+
+Estructura de la pantalla:
+  AppBar → nombre del presupuesto + botones (refresh, eliminar)
+  ↓
+  Banner de periodo con regla de reparto
+  ↓
+  Card resumen "Mi presupuesto total"
+    - Numero grande: mi total de responsabilidades
+    - Barra de progreso (pagado / total)
+    - "Pagado $X  Pendiente $Y"
+  ↓
+  Card progreso de pagos circular
+    - "X de Y movimientos confirmados"
+  ↓
+  Botones: [+ Agregar] [Eliminar presupuesto]
+  ↓
+  Seccion MOVIMIENTOS
+  ↓
+  [Lista de expense cards]
+
+EXPENSE CARD - Diseño de doble mitad:
+  Parte superior:
+    - Icono + descripcion + etiqueta (Compartido/Personal) + fecha
+    - NUMERO GRANDE = mi_responsabilidad (lo que me toca pagar)
+    - numero chico  = monto total del gasto
+  Parte inferior (solo gastos compartidos):
+    - Mitad izquierda (ELLOS): verde si su_parte_pagada=true
+    - Mitad derecha (YO):      verde si mi_parte_pagada=true | boton "Pagar"
+    - AnimatedContainer para transicion suave al verde
+  Border completo verde cuando ambos han pagado.
+
+LOGICA DE PAGO:
+  mi_parte_pagada = true si:
+    - Campo mi_parte_pagada=1 del API (nuevo campo)
+    - O pagado_por == mi firebase_uid (yo pague el gasto completo)
+  su_parte_pagada = true si:
+    - Campo su_parte_pagada=1 del API (nuevo campo)
+    - O pagado_por == otro uid (el otro pago el gasto completo)
+
+ELIMINAR PRESUPUESTO:
+  - Boton abre AlertDialog de confirmacion
+  - Llama POST /shared-budgets/:id/request-delete
+  - No elimina de inmediato: envía solicitud al co-dueño
+  - Co-dueño debe aprobar para que se elimine
+  - Columna delete_requested_by guarda quien solicito
+
+APIs:
+  GET  /shared-budgets/:id?firebase_uid=xxx
+  GET  /shared-budgets/:id/expenses?firebase_uid=xxx
+  POST /shared-budgets/:id/expenses
+  POST /shared-expenses/:id/confirm-payment    ← NUEVO
+  POST /shared-budgets/:id/request-delete       ← NUEVO
+  DELETE /shared-expenses/:id?firebase_uid=xxx
+
+────────────────────────────────────────────────────────
+7.9 shared_budget_create.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Crear presupuesto compartido con invitacion por email
+
+Campos:
+  - Nombre del presupuesto
+  - Tipo de periodo (Mensual/Quincenal)
+  - Regla de reparto:
+      Equitativo (50/50)
+      Porcentual (slider de %)
+      Proporcional a ingresos (declarar ingreso mensual)
+  - Email del co-dueño a invitar
+
+APIs:
+  POST /shared-budgets
+  POST /shared-budgets/:id/invitations
+
+────────────────────────────────────────────────────────
+7.10 shared_budget_invitations.dart
+────────────────────────────────────────────────────────
+Tipo:       Screen
+Funcion:    Gestionar invitaciones pendientes a presupuestos compartidos
+
+Acciones:
+  - Aceptar invitacion (con ingreso declarado si regla=proporcional)
+  - Rechazar invitacion
+
+APIs:
+  GET  /shared-budget-invitations?firebase_uid=xxx
+  POST /shared-budget-invitations/:token/accept
+  POST /shared-budget-invitations/:token/reject
+
+────────────────────────────────────────────────────────
+7.11 ahorro_meta.dart
+────────────────────────────────────────────────────────
+(Sin cambios respecto a version anterior)
+
+────────────────────────────────────────────────────────
+7.12 progreso_ahorro.dart
+────────────────────────────────────────────────────────
+(Sin cambios respecto a version anterior)
+
+────────────────────────────────────────────────────────
+7.13 calendario.dart
+────────────────────────────────────────────────────────
+(Sin cambios respecto a version anterior)
+
+================================================================================
+8. SERVICIOS FLUTTER (lib/services/)
+================================================================================
+
+────────────────────────────────────────────────────────
+api_client.dart
+────────────────────────────────────────────────────────
+Cliente HTTP centralizado.
+  BASE_URL = https://presupuestos-backend-h3l6.onrender.com
+  TIMEOUT  = 55 segundos
+  Metodos estaticos: get(), post(), put(), delete()
+  Headers: Content-Type: application/json
+
+!! ADVERTENCIA CRITICA !!
+  Durante desarrollo local, si se cambia baseUrl a 'http://localhost:3002'
+  para probar, SIEMPRE revertirlo a la URL de Render antes de:
+    1. Generar el APK de produccion
+    2. Hacer git push (para que Render use el codigo correcto)
+  El APK con localhost no funciona en dispositivos reales.
+
+────────────────────────────────────────────────────────
+shared_budget_service.dart
+────────────────────────────────────────────────────────
+CRUD completo de presupuestos compartidos.
+
+Metodos:
+  getAll(uid)                          → GET /shared-budgets
+  getDetail(id, uid)                   → GET /shared-budgets/:id
+  create(body)                         → POST /shared-budgets
+  invite(budgetId, email, uid)         → POST /shared-budgets/:id/invitations
+  getInvitations(uid)                  → GET /shared-budget-invitations
+  acceptInvitation(token, uid, ingreso)→ POST /shared-budget-invitations/:token/accept
+  rejectInvitation(token, uid)         → POST /shared-budget-invitations/:token/reject
+  createExpense(budgetId, body)        → POST /shared-budgets/:id/expenses
+  getExpenses(budgetId, uid)           → GET /shared-budgets/:id/expenses
+  createSettlement(budgetId, body)     → POST /shared-budgets/:id/settlements
+  getSettlements(budgetId, uid)        → GET /shared-budgets/:id/settlements
+  deleteExpense(expenseId, uid)        → DELETE /shared-expenses/:id
+  confirmarMiParte(expenseId, uid)     → POST /shared-expenses/:id/confirm-payment [NUEVO]
+  requestDelete(budgetId, uid)         → POST /shared-budgets/:id/request-delete   [NUEVO]
+
+────────────────────────────────────────────────────────
+auth_service.dart
+────────────────────────────────────────────────────────
+  signIn()        → abre selector de cuenta Google
+  silentSignIn()  → recupera sesion sin UI
+  signOut()       → cierra sesion + limpia cache Hive
+  currentUser     → getter del usuario actual
+
+────────────────────────────────────────────────────────
+cache_service.dart
+────────────────────────────────────────────────────────
+  init()           → abre box 'salarying_cache'
+  set(key, data)   → guarda con timestamp
+  get(key, maxAge) → retorna si edad < maxAge (default 24h)
+  clearForUser(uid) → limpia datos del usuario al logout
+  clear()          → limpia todo el cache
+
+================================================================================
+9. TEMA Y WIDGETS
+================================================================================
+
+────────────────────────────────────────────────────────
+app_theme.dart — Paleta inspirada en Binance
+────────────────────────────────────────────────────────
+Fondos:
+  background    #0B0E11   Negro profundo (fondo global)
+  surface       #1E2026   Tarjetas, modales
+  surfaceAlt    #2B3139   Inputs, fondos secundarios
+  border        #2B3139
+
+Acentos:
+  primary       #F0B90B   Amarillo Binance (botones principales)
+
+Texto:
+  textPrimary   #EAECEF
+  textSecondary #848E9C
+  textMuted     #5E6673
+
+Estados:
+  success       #0ECB81   Verde
+  danger        #F6465D   Rojo
+  info          #2E8DEF   Azul
+
+Colores por tipo de gasto:
+  colorFijo     #1890FF   Azul
+  colorNoFijo   #F0B90B   Amarillo (variable)
+  colorAhorro   #0ECB81   Verde
+
+================================================================================
+10. BACKEND - ENDPOINTS REST
+================================================================================
+
+Base URL: https://presupuestos-backend-h3l6.onrender.com
+
+────────────────────────────────────────────────────────
+10.1 PRESUPUESTOS
+────────────────────────────────────────────────────────
+GET /presupuestos?firebase_uid=xxx
+  Retorna: array con campos basicos del presupuesto
+  CAMPOS DISPONIBLES: id, nombre, monto_total, firebase_uid,
+                      tipo_periodo, dia_inicio_periodo
+  CAMPOS NO DISPONIBLES: gastado, disponible, fecha_inicio, fecha_fin
+  → Para obtener gastado real usar GET /presupuestos/:id/detalle
+
+GET /presupuestos/:id/detalle?firebase_uid=xxx
+  Retorna:
+    {
+      periodo: { id, fecha_inicio, fecha_fin, estado },
+      movimientos: [{ id, descripcion, monto, tipo, pagado, monto_pagado_real }],
+      resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado, porcentajePagados }
+    }
+  NOTA: totalGastado = suma de m.monto (montos presupuestados, no lo pagado real)
+  Para gastado real: SUM(monto_pagado_real) WHERE pagado=1 desde movimientos
+
+GET /presupuestos/:id/historico?firebase_uid=xxx
+  Ultimos 6 periodos.
+  Retorna: { monto_total, periodos: [{ total_gastado, movimientos_pagados, ... }] }
+  NOTA: En historico si, total_gastado = SUM(monto_pagado_real) (el real)
+
+POST /presupuestos
+PUT /presupuestos/:id
+
+────────────────────────────────────────────────────────
+10.2 GASTOS Y MOVIMIENTOS
+────────────────────────────────────────────────────────
+POST /gastos
+POST /gastos/ahorroMeta
+GET /presupuestos/:id/gastos?firebase_uid=xxx
+GET /presupuestos/:id/gastos-seleccionables?firebase_uid=xxx
+PUT /gastos/:id
+PUT /presupuestos/:id/gastos/reanudar-fijos
+DELETE /gastos/:id?firebase_uid=xxx
+POST /presupuestos/:id/movimientos
+PUT /movimientos/:id/pagar   Body: { pagado, monto_pagado_real, firebase_uid }
+
+────────────────────────────────────────────────────────
+10.3 AHORROS
+────────────────────────────────────────────────────────
+GET /ahorros?firebase_uid=xxx
+  Retorna: [{ id, nombre, monto_meta, monto_ahorrado, total_aportaciones }]
+  CAMPOS EXACTOS:
+    nombre           → descripcion del gasto de ahorro
+    monto_meta       → meta total (NO se llama 'monto')
+    monto_ahorrado   → suma de monto_pagado_real de movimientos pagados
+    total_aportaciones → suma de aportaciones manuales adicionales
+  TOTAL REAL AHORRADO = monto_ahorrado + total_aportaciones
+
+POST /ahorros/:id/aportaciones
+GET /ahorros/:id/aportaciones?firebase_uid=xxx
+DELETE /aportaciones/:id?firebase_uid=xxx
+DELETE /ahorros/:id?firebase_uid=xxx
+
+────────────────────────────────────────────────────────
+10.4 CALENDARIO
+────────────────────────────────────────────────────────
+GET /calendario/eventos?firebase_uid=xxx&mes=M&anio=A
+  Retorna: [{ id, titulo, tipo, fecha_evento, monto_esperado, estado }]
+  tipo: 'pago' (gasto) o 'cobro' (ingreso de venta)
+  estado: 'pendiente' | 'pagado' | 'cobrado' | 'vencido'
+
+PUT /calendario/eventos/:id/estado
+DELETE /calendario/eventos/:id?firebase_uid=xxx&solo_este=true|false
+
+────────────────────────────────────────────────────────
+10.5 VENTAS Y COBROS
+────────────────────────────────────────────────────────
+GET /ventas?firebase_uid=xxx
+  Retorna: v.* + total_cobrado, total_esperado, cobros_pendientes
+  total_cobrado = SUM(cobros_clientes.monto_cobrado WHERE estado='cobrado')
+  NOTA: ventas.estado puede ser 'activa', filtrarlo en Flutter si es necesario
+
+GET /ventas/:id?firebase_uid=xxx → detalle completo con metricas
+POST /ventas
+PUT /ventas/:id
+DELETE /ventas/:id?firebase_uid=xxx
+POST /ventas/:id/cobros
+PUT /cobros/:id/cobrar
+DELETE /cobros/:id?firebase_uid=xxx
+GET /ventas/:id/lista-compras?firebase_uid=xxx
+
+────────────────────────────────────────────────────────
+10.6 PRESUPUESTOS COMPARTIDOS
+────────────────────────────────────────────────────────
+GET  /shared-budgets?firebase_uid=xxx
+GET  /shared-budgets/:id?firebase_uid=xxx
+POST /shared-budgets
+POST /shared-budgets/:id/invitations
+GET  /shared-budget-invitations?firebase_uid=xxx
+POST /shared-budget-invitations/:token/accept
+POST /shared-budget-invitations/:token/reject
+
+GET  /shared-budgets/:id/expenses?firebase_uid=xxx        [ACTUALIZADO]
+  Retorna campos adicionales:
+    mi_parte_pagada  → 1 si yo pague mi parte (pagado_por=yo OR shared_expense_splits.pagado=1)
+    su_parte_pagada  → 1 si el otro pago su parte (pagado_por=otro OR otro_split.pagado=1)
+    mi_responsabilidad → monto que me corresponde pagar
+
+POST /shared-budgets/:id/expenses
+DELETE /shared-expenses/:id?firebase_uid=xxx
+
+POST /shared-expenses/:id/confirm-payment                 [NUEVO]
+  Body: { firebase_uid }
+  Funcion: marca shared_expense_splits.pagado=1 para el usuario
+  Verifica que el usuario sea miembro del presupuesto
+  Respuesta 200: { message: 'Pago confirmado' }
+
+POST /shared-budgets/:id/settlements
+GET  /shared-budgets/:id/settlements?firebase_uid=xxx
+
+POST /shared-budgets/:id/request-delete                   [NUEVO]
+  Body: { firebase_uid }
+  Funcion: guarda firebase_uid en shared_budgets.delete_requested_by
+  El presupuesto no se elimina aun. El otro usuario debe aprobar.
+  Respuesta 200: { message: 'Solicitud de eliminacion enviada' }
+
+────────────────────────────────────────────────────────
+10.7 PRODUCTOS, RECETAS, PRODUCCION
+────────────────────────────────────────────────────────
+(Sin cambios, ver version anterior del documento)
+
+================================================================================
+11. BASE DE DATOS Y BACKEND CONFIG
+================================================================================
+
+CONEXION MYSQL:
+  Host:     bvmmbs7zrnufnskqoxwm-mysql.services.clever-cloud.com
+  Puerto:   3306
+  Database: bvmmbs7zrnufnskqoxwm
+  Pool:     max 3 conexiones  ← CRITICO: Clever Cloud free = max 5 por usuario
+                                  Usar 3 deja margen para conexiones administrativas
+
+!! REGLA OBLIGATORIA !!
+  connectionLimit NUNCA debe superar 3 en produccion con Clever Cloud free tier.
+  Si se sube a 10, al reiniciar Render ocurre ER_USER_LIMIT_REACHED y el backend
+  puede quedar degradado aunque el log diga "Your service is live".
+  Si el servidor local esta corriendo (node server.js), MATARLO antes de que
+  Render haga deploy, de lo contrario ambos consumen las 5 conexiones disponibles.
+
+VARIABLES DE ENTORNO (.env):
+  MYSQLDATABASE   bvmmbs7zrnufnskqoxwm
+  MYSQLHOST       bvmmbs7zrnufnskqoxwm-mysql.services.clever-cloud.com
+  MYSQLPASSWORD   [credenciales en keystore-credentials.enc]
+  MYSQLPORT       3306
+  MYSQLUSER       ueuaxoqgtveollq5
+  PORT            3002
+
+CRON JOB:
+  Schedule:  0 0 * * * (medianoche, America/Panama UTC-5)
+  Funcion:   Marca como 'vencido' eventos calendario pendientes con fecha pasada
+
+TABLAS COMPARTIDAS (shared_budgets module):
+  shared_budgets              → presupuestos compartidos
+    Columna nueva: delete_requested_by VARCHAR(255) DEFAULT NULL
+  shared_budget_members       → miembros con porcentaje e ingreso
+  shared_budget_invitations   → invitaciones por email con token
+  shared_expenses             → gastos del presupuesto compartido
+  shared_expense_splits       → responsabilidad por usuario
+    Columna: pagado TINYINT(1) DEFAULT 0  ← activa desde 2026-05-11
+  shared_settlements          → pagos de liquidacion entre usuarios
+  shared_budget_activity_logs → historial de acciones
+
+MIGRACION PENDIENTE (si no se ha ejecutado):
+  ALTER TABLE shared_budgets
+    ADD COLUMN delete_requested_by VARCHAR(255) DEFAULT NULL;
+
+================================================================================
+12. CONFIGURACION ANDROID
+================================================================================
+
+PERMISOS (AndroidManifest.xml):
+  INTERNET, RECEIVE_BOOT_COMPLETED, POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM
+
+BUILD (android/app/build.gradle):
+  ndkVersion = flutter.ndkVersion   → requiere NDK instalado en SDK
+  NDK version: 26.3.11579264        → instalar con sdkmanager si se elimina
+
+KEYSTORE:
+  Archivo:  android/app/release.jks
+  Alias:    salarying
+  Comando de firma: automatico via key.properties en build.gradle
+
+================================================================================
+13. GENERAR APK - PROCESO CORRECTO
+================================================================================
+
+REQUISITOS ANTES DE GENERAR:
+  1. Verificar que baseUrl en lib/services/api_client.dart apunte a Render:
+       static const String baseUrl = 'https://presupuestos-backend-h3l6.onrender.com';
+     (Si estaba en localhost durante desarrollo, REVERTIR antes de build)
+
+  2. Espacio en disco: necesita minimo 5 GB libres en C:
+     - Si hay menos espacio: limpiar Downloads, Papelera
+     - NO borrar: Pub Cache, NDK, Flutter SDK (rompe el build)
+     - Se puede borrar: .gradle/caches (se reconstruye), system-images del emulador
+
+  3. Matar servidor local si esta corriendo (libera conexiones MySQL)
+
+COMANDO:
+  flutter build apk --release
+
+SALIDA:
+  build/app/outputs/flutter-apk/app-release.apk  (~24 MB)
+
+ALTERNATIVA (si hay poco espacio, solo arm64):
+  flutter build apk --debug --split-per-abi --target-platform android-arm64
+  Salida: app-arm64-v8a-debug.apk (~47 MB, solo para debugging)
+
+ERRORES COMUNES AL BUILDEAR:
+  "symlink support" → activar Developer Mode en Windows (Configuracion > Para desarrolladores)
+  "Espacio insuficiente" → liberar al menos 5 GB en C:
+  "NDK did not have source.properties" → reinstalar NDK via sdkmanager:
+    $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+    $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+    sdkmanager.bat "ndk;26.3.11579264"
+  "CorruptedCacheException" → matar java/gradle + borrar .gradle + volver a buildear
+
+================================================================================
+14. BUGS CORREGIDOS Y NOTAS TECNICAS
+================================================================================
+
+BUG 1: Cobrado desde Calendario no actualizaba VentaDetalle
+  Solucion: routeObserver global + RouteAware en VentaDetalle (didPopNext)
+
+BUG 2: Fechas en Calendario con timezone
+  Solucion: comparar fechas como string "YYYY-MM-DD" con _toDateStr()
+
+BUG 3: Fondo gris en Android Release mode
+  Solucion: Container explicito con color: AppTheme.background en estados vacios
+
+BUG 4: Parsing robusto de numeros MySQL
+  Solucion: double.tryParse(v?.toString() ?? '0') ?? 0.0 en todos los parseos
+
+BUG 5: Movimiento creado sin ID de gasto
+  Solucion: Validar id != null antes de crear movimiento
+
+BUG 6: Estado invalido al cobrar desde calendario
+  Solucion: Usar siempre 'pagado' (no 'cobrado') para eventos calendario
+
+BUG 7: Dashboard mostraba $0 en gastado y fechas vacias [2026-05-11]
+  Problema: GET /presupuestos no retorna gastado, fecha_inicio, fecha_fin
+  Solucion: Llamar GET /presupuestos/:id/detalle despues de obtener el ID activo
+            y calcular: gastado = SUM(movimiento.monto_pagado_real WHERE pagado=1)
+
+BUG 8: Dashboard mostraba $0 en ahorro [2026-05-11]
+  Problema: Nombres de campos incorrectos. La API retorna 'monto_meta' y
+            'monto_ahorrado', no 'monto' y 'total_ahorrado'
+  Solucion: Corregir field names en _cargarAhorro() y _buildAhorroCard()
+  REGLA: siempre verificar nombres exactos de campos contra el SQL del backend
+
+BUG 9: ER_USER_LIMIT_REACHED al redesplegar en Render [2026-05-11]
+  Problema: connectionLimit=10 excede el maximo de 5 de Clever Cloud free tier
+  Solucion: Reducir connectionLimit a 3 en server.js
+  REGLA: Ademas matar el servidor local antes de que Render despliegue
+
+BUG 10: APK apuntaba a localhost despues de pruebas locales [2026-05-11]
+  Problema: Se cambio baseUrl a localhost para pruebas y no se revirtio antes del APK
+  Solucion: Siempre verificar baseUrl en api_client.dart antes de generar APK
+
+BUG 11: shared_expense_splits.pagado existia pero nunca se usaba [2026-05-11]
+  Problema: El campo 'pagado' en la tabla de splits estaba en el schema pero
+            ningun endpoint lo leia ni actualizaba, por eso el boton Pagar fallaba
+  Solucion: Nuevo endpoint POST /shared-expenses/:id/confirm-payment que hace
+            UPDATE shared_expense_splits SET pagado=1 WHERE expense_id=? AND firebase_uid=?
+            El GET /expenses ahora retorna mi_parte_pagada y su_parte_pagada
+
+================================================================================
+15. DEPENDENCIAS
+================================================================================
+
+FLUTTER (pubspec.yaml):
+  flutter, http ^1.2.0, intl ^0.19.0, table_calendar ^3.1.2
+  flutter_local_notifications ^17.2.4, cupertino_icons ^1.0.8
+  google_sign_in ^6.2.1, hive ^2.2.3, hive_flutter ^1.1.0
+  pdf ^3.10.8, printing ^5.12.0
+  Dev: flutter_test, flutter_lints ^4.0.0
+
+NODE.JS (backend/package.json):
+  express ^4.21.0, mysql2 ^3.16.0, cors ^2.8.5
+  node-cron ^3.0.3, node-fetch ^3.3.2
+  Node.js requerido: 22.x (Render usa v22.22.0)
+
+================================================================================
+16. INFRAESTRUCTURA DE PRODUCCION
+================================================================================
+
+RENDER (backend):
+  URL:     https://presupuestos-backend-h3l6.onrender.com
+  Branch:  main (deploy automatico en push)
+  Build:   npm install (en directorio backend/)
+  Start:   node server.js
+  Plan:    Gratuito (duerme tras inactividad, 50s para despertar)
+
+CLEVER CLOUD (MySQL):
+  Plan:    MySQL compartido gratuito
+  Limite:  5 conexiones simultaneas por usuario
+  Pool:    connectionLimit=3 en server.js
+
+FIREBASE:
+  Proyecto: salary-bi (ID: 750057422826)
+  Servicio: Google Sign-In (OAuth para Android)
+
+APK RELEASE:
+  Ruta:    build/app/outputs/flutter-apk/app-release.apk
+  Tamaño:  ~24 MB
+  Firmado: release.jks (alias: salarying)
+
+================================================================================
+17. SESION 2026-05-11 - RESUMEN DE CAMBIOS Y LECCIONES
+================================================================================
+
+CAMBIOS IMPLEMENTADOS:
+  1. main_menu.dart      → Card expandible Presupuesto (Individual/Compartido)
+  2. shared_budget_detail.dart → Rediseño completo: scroll unico, split de pagos verde
+  3. dashboard_screen.dart → Dashboard Harvard: 7 cards, score financiero, ritmo
+  4. shared_budget_service.dart → confirmarMiParte(), requestDelete()
+  5. server.js           → POST confirm-payment, POST request-delete,
+                           GET expenses retorna mi_parte_pagada/su_parte_pagada,
+                           connectionLimit 10→3
+  6. migration_shared_budgets.sql → ALTER TABLE add delete_requested_by
+  7. api_client.dart     → baseUrl verificado en Render (no localhost)
+
+COMMITS EN ESTA SESION:
+  479924f feat: shared budget payments, expandable menu, Harvard dashboard
+  d7746f3 fix: split proximos 7 dias card (Gastos/Ingresos con colores)
+  c73e48a fix: dashboard field names (monto_meta, monto_ahorrado, detalle endpoint)
+  1172e36 fix: reduce MySQL pool connectionLimit 10→3 Clever Cloud
+
+LECCIONES APRENDIDAS:
+  - Siempre verificar nombres exactos de campos contra el SQL real del backend
+    antes de escribir codigo Flutter que lee esa data
+  - El GET /presupuestos (lista) NO tiene gastado. Usar GET /presupuestos/:id/detalle
+  - Ahorros: los campos son monto_meta y monto_ahorrado (no monto y total_ahorrado)
+  - shared_expense_splits.pagado existia en schema pero sin uso: verificar siempre
+    que los campos del schema esten realmente siendo leidos/escritos en los endpoints
+  - connectionLimit de mysql2 debe estar por debajo del limite del plan de BD
+  - Matar procesos locales antes de deploy a Render (comparten conexiones MySQL)
+  - Nunca borrar Pub Cache, NDK o Flutter SDK para liberar espacio (rompe builds)
+  - Mantener al menos 5 GB libres en disco para generar APKs
+  - Siempre revertir baseUrl a produccion antes de buildear APK de release
+
+================================================================================
+FIN DEL DOCUMENTO TECNICO - SALARYING
+================================================================================
