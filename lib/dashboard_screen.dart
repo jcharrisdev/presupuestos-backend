@@ -772,40 +772,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ── 6. Próximos 7 días ────────────────────────────────────────────────────
 
   Widget _buildProximosPagosCard() {
-    if (_loadingPagos) return _skeleton(height: 90);
+    if (_loadingPagos) return _skeleton(height: 120);
 
-    if (_proximosPagos.isEmpty) {
+    final now = DateTime.now();
+    final gastos   = _proximosPagos.where((e) => e['tipo'] != 'cobro').toList();
+    final ingresos = _proximosPagos.where((e) => e['tipo'] == 'cobro').toList();
+
+    if (gastos.isEmpty && ingresos.isEmpty) {
       return _cardWrapper(
         title: 'PRÓXIMOS 7 DÍAS',
         accentColor: AppTheme.colorNoFijo,
         child: Row(children: const [
           Icon(Icons.check_circle_outline, color: AppTheme.success, size: 18),
           SizedBox(width: 8),
-          Text('Sin pagos urgentes esta semana',
+          Text('Sin movimientos urgentes esta semana',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         ]),
       );
     }
 
-    final totalPendiente = _proximosPagos.fold<double>(
-      0, (s, e) => s + (double.tryParse(e['monto_esperado']?.toString() ?? '0') ?? 0));
-    final now = DateTime.now();
-
     return _cardWrapper(
       title: 'PRÓXIMOS 7 DÍAS',
       accentColor: AppTheme.colorNoFijo,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('${_proximosPagos.length} pago${_proximosPagos.length != 1 ? 's' : ''} pendiente${_proximosPagos.length != 1 ? 's' : ''}',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          Text('\$${_fmt.format(totalPendiente)}',
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+      child: IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── Gastos (izquierda) ──────────────────────────────────
+          Expanded(child: _buildSemanaColumna(
+            titulo: 'Gastos',
+            items: gastos,
+            color: AppTheme.danger,
+            now: now,
+          )),
+          // ── Divisor vertical ────────────────────────────────────
+          Container(width: 1, color: AppTheme.border, margin: const EdgeInsets.symmetric(horizontal: 10)),
+          // ── Ingresos (derecha) ──────────────────────────────────
+          Expanded(child: _buildSemanaColumna(
+            titulo: 'Ingresos',
+            items: ingresos,
+            color: AppTheme.success,
+            now: now,
+          )),
         ]),
-        const SizedBox(height: 12),
-        Divider(color: AppTheme.border, height: 1),
-        const SizedBox(height: 10),
-        ..._proximosPagos.take(4).map((e) {
-          final titulo = e['titulo'] ?? e['descripcion'] ?? '';
+      ),
+    );
+  }
+
+  Widget _buildSemanaColumna({
+    required String titulo,
+    required List<dynamic> items,
+    required Color color,
+    required DateTime now,
+  }) {
+    final total = items.fold<double>(
+      0, (s, e) => s + (double.tryParse(e['monto_esperado']?.toString() ?? '0') ?? 0));
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(titulo, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+        Text('\$${_fmt.format(total)}',
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+      ]),
+      const SizedBox(height: 8),
+      if (items.isEmpty)
+        Text('Sin ${titulo.toLowerCase()}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))
+      else
+        ...items.take(3).map((e) {
+          final titulo2 = e['titulo'] ?? e['descripcion'] ?? '';
           final monto = double.tryParse(e['monto_esperado']?.toString() ?? '0') ?? 0;
           DateTime? fecha;
           try { fecha = DateTime.parse(e['fecha_evento'] as String); } catch (_) {}
@@ -813,42 +845,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final urgente = dias != null && dias <= 1;
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(children: [
-              Container(
-                width: 7, height: 7,
-                decoration: BoxDecoration(
-                  color: urgente ? AppTheme.danger : AppTheme.colorNoFijo,
-                  shape: BoxShape.circle,
+            padding: const EdgeInsets.only(bottom: 7),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Container(
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(child: Text(titulo,
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                  maxLines: 1, overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 8),
-              if (dias != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: (urgente ? AppTheme.danger : AppTheme.textMuted).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    dias == 0 ? 'Hoy' : (dias == 1 ? 'Mañana' : '$dias días'),
-                    style: TextStyle(
+              const SizedBox(width: 6),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(titulo2,
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                Row(children: [
+                  Text('\$${_fmt.format(monto)}',
+                      style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 11)),
+                  if (dias != null) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      dias == 0 ? '· Hoy' : (dias == 1 ? '· Mañana' : '· $dias d'),
+                      style: TextStyle(
                         color: urgente ? AppTheme.danger : AppTheme.textMuted,
-                        fontSize: 10, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              const SizedBox(width: 8),
-              Text('\$${_fmt.format(monto)}',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
+                        fontSize: 10, fontWeight: urgente ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ]),
+              ])),
             ]),
           );
         }),
-      ]),
-    );
+    ]);
   }
 
   // ── 7. Cobros activos ─────────────────────────────────────────────────────
