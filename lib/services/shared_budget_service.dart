@@ -72,4 +72,14 @@ class SharedBudgetService {
     final res = await ApiClient.delete('/shared-expenses/$expenseId?firebase_uid=$uid');
     return res.statusCode == 200;
   }
+
+  static Future<bool> confirmarMiParte(int expenseId, String uid) async {
+    final res = await ApiClient.post('/shared-expenses/$expenseId/confirm-payment', {'firebase_uid': uid});
+    return res.statusCode == 200;
+  }
+
+  static Future<bool> requestDelete(int budgetId, String uid) async {
+    final res = await ApiClient.post('/shared-budgets/$budgetId/request-delete', {'firebase_uid': uid});
+    return res.statusCode == 200;
+  }
 }

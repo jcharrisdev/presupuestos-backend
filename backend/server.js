@@ -2909,12 +2909,25 @@ app.get('/shared-budgets/:id/expenses', async (req, res) => {
     const [expenses] = await db.execute(
       `SELECT se.id, se.descripcion, se.monto, se.pagado_por, se.regla_override,
               se.es_personal, se.firebase_uid_personal, se.fecha, se.created_at,
-              ses.monto_responsabilidad AS mi_responsabilidad
+              my_split.monto_responsabilidad AS mi_responsabilidad,
+              CASE
+                WHEN se.pagado_por = ? OR my_split.pagado = 1 THEN 1
+                ELSE 0
+              END AS mi_parte_pagada,
+              CASE
+                WHEN (se.es_personal = 0 AND se.pagado_por IS NOT NULL AND se.pagado_por != ? AND se.pagado_por != '')
+                     OR other_split.pagado = 1
+                THEN 1
+                ELSE 0
+              END AS su_parte_pagada
        FROM shared_expenses se
-       LEFT JOIN shared_expense_splits ses ON ses.expense_id = se.id AND ses.firebase_uid = ?
+       LEFT JOIN shared_expense_splits my_split
+         ON my_split.expense_id = se.id AND my_split.firebase_uid = ?
+       LEFT JOIN shared_expense_splits other_split
+         ON other_split.expense_id = se.id AND other_split.firebase_uid != ?
        WHERE se.shared_budget_id = ?
        ORDER BY se.fecha DESC, se.created_at DESC`,
-      [firebase_uid, id]
+      [firebase_uid, firebase_uid, firebase_uid, firebase_uid, id]
     );
     res.json(expenses);
   } catch (err) {
@@ -2985,6 +2998,51 @@ app.delete('/shared-expenses/:expenseId', async (req, res) => {
     if (!expense) return res.status(403).json({ error: 'No autorizado' });
     await db.execute(`DELETE FROM shared_expenses WHERE id = ?`, [expenseId]);
     res.json({ message: 'Eliminado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-expenses/:expenseId/confirm-payment
+app.post('/shared-expenses/:expenseId/confirm-payment', async (req, res) => {
+  const { expenseId } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[split]] = await db.execute(
+      `SELECT ses.id FROM shared_expense_splits ses
+       JOIN shared_expenses se ON se.id = ses.expense_id
+       JOIN shared_budget_members m ON m.shared_budget_id = se.shared_budget_id AND m.firebase_uid = ?
+       WHERE ses.expense_id = ? AND ses.firebase_uid = ?`,
+      [firebase_uid, expenseId, firebase_uid]
+    );
+    if (!split) return res.status(403).json({ error: 'No autorizado o split no encontrado' });
+    await db.execute(
+      `UPDATE shared_expense_splits SET pagado = 1 WHERE expense_id = ? AND firebase_uid = ?`,
+      [expenseId, firebase_uid]
+    );
+    res.json({ message: 'Pago confirmado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /shared-budgets/:id/request-delete
+app.post('/shared-budgets/:id/request-delete', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[member]] = await db.execute(
+      `SELECT id FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!member) return res.status(403).json({ error: 'No autorizado' });
+    await db.execute(
+      `UPDATE shared_budgets SET delete_requested_by = ? WHERE id = ?`,
+      [firebase_uid, id]
+    );
+    res.json({ message: 'Solicitud de eliminación enviada al co-dueño' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

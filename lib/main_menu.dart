@@ -10,11 +10,6 @@ import 'services/auth_service.dart';
 import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
 
-/// Menú principal (home) de Salarying.
-///
-/// [firebaseUid] es el email de la cuenta Google; se propaga a todas las
-/// sub-pantallas para filtrar datos por usuario en el backend.
-/// [displayName] y [photoUrl] se usan solo para el avatar/header del menú.
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
   final String? displayName;
@@ -58,9 +53,9 @@ class MainMenu extends StatelessWidget {
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
                 content: const Text(
                   'Esta es la pantalla de inicio de Salarying.\n\n'
-                  '1. Mis Presupuestos — registra y controla tus gastos por período (quincenal o mensual).\n'
+                  '1. Presupuesto — Individual (tus gastos personales) o Compartido (con otra persona).\n'
                   '2. Ahorro y Metas — define metas de ahorro y sigue su progreso.\n'
-                  '3. Calendario — ve todos tus pagos y cobros programados en un calendario.\n'
+                  '3. Calendario — ve todos tus pagos y cobros programados.\n'
                   '4. Cobros — gestiona producción, ventas y cobros a clientes.\n\n'
                   'Toca cualquier tarjeta para entrar al módulo.',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
@@ -85,30 +80,28 @@ class MainMenu extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── HEADER USUARIO ────────────────────────────────────────────
-              Row(
-                children: [
-                  // Avatar: foto de Google si está disponible, si no inicial
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppTheme.primary.withOpacity(0.15),
-                    backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-                    child: photoUrl == null
-                        ? Text(initial, style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 18))
-                        : null,
+              Row(children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: AppTheme.primary.withOpacity(0.15),
+                  backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+                  child: photoUrl == null
+                      ? Text(initial,
+                          style: const TextStyle(
+                              color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 18))
+                      : null,
+                ),
+                const SizedBox(width: 14),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Bienvenido',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  Text(
+                    name.length > 24 ? '${name.substring(0, 24)}...' : name,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Bienvenido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                      Text(
-                        name.length > 24 ? '${name.substring(0, 24)}...' : name,
-                        style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ]),
+              ]),
 
               const SizedBox(height: 32),
               const SectionHeader('PANEL PRINCIPAL'),
@@ -117,22 +110,17 @@ class MainMenu extends StatelessWidget {
               _NavCard(
                 icon: Icons.dashboard_outlined,
                 title: 'Dashboard',
-                subtitle: 'Resumen de tu actividad',
+                subtitle: 'Resumen financiero inteligente',
                 color: AppTheme.primary,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => DashboardScreen(firebaseUid: firebaseUid),
                 )),
               ),
               const SizedBox(height: 12),
-              _NavCard(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Mis Presupuestos',
-                subtitle: 'Controla tus gastos por período',
-                color: AppTheme.colorFijo,
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => ListaPresupuestos(firebaseUid: firebaseUid),
-                )),
-              ),
+
+              // ── PRESUPUESTO EXPANDIBLE ────────────────────────────────────
+              _PresupuestoExpandCard(firebaseUid: firebaseUid),
+
               const SizedBox(height: 12),
               _NavCard(
                 icon: Icons.savings_outlined,
@@ -163,19 +151,8 @@ class MainMenu extends StatelessWidget {
                   builder: (_) => CobrosHome(firebaseUid: firebaseUid),
                 )),
               ),
-              const SizedBox(height: 12),
-              _NavCard(
-                icon: Icons.group_outlined,
-                title: 'Compartido',
-                subtitle: 'Presupuestos con otra persona',
-                color: AppTheme.info,
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => SharedBudgetsListScreen(firebaseUid: firebaseUid),
-                )),
-              ),
 
               const SizedBox(height: 32),
-
               const SectionHeader('ESTADO DEL SISTEMA'),
               const SizedBox(height: 14),
               Container(
@@ -186,18 +163,18 @@ class MainMenu extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppTheme.border),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8, height: 8,
-                      decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('Backend conectado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                    const Spacer(),
-                    const Text('Clever Cloud · MySQL', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                  ],
-                ),
+                child: Row(children: [
+                  Container(
+                    width: 8, height: 8,
+                    decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Backend conectado',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  const Spacer(),
+                  const Text('Clever Cloud · MySQL',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                ]),
               ),
             ],
           ),
@@ -206,6 +183,168 @@ class MainMenu extends StatelessWidget {
     );
   }
 }
+
+// ── Presupuesto expandible ─────────────────────────────────────────────────────
+
+class _PresupuestoExpandCard extends StatefulWidget {
+  final String firebaseUid;
+  const _PresupuestoExpandCard({required this.firebaseUid});
+
+  @override
+  State<_PresupuestoExpandCard> createState() => _PresupuestoExpandCardState();
+}
+
+class _PresupuestoExpandCardState extends State<_PresupuestoExpandCard>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  late AnimationController _animCtrl;
+  late Animation<double> _rotate;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _rotate = Tween<double>(begin: 0, end: 0.5).animate(
+      CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    _expanded ? _animCtrl.forward() : _animCtrl.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      // ── Tarjeta principal ──────────────────────────────────────────
+      GestureDetector(
+        onTap: _toggle,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _expanded ? AppTheme.colorFijo.withOpacity(0.5) : AppTheme.border,
+            ),
+          ),
+          child: Row(children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.colorFijo.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.account_balance_wallet_outlined,
+                  color: AppTheme.colorFijo, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Presupuesto',
+                  style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
+              const SizedBox(height: 3),
+              const Text('Individual o compartido',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            ])),
+            RotationTransition(
+              turns: _rotate,
+              child: const Icon(Icons.expand_more, color: AppTheme.textMuted, size: 20),
+            ),
+          ]),
+        ),
+      ),
+
+      // ── Sub-opciones animadas ──────────────────────────────────────
+      AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInOut,
+        child: _expanded
+            ? Padding(
+                padding: const EdgeInsets.only(top: 8, left: 16),
+                child: Column(children: [
+                  _SubCard(
+                    icon: Icons.person_outline,
+                    title: 'Presupuesto Individual',
+                    subtitle: 'Controla tus gastos por período',
+                    color: AppTheme.colorFijo,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => ListaPresupuestos(firebaseUid: widget.firebaseUid),
+                    )),
+                  ),
+                  const SizedBox(height: 8),
+                  _SubCard(
+                    icon: Icons.group_outlined,
+                    title: 'Presupuesto Compartido',
+                    subtitle: 'Gastos con otra persona',
+                    color: AppTheme.info,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => SharedBudgetsListScreen(firebaseUid: widget.firebaseUid),
+                    )),
+                  ),
+                ]),
+              )
+            : const SizedBox.shrink(),
+      ),
+    ]);
+  }
+}
+
+// ── Sub-card ───────────────────────────────────────────────────────────────────
+
+class _SubCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SubCard({
+    required this.icon, required this.title, required this.subtitle,
+    required this.color, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 2),
+            Text(subtitle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          ])),
+          const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 16),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── NavCard principal ──────────────────────────────────────────────────────────
 
 class _NavCard extends StatelessWidget {
   final IconData icon;
@@ -230,30 +369,25 @@ class _NavCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppTheme.border),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 22),
+        child: Row(children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
-                  const SizedBox(height: 3),
-                  Text(subtitle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
-          ],
-        ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: const TextStyle(
+                    color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
+            const SizedBox(height: 3),
+            Text(subtitle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          ])),
+          const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+        ]),
       ),
     );
   }

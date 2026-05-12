@@ -82,3 +82,6 @@ CREATE TABLE IF NOT EXISTS shared_budget_activity_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (shared_budget_id) REFERENCES shared_budgets(id) ON DELETE CASCADE
 );
+
+-- Migración 2: columna para solicitud de eliminación (ejecutar si ya existe la tabla)
+ALTER TABLE shared_budgets ADD COLUMN IF NOT EXISTS delete_requested_by VARCHAR(255) DEFAULT NULL;
