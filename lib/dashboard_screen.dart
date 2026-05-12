@@ -66,16 +66,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _cargarPresupuesto() async {
     try {
       final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode == 200) {
-        final list = json.decode(res.body) as List;
-        final activo = list.firstWhere(
-          (p) => p['estado'] == 'activo' || p['estado'] == null,
-          orElse: () => list.isNotEmpty ? list.first : null,
-        );
-        if (mounted) setState(() { _presupuesto = activo; _loadingPresupuesto = false; });
-      } else {
+      if (res.statusCode != 200) {
         if (mounted) setState(() { _errorPresupuesto = 'Error ${res.statusCode}'; _loadingPresupuesto = false; });
+        return;
       }
+      final list = json.decode(res.body) as List;
+      final activo = list.firstWhere(
+        (p) => p['estado'] == 'activo' || p['estado'] == null,
+        orElse: () => list.isNotEmpty ? list.first : null,
+      );
+      if (activo == null) {
+        if (mounted) setState(() { _presupuesto = null; _loadingPresupuesto = false; });
+        return;
+      }
+
+      // Llamar al detalle para obtener gastado real, fechas y breakdown
+      try {
+        final detRes = await ApiClient.get('/presupuestos/${activo['id']}/detalle?firebase_uid=${widget.firebaseUid}');
+        if (detRes.statusCode == 200) {
+          final det = json.decode(detRes.body) as Map<String, dynamic>;
+          final movimientos = det['movimientos'] as List? ?? [];
+          final resumen = det['resumen'] as Map<String, dynamic>? ?? {};
+          final periodo  = det['periodo']  as Map<String, dynamic>? ?? {};
+
+          // gastado real = suma de monto_pagado_real de movimientos pagados
+          final gastadoReal = movimientos
+              .where((m) => m['pagado'] == 1)
+              .fold<double>(0, (s, m) => s + (double.tryParse(m['monto_pagado_real']?.toString() ?? '0') ?? 0));
+
+          final monto = double.tryParse(activo['monto_total']?.toString() ?? '0') ?? 0;
+          final merged = Map<String, dynamic>.from(activo)
+            ..['gastado']        = gastadoReal
+            ..['disponible']     = monto - gastadoReal
+            ..['fecha_inicio']   = periodo['fecha_inicio']
+            ..['fecha_fin']      = periodo['fecha_fin']
+            ..['total_fijos']    = resumen['totalFijo']    ?? 0
+            ..['total_variables']= resumen['totalNoFijo']  ?? 0
+            ..['total_ahorro']   = resumen['totalAhorro']  ?? 0;
+
+          if (mounted) setState(() { _presupuesto = merged; _loadingPresupuesto = false; });
+          return;
+        }
+      } catch (_) {}
+
+      // Fallback: solo datos básicos del list
+      if (mounted) setState(() { _presupuesto = activo; _loadingPresupuesto = false; });
     } catch (e) {
       if (mounted) setState(() { _errorPresupuesto = e.toString(); _loadingPresupuesto = false; });
     }
@@ -124,8 +159,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Map<String, dynamic>? mejor;
           double mejorPct = -1;
           for (final m in list) {
-            final meta = double.tryParse(m['monto']?.toString() ?? '0') ?? 0;
-            final ahorrado = double.tryParse(m['total_ahorrado']?.toString() ?? '0') ?? 0;
+            final meta     = double.tryParse(m['monto_meta']?.toString() ?? '0') ?? 0;
+            final ahorrado = (double.tryParse(m['monto_ahorrado']?.toString() ?? '0') ?? 0)
+                           + (double.tryParse(m['total_aportaciones']?.toString() ?? '0') ?? 0);
             final pct = meta > 0 ? ahorrado / meta : 0;
             if (pct > mejorPct) { mejorPct = pct.toDouble(); mejor = Map<String, dynamic>.from(m); }
           }
@@ -662,9 +698,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    final nombre = _metaAhorro!['descripcion'] ?? _metaAhorro!['nombre'] ?? '';
-    final meta = double.tryParse(_metaAhorro!['monto']?.toString() ?? '0') ?? 0;
-    final ahorrado = double.tryParse(_metaAhorro!['total_ahorrado']?.toString() ?? '0') ?? 0;
+    final nombre   = _metaAhorro!['nombre'] ?? _metaAhorro!['descripcion'] ?? '';
+    final meta     = double.tryParse(_metaAhorro!['monto_meta']?.toString() ?? '0') ?? 0;
+    final ahorrado = (double.tryParse(_metaAhorro!['monto_ahorrado']?.toString() ?? '0') ?? 0)
+                   + (double.tryParse(_metaAhorro!['total_aportaciones']?.toString() ?? '0') ?? 0);
     final pct = meta > 0 ? (ahorrado / meta).clamp(0.0, 1.0) : 0.0;
     final restantes = _todasMetas.length - 1;
 
