@@ -37,7 +37,7 @@ app.use(express.json());  // Parsea el body de las peticiones como JSON
 // Se usa createPool en lugar de createConnection para evitar que el servidor
 // crashee cuando Clever Cloud cierra conexiones inactivas (timeout).
 // Con pool, mysql2 reabre la conexión automáticamente cuando se necesita.
-// connectionLimit: 10 → máximo 10 conexiones simultáneas (suficiente para free tier)
+// connectionLimit: 3 → Clever Cloud free tier permite máximo 5 conexiones por usuario
 const pool = mysql.createPool({
   host:     process.env.MYSQLHOST,
   user:     process.env.MYSQLUSER,
@@ -45,7 +45,7 @@ const pool = mysql.createPool({
   database: process.env.MYSQLDATABASE,
   port:     Number(process.env.MYSQLPORT),
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 3,
   queueLimit: 0,
 });
 
