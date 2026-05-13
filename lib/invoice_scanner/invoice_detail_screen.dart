@@ -22,6 +22,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   final _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
   final _dateFmtShort = DateFormat('dd/MM/yyyy');
 
+  double _d(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -145,14 +151,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
     final items       = (_invoice!['items']       as List?) ?? [];
     final assignments = (_invoice!['assignments'] as List?) ?? [];
-    final total       = _invoice!['total_amount']   ?? 0;
-    final assigned    = _invoice!['total_assigned']  ?? 0;
-    final remaining   = _invoice!['remaining']       ?? 0;
+    final total       = _d(_invoice!['total_amount']);
+    final assigned    = _d(_invoice!['total_assigned']);
+    final remaining   = _d(_invoice!['remaining']);
     final status      = _invoice!['status'];
 
     final canDelete   = status == 'unassigned' || status == 'pending';
     final canAssign   = remaining > 0;
-    final progress    = total > 0 ? (assigned / total).clamp(0.0, 1.0) as double : 0.0;
+    final progress    = total > 0 ? (assigned / total).clamp(0.0, 1.0) : 0.0;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -193,16 +199,16 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               _Row('RUC',         _invoice!['merchant_ruc']   ?? '-'),
               _Row('N° Factura',  _invoice!['numero_factura'] ?? '-'),
               _Row('Fecha',       _fmtDate(_invoice!['invoice_date'])),
-              _Row('DGI',         (_invoice!['dgi_validated'] as int? ?? 0) == 1 ? '✓ Validado' : '— No validado',
-                   color: (_invoice!['dgi_validated'] as int? ?? 0) == 1 ? AppTheme.success : Colors.orange),
+              _Row('DGI', _invoice!['dgi_validated'].toString() == '1' ? '✓ Validado' : '— No validado',
+                   color: _invoice!['dgi_validated'].toString() == '1' ? AppTheme.success : Colors.orange),
             ]),
             const SizedBox(height: 12),
 
             // Montos y progreso
             _Section(title: 'Montos', children: [
-              _Row('Subtotal',  _invoice!['subtotal_amount'] != null ? 'B/. ${_fmt.format(_invoice!['subtotal_amount'])}' : '-'),
-              _Row('ITBMS',     _invoice!['tax_amount'] != null ? 'B/. ${_fmt.format(_invoice!['tax_amount'])}' : '-'),
-              _Row('Total',     'B/. ${_fmt.format(total)}', bold: true, color: AppTheme.primary),
+              _Row('Subtotal', _invoice!['subtotal_amount'] != null ? 'B/. ${_fmt.format(_d(_invoice!['subtotal_amount']))}' : '-'),
+              _Row('ITBMS',    _invoice!['tax_amount']      != null ? 'B/. ${_fmt.format(_d(_invoice!['tax_amount']))}' : '-'),
+              _Row('Total',    total > 0 ? 'B/. ${_fmt.format(total)}' : '-', bold: true, color: AppTheme.primary),
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
@@ -240,7 +246,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     child: Row(children: [
                       Expanded(child: Text(it['descripcion'] ?? '-',
                           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
-                      Text('B/. ${_fmt.format(it['subtotal'] ?? 0)}',
+                      Text('B/. ${_fmt.format(_d(it['subtotal']))}',
                           style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                     ]),
                   )),
@@ -276,7 +282,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                       ],
                     )),
-                    Text('B/. ${_fmt.format(a['amount_assigned'] ?? 0)}',
+                    Text('B/. ${_fmt.format(_d(a['amount_assigned']))}',
                         style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(width: 8),
                     _removiendo

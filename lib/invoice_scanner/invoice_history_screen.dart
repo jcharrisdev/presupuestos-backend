@@ -20,6 +20,13 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
   final _fmt     = NumberFormat('#,##0.00', 'en_US');
   final _dateFmt = DateFormat('dd/MM/yyyy');
 
+  // MySQL DECIMAL vuelve como String en JSON — parseamos defensivamente
+  double _d(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -187,7 +194,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('B/. ${_fmt.format(inv['total_amount'] ?? 0)}',
+              Text('B/. ${_fmt.format(_d(inv['total_amount']))}',
                   style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 4),
               Container(

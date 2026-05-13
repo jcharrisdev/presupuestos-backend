@@ -21,6 +21,12 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
   final _fmt     = NumberFormat('#,##0.00', 'en_US');
   final _dateFmt = DateFormat('dd/MM/yyyy');
 
+  double _d(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -37,7 +43,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
     try {
       await InvoiceScannerService.assignInvoice(
         _invoice['id'] as int,
-        {'assignment_type': 'sin_asignar', 'amount_assigned': _invoice['total_amount'] ?? 0},
+        {'assignment_type': 'sin_asignar', 'amount_assigned': _d(_invoice['total_amount'])},
         widget.firebaseUid,
       );
       if (!mounted) return;
@@ -60,12 +66,12 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final items       = (_invoice['items'] as List?) ?? [];
-    final dgiOk       = (_invoice['dgi_validated'] as int? ?? 0) == 1;
-    final total       = _invoice['total_amount'];
-    final tax         = _invoice['tax_amount'];
-    final subtotal    = _invoice['subtotal_amount'];
-    final assigned    = _invoice['total_assigned'];
-    final remaining   = _invoice['remaining'];
+    final dgiOk       = (_invoice['dgi_validated'].toString() == '1');
+    final total       = _d(_invoice['total_amount']);
+    final tax         = _invoice['tax_amount']   != null ? _d(_invoice['tax_amount'])   : null;
+    final subtotal    = _invoice['subtotal_amount'] != null ? _d(_invoice['subtotal_amount']) : null;
+    final assigned    = _d(_invoice['total_assigned']);
+    final remaining   = _d(_invoice['remaining']);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -113,15 +119,15 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
 
             // Montos
             _Card(children: [
-              if (subtotal != null) _Row('Subtotal',  'B/. ${_fmt.format(subtotal)}'),
-              if (tax != null)      _Row('ITBMS',     'B/. ${_fmt.format(tax)}'),
+              if (subtotal != null) _Row('Subtotal', 'B/. ${_fmt.format(subtotal)}'),
+              if (tax != null)      _Row('ITBMS',    'B/. ${_fmt.format(tax)}'),
               _Row('Total',
-                total != null ? 'B/. ${_fmt.format(total)}' : '-',
+                total > 0 ? 'B/. ${_fmt.format(total)}' : '-',
                 bold: true, color: AppTheme.primary),
-              if (assigned != null && assigned > 0) ...[
-                _Row('Asignado',    'B/. ${_fmt.format(assigned)}', color: AppTheme.success),
-                _Row('Pendiente',   'B/. ${_fmt.format(remaining ?? 0)}',
-                    color: (remaining ?? 0) < 0 ? AppTheme.danger : AppTheme.textSecondary),
+              if (assigned > 0) ...[
+                _Row('Asignado',  'B/. ${_fmt.format(assigned)}', color: AppTheme.success),
+                _Row('Pendiente', 'B/. ${_fmt.format(remaining)}',
+                    color: remaining < 0 ? AppTheme.danger : AppTheme.textSecondary),
               ],
             ]),
             const SizedBox(height: 12),
@@ -148,7 +154,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                         children: [
                           Expanded(child: Text(it['descripcion'] ?? '-',
                               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
-                          Text('B/. ${_fmt.format(it['subtotal'] ?? 0)}',
+                          Text('B/. ${_fmt.format(_d(it['subtotal']))}',
                               style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                         ],
                       ),
