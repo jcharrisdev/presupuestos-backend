@@ -11,9 +11,10 @@ class SharedBudgetCreateScreen extends StatefulWidget {
 }
 
 class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
-  final _nombreCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _ingresoCtrl = TextEditingController();
+  final _nombreCtrl        = TextEditingController();
+  final _emailCtrl         = TextEditingController();
+  final _ingresoCtrl       = TextEditingController();
+  final _contribucionCtrl  = TextEditingController();
 
   String _tipoPeriodo = 'mensual';
   String _regla = 'equitativo';
@@ -25,6 +26,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
     _nombreCtrl.dispose();
     _emailCtrl.dispose();
     _ingresoCtrl.dispose();
+    _contribucionCtrl.dispose();
     super.dispose();
   }
 
@@ -38,6 +40,9 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
     if (_regla == 'proporcional' && (double.tryParse(_ingresoCtrl.text) ?? 0) <= 0) {
       _snack('Ingresa tu ingreso mensual'); return;
     }
+    if (_regla == 'pool_contribucion' && (double.tryParse(_contribucionCtrl.text) ?? 0) <= 0) {
+      _snack('Ingresa tu contribución mensual al fondo'); return;
+    }
     setState(() => _saving = true);
     final body = <String, dynamic>{
       'nombre': nombre,
@@ -47,6 +52,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
       'firebase_uid': widget.firebaseUid,
       if (_regla == 'porcentual') 'porcentaje_owner': _pctOwner,
       if (_regla == 'proporcional') 'ingreso_owner': double.tryParse(_ingresoCtrl.text) ?? 0,
+      if (_regla == 'pool_contribucion') 'contribucion_owner': double.tryParse(_contribucionCtrl.text) ?? 0,
     };
     final result = await SharedBudgetService.create(body);
     if (!mounted) return;
@@ -108,6 +114,18 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
             _label('Tu ingreso mensual'),
             const SizedBox(height: 6),
             _input(_ingresoCtrl, '0.00', numeric: true),
+          ],
+          if (_regla == 'pool_contribucion') ...[
+            const SizedBox(height: 16),
+            _label('Tu contribución mensual al fondo (\$)'),
+            const SizedBox(height: 6),
+            _input(_contribucionCtrl, '0.00', numeric: true),
+            const SizedBox(height: 6),
+            const Text(
+              'El invitado declarará su contribución al aceptar la invitación. '
+              'El fondo total = tu aporte + el de tu compañero.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
           ],
           const SizedBox(height: 20),
           _label('Email del co-dueño'),
@@ -190,6 +208,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
           DropdownMenuItem(value: 'equitativo', child: Text('50/50 equitativo')),
           DropdownMenuItem(value: 'porcentual', child: Text('Porcentual manual')),
           DropdownMenuItem(value: 'proporcional', child: Text('Proporcional a ingresos')),
+          DropdownMenuItem(value: 'pool_contribucion', child: Text('Fondo común (cada uno aporta su monto)')),
         ],
         onChanged: (v) => setState(() => _regla = v!),
       ),

@@ -112,9 +112,13 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                 children: [
                   _buildPeriodoBanner(),
                   const SizedBox(height: 12),
-                  _buildResumenCard(),
-                  const SizedBox(height: 12),
-                  _buildProgressRow(),
+                  if (_budget?['modo_pool'] == true)
+                    _buildPoolCard()
+                  else ...[
+                    _buildResumenCard(),
+                    const SizedBox(height: 12),
+                    _buildProgressRow(),
+                  ],
                   const SizedBox(height: 16),
                   _buildBotones(activo),
                   const SizedBox(height: 20),
@@ -254,37 +258,217 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   }
 
   Widget _buildBotones(bool activo) {
-    return Row(children: [
-      if (activo) ...[
+    final esOwner = _budget?['owner_uid'] == widget.firebaseUid;
+    return Column(children: [
+      Row(children: [
+        if (activo) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _showAgregarGasto,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Agregar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+                side: const BorderSide(color: AppTheme.primary),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: _showAgregarGasto,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Agregar'),
+            onPressed: _showEliminarDialog,
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Eliminar'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.primary,
-              side: const BorderSide(color: AppTheme.primary),
+              foregroundColor: AppTheme.danger,
+              side: const BorderSide(color: AppTheme.danger),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ),
-        const SizedBox(width: 10),
-      ],
-      Expanded(
-        child: OutlinedButton.icon(
-          onPressed: _showEliminarDialog,
-          icon: const Icon(Icons.delete_outline, size: 18),
-          label: const Text('Eliminar'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppTheme.danger,
-            side: const BorderSide(color: AppTheme.danger),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ]),
+      if (esOwner && (_budget?['regla_reparto'] == 'porcentual' || _budget?['regla_reparto'] == 'pool_contribucion')) ...[
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _editarDivision,
+            icon: const Icon(Icons.tune, size: 18),
+            label: const Text('Editar división entre miembros'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.border),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
           ),
         ),
-      ),
+      ],
     ]);
+  }
+
+  Widget _buildPoolCard() {
+    final totalContrib = double.tryParse(_budget?['total_contribucion']?.toString() ?? '0') ?? 0;
+    final totalGastos  = double.tryParse(_budget?['total_gastos']?.toString() ?? '0') ?? 0;
+    final balance      = double.tryParse(_budget?['balance_disponible']?.toString() ?? '0') ?? 0;
+    final members      = _budget?['members'] as List? ?? [];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('FONDO COMÚN', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Total aportes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('\$${_fmt.format(totalContrib)}', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 4),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Total gastado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('\$${_fmt.format(totalGastos)}', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700)),
+        ]),
+        const Divider(color: AppTheme.border, height: 20),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Disponible', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(
+            '\$${_fmt.format(balance)}',
+            style: TextStyle(
+              color: balance >= 0 ? AppTheme.success : AppTheme.danger,
+              fontSize: 22, fontWeight: FontWeight.w800,
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        const Text('APORTES POR PERSONA', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+        const SizedBox(height: 6),
+        ...members.map((m) {
+          final contrib = double.tryParse(m['contribucion_mensual']?.toString() ?? '0') ?? 0;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(_shortUid(m['firebase_uid'] as String),
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Row(children: [
+                if ((m['rol'] as String?) == 'owner')
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                    child: const Text('owner', style: TextStyle(color: AppTheme.primary, fontSize: 10)),
+                  ),
+                Text('\$${_fmt.format(contrib)}',
+                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
+              ]),
+            ]),
+          );
+        }),
+      ]),
+    );
+  }
+
+  Future<void> _editarDivision() async {
+    final members = List<dynamic>.from(_budget?['members'] ?? []);
+    final regla   = _budget?['regla_reparto'] as String? ?? '';
+    final controllers = <String, TextEditingController>{};
+    for (final m in members) {
+      final uid   = m['firebase_uid'] as String;
+      final valor = regla == 'pool_contribucion'
+          ? (m['contribucion_mensual']?.toString() ?? '0')
+          : (m['porcentaje']?.toString() ?? '0');
+      controllers[uid] = TextEditingController(text: valor);
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setM) {
+        double totalPct() => members.fold(0.0, (s, m) {
+          final uid = m['firebase_uid'] as String;
+          return s + (double.tryParse(controllers[uid]?.text ?? '0') ?? 0);
+        });
+        final bool isPct  = regla == 'porcentual';
+        final double suma = isPct ? totalPct() : 0;
+        final bool valid  = !isPct || (suma > 99.9 && suma < 100.1);
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text(
+              isPct ? 'Editar porcentajes' : 'Editar contribuciones mensuales',
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 16),
+            ...members.map((m) {
+              final uid = m['firebase_uid'] as String;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(children: [
+                  Expanded(child: Text(_shortUid(uid), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 100,
+                    child: TextField(
+                      controller: controllers[uid],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: AppTheme.textPrimary),
+                      textAlign: TextAlign.right,
+                      onChanged: (_) => setM(() {}),
+                      decoration: InputDecoration(
+                        suffixText: isPct ? '%' : '\$',
+                        suffixStyle: const TextStyle(color: AppTheme.textSecondary),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ]),
+              );
+            }),
+            if (isPct) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Total: ${suma.toStringAsFixed(1)}% ${valid ? "✓" : "(debe ser 100%)"}',
+                style: TextStyle(color: valid ? AppTheme.success : AppTheme.danger, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: valid ? () async {
+                  Navigator.pop(ctx);
+                  for (final m in members) {
+                    final uid   = m['firebase_uid'] as String;
+                    final valor = double.tryParse(controllers[uid]?.text ?? '0') ?? 0;
+                    await SharedBudgetService.updateMember(
+                      widget.budgetId, uid, widget.firebaseUid,
+                      porcentaje: isPct ? valor : null,
+                      contribucionMensual: !isPct ? valor : null,
+                    );
+                  }
+                  _recargar();
+                } : null,
+                child: const Text('Guardar cambios'),
+              ),
+            ),
+          ]),
+        );
+      }),
+    );
+    for (final c in controllers.values) { c.dispose(); }
   }
 
   Widget _buildEmpty() => Container(

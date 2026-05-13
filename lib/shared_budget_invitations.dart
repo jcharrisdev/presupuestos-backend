@@ -32,6 +32,9 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
     if (inv['regla_reparto'] == 'proporcional') {
       ingreso = await _askIngreso();
       if (ingreso == null) return;
+    } else if (inv['regla_reparto'] == 'pool_contribucion') {
+      ingreso = await _askContribucion();
+      if (ingreso == null) return;
     }
     final ok = await SharedBudgetService.acceptInvitation(inv['token'], widget.firebaseUid, ingresoDeclarado: ingreso);
     if (!mounted) return;
@@ -67,6 +70,37 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Ingreso mensual', prefixText: '\$'),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, double.tryParse(ctrl.text)),
+            child: const Text('Confirmar', style: TextStyle(color: AppTheme.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<double?> _askContribucion() async {
+    final ctrl = TextEditingController();
+    return showDialog<double>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Tu contribución mensual', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+            'Este presupuesto usa fondo común. Ingresa cuánto aportarás mensualmente al fondo compartido.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(labelText: 'Contribución mensual', prefixText: '\$'),
           ),
         ]),
         actions: [

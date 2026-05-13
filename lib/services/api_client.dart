@@ -58,6 +58,11 @@ class ApiClient {
       http.put(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
           .timeout(_timeout);
 
+  /// PATCH con timeout.
+  static Future<http.Response> patch(String path, Map<String, dynamic> body) =>
+      http.patch(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+          .timeout(_timeout);
+
   /// DELETE con timeout.
   static Future<http.Response> delete(String path) =>
       http.delete(Uri.parse('$baseUrl$path'), headers: _headers).timeout(_timeout);

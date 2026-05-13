@@ -1,10 +1,10 @@
-/// Tarjeta de objetivo de margen en la pantalla de detalle de venta.
+/// Tarjeta de objetivo de ganancia en la pantalla de detalle de venta.
 ///
-/// El usuario selecciona un margen objetivo con un dropdown y la tarjeta
-/// calcula cuánto necesita vender para alcanzarlo, comparándolo con las
-/// ventas proyectadas actuales.
+/// El usuario selecciona un porcentaje de ganancia deseado y la tarjeta
+/// calcula cuánto necesita vender para alcanzarlo usando markup sobre costo.
 ///
-/// Fórmula: ventas_necesarias = invertido / (1 − margenObjetivo)
+/// Fórmula: precio_objetivo = invertido × (1 + markup)
+/// Ej: $12 invertido con 50% markup → necesita vender $18.
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
@@ -24,18 +24,20 @@ class MargenObjetivoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const mrgValues = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60];
+    const mrgValues = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60, 0.75, 1.00];
     const mrgLabels = [
       '10% – Mínimo', '15% – Básico', '20% – Razonable',
       '25% – Sólido', '30% – Bueno', '35% – Muy bueno',
-      '40% – Excelente', '50% – Óptimo', '60% – Premium',
+      '40% – Excelente', '50% – Óptimo', '60% – Muy bueno',
+      '75% – Excelente', '100% – Premium',
     ];
 
     // esperado = totalCobrado (suma de todos los cobros: cobrados + pendientes)
     final esperado = totalCobrado;
 
-    final ventasNecesarias = invertido > 0 && margenObjetivo < 1.0
-        ? invertido / (1.0 - margenObjetivo)
+    // Markup: precio_objetivo = invertido × (1 + markup). Ganancia sobre el costo.
+    final ventasNecesarias = invertido > 0
+        ? invertido * (1.0 + margenObjetivo)
         : 0.0;
     final brecha = ventasNecesarias > 0 ? (esperado - ventasNecesarias) : 0.0;
     final pctAvance = ventasNecesarias > 0
@@ -54,7 +56,7 @@ class MargenObjetivoCard extends StatelessWidget {
         Row(children: [
           const Icon(Icons.flag_outlined, color: AppTheme.primary, size: 16),
           const SizedBox(width: 8),
-          const Text('Meta de margen',
+          const Text('% de ganancia sobre costo',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const Spacer(),
           DropdownButton<double>(
@@ -99,7 +101,7 @@ class MargenObjetivoCard extends StatelessWidget {
           // Ventas necesarias para el margen objetivo
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Expanded(child: Text(
-              'Ventas para ${(margenObjetivo * 100).toStringAsFixed(0)}% de margen',
+              'Ventas para ${(margenObjetivo * 100).toStringAsFixed(0)}% de ganancia',
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             )),
             const SizedBox(width: 8),

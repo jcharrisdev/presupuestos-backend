@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'proyeccion_screen.dart';
 
 /// Detalle de insumos de un presupuesto de producción.
 class ProduccionDetalle extends StatefulWidget {
@@ -70,72 +71,160 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
 
   /// Abre el modal para agregar un nuevo ítem de insumo.
   ///
-  /// Campos: nombre del insumo, cantidad (decimales permitidos), precio unitario.
-  /// Valida que todos los campos sean positivos antes de enviar.
+  /// Permite registrar el precio del paquete completo y cuántas unidades
+  /// se usaron realmente en esta producción. El sistema calcula el costo
+  /// asignado proporcional: precio_paquete × (usadas / total).
   void _modalAgregarItem() {
     final nombreCtrl   = TextEditingController();
-    final cantidadCtrl = TextEditingController(text: '1'); // cantidad por defecto = 1
+    final cantidadCtrl = TextEditingController(text: '1');
     final precioCtrl   = TextEditingController();
+    final usadasCtrl   = TextEditingController();
+    bool soloUseParte  = false;
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Handle decorativo
-          Center(child: Container(width: 36, height: 4,
-              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          const Text('Agregar ítem', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
-          // Nombre del insumo
-          TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(hintText: 'Nombre del insumo (ej: Harina)')),
-          const SizedBox(height: 12),
-          // Cantidad y precio en fila
-          Row(children: [
-            Expanded(child: TextField(
-              controller: cantidadCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Cantidad',
-                prefixIcon: Icon(Icons.numbers, size: 16, color: AppTheme.textSecondary),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          final cantidad     = double.tryParse(cantidadCtrl.text) ?? 0;
+          final precioPaq    = double.tryParse(precioCtrl.text) ?? 0;
+          final usadas       = soloUseParte ? (double.tryParse(usadasCtrl.text) ?? 0) : cantidad;
+          final costoAsignado = (cantidad > 0 && precioPaq > 0)
+              ? precioPaq * (usadas / cantidad)
+              : 0.0;
+          final sobrante = soloUseParte && cantidad > 0 ? cantidad - usadas : 0.0;
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              const Text('Agregar insumo', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+
+              // Nombre
+              TextField(
+                controller: nombreCtrl,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(hintText: 'Nombre del insumo (ej: Bolsitas, Harina)'),
               ),
-            )),
-            const SizedBox(width: 12),
-            Expanded(child: TextField(
-              controller: precioCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Precio unitario',
-                prefixText: '\$ ',
-                prefixStyle: TextStyle(color: AppTheme.primary),
+              const SizedBox(height: 12),
+
+              // Unidades en el paquete + precio del paquete
+              Row(children: [
+                Expanded(child: TextField(
+                  controller: cantidadCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                  onChanged: (_) => setModalState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Unidades compradas',
+                    prefixIcon: Icon(Icons.numbers, size: 16, color: AppTheme.textSecondary),
+                  ),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(
+                  controller: precioCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                  onChanged: (_) => setModalState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Precio del paquete',
+                    prefixText: '\$ ',
+                    prefixStyle: TextStyle(color: AppTheme.primary),
+                  ),
+                )),
+              ]),
+              const SizedBox(height: 4),
+              const Text(
+                'Ingresa el precio total que pagaste por el paquete.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
               ),
-            )),
-          ]),
-          const SizedBox(height: 24),
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () async {
-              final nombre   = nombreCtrl.text.trim();
-              final cantidad = double.tryParse(cantidadCtrl.text) ?? 0;
-              final precio   = double.tryParse(precioCtrl.text) ?? 0;
-              // Validar todos los campos antes de enviar
-              if (nombre.isEmpty || cantidad <= 0 || precio <= 0) return;
-              Navigator.pop(context);
-              final res = await ApiClient.post(
-                '/produccion/${widget.presupuestoId}/items',
-                {'nombre': nombre, 'cantidad': cantidad, 'precio_unitario': precio,
-                 'firebase_uid': widget.firebaseUid},
-              );
-              if (res.statusCode == 201) _cargar(); // recargar para ver el nuevo ítem y el total actualizado
-            },
-            child: const Text('Agregar ítem'),
-          )),
-        ]),
+              const SizedBox(height: 14),
+
+              // Toggle: ¿solo usé una parte?
+              Row(children: [
+                Switch(
+                  value: soloUseParte,
+                  activeColor: AppTheme.primary,
+                  onChanged: (v) => setModalState(() { soloUseParte = v; if (!v) usadasCtrl.clear(); }),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(child: Text(
+                  '¿Solo usé una parte del paquete?',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                )),
+              ]),
+
+              if (soloUseParte) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: usadasCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                  onChanged: (_) => setModalState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Unidades usadas en esta producción',
+                    prefixIcon: Icon(Icons.cut_outlined, size: 16, color: AppTheme.textSecondary),
+                  ),
+                ),
+              ],
+
+              // Preview de costo asignado
+              if (costoAsignado > 0) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Text('Costo asignado a esta producción:',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      Text('\$${costoAsignado.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
+                    ]),
+                    if (soloUseParte && sobrante > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Sobrante: ${sobrante % 1 == 0 ? sobrante.toInt() : sobrante.toStringAsFixed(1)} unidades sin usar',
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      ),
+                    ],
+                  ]),
+                ),
+              ],
+
+              const SizedBox(height: 20),
+              SizedBox(width: double.infinity, child: ElevatedButton(
+                onPressed: () async {
+                  final nombre  = nombreCtrl.text.trim();
+                  final cant    = double.tryParse(cantidadCtrl.text) ?? 0;
+                  final precio  = double.tryParse(precioCtrl.text) ?? 0;
+                  final usadasV = soloUseParte ? (double.tryParse(usadasCtrl.text) ?? 0) : 0;
+                  if (nombre.isEmpty || cant <= 0 || precio <= 0) return;
+                  if (soloUseParte && (usadasV <= 0 || usadasV > cant)) return;
+                  Navigator.pop(ctx);
+                  final body = {
+                    'nombre': nombre,
+                    'cantidad': cant,
+                    'precio_total_paquete': precio,
+                    'firebase_uid': widget.firebaseUid,
+                    if (soloUseParte) 'cantidad_usada': usadasV,
+                  };
+                  final res = await ApiClient.post('/produccion/${widget.presupuestoId}/items', body);
+                  if (res.statusCode == 201) _cargar();
+                },
+                child: const Text('Agregar insumo'),
+              )),
+            ]),
+          );
+        },
       ),
     );
   }
@@ -185,18 +274,31 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                 content: const Text(
                   'Registra los insumos (materiales, ingredientes, etc.) '
                   'que necesitas para producir tu producto o servicio.\n\n'
-                  '1. Toca "Ítem" para agregar un insumo con nombre, cantidad y precio unitario.\n'
-                  '2. El subtotal de cada ítem = cantidad × precio unitario.\n'
-                  '3. El COSTO TOTAL en la parte superior es la suma de todos los ítems.\n\n'
-                  'Para eliminar un ítem, desliza la tarjeta hacia la izquierda.\n\n'
-                  'Este costo total se usa al vincular el presupuesto a una venta '
-                  'para calcular la ganancia neta (cobrado − invertido).',
+                  '1. Toca "Ítem" para agregar un insumo.\n'
+                  '2. Ingresa el precio del paquete completo y cuántas unidades compraste.\n'
+                  '3. Si solo usaste una parte del paquete, activa el toggle para indicar '
+                  'cuántas unidades usaste — el costo asignado se calcula proporcionalmente.\n'
+                  '4. El COSTO TOTAL refleja solo lo invertido en esta producción.\n\n'
+                  'Ejemplo: compraste 100 bolsitas a \$3.00 y usaste 32 → '
+                  'costo asignado = \$0.96.\n\n'
+                  'Para eliminar un ítem, desliza la tarjeta hacia la izquierda.',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
                 ),
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
                 ],
               ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.trending_up, size: 20),
+            tooltip: 'Proyectar precio',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProyeccionScreen(
+                invertidoInicial: _total,
+                nombreProduccion: widget.nombre,
+              )),
             ),
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
@@ -245,16 +347,21 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                       itemCount: _items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, i) {
-                        final item   = _items[i];
-                        final cant   = double.tryParse(item['cantidad']?.toString() ?? '1') ?? 1;
-                        final precio = double.tryParse(item['precio_unitario']?.toString() ?? '0') ?? 0;
-                        final sub    = cant * precio; // subtotal del ítem
+                        final item        = _items[i];
+                        final cant        = double.tryParse(item['cantidad']?.toString() ?? '1') ?? 1;
+                        final precio      = double.tryParse(item['precio_unitario']?.toString() ?? '0') ?? 0;
+                        final precioPaq   = item['precio_total_paquete'] != null
+                            ? double.tryParse(item['precio_total_paquete'].toString()) : null;
+                        final cantUsada   = item['cantidad_usada'] != null
+                            ? double.tryParse(item['cantidad_usada'].toString()) : null;
+                        final tienePaquete = precioPaq != null && cantUsada != null;
+                        final costoAsig   = tienePaquete
+                            ? precioPaq! * (cantUsada! / cant)
+                            : cant * precio;
 
-                        // Dismissible permite swipe-to-delete hacia la izquierda
                         return Dismissible(
                           key: Key('item_${item['id']}'),
                           direction: DismissDirection.endToStart,
-                          // Fondo rojo con ícono de basurero al deslizar
                           background: Container(
                             alignment: Alignment.centerRight,
                             padding: const EdgeInsets.only(right: 20),
@@ -264,9 +371,6 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                             ),
                             child: const Icon(Icons.delete_outline, color: AppTheme.danger),
                           ),
-                          // confirmDismiss muestra diálogo y retorna false para que
-                          // Dismissible no elimine el widget del árbol (lo hacemos nosotros
-                          // al recargar la lista desde el backend).
                           confirmDismiss: (_) => _eliminarItem(item['id']).then((_) => false),
                           child: Container(
                             padding: const EdgeInsets.all(14),
@@ -279,14 +383,20 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                                 Text(item['nombre'],
                                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                                 const SizedBox(height: 3),
-                                // Cantidad × Precio unitario
-                                Text('${_fmtNum(cant)} × \$${_fmtNum(precio)}',
-                                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                                if (tienePaquete)
+                                  Text(
+                                    '${_fmtNum(cantUsada!)} de ${_fmtNum(cant)} usadas · paquete \$${precioPaq!.toStringAsFixed(2)}',
+                                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                                  )
+                                else
+                                  Text('${_fmtNum(cant)} × \$${_fmtNum(precio)}',
+                                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ])),
                               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                                Text('\$${sub.toStringAsFixed(2)}',
+                                Text('\$${costoAsig.toStringAsFixed(2)}',
                                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
-                                const Text('subtotal', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                                Text(tienePaquete ? 'asignado' : 'subtotal',
+                                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                               ]),
                             ]),
                           ),

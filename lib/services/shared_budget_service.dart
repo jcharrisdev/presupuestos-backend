@@ -82,4 +82,20 @@ class SharedBudgetService {
     final res = await ApiClient.post('/shared-budgets/$budgetId/request-delete', {'firebase_uid': uid});
     return res.statusCode == 200;
   }
+
+  static Future<bool> updateMember(
+    int budgetId,
+    String memberUid,
+    String ownerUid, {
+    double? porcentaje,
+    double? ingresoDeclarado,
+    double? contribucionMensual,
+  }) async {
+    final body = <String, dynamic>{'firebase_uid': ownerUid};
+    if (porcentaje != null) body['porcentaje'] = porcentaje;
+    if (ingresoDeclarado != null) body['ingreso_declarado'] = ingresoDeclarado;
+    if (contribucionMensual != null) body['contribucion_mensual'] = contribucionMensual;
+    final res = await ApiClient.patch('/shared-budgets/$budgetId/members/$memberUid', body);
+    return res.statusCode == 200;
+  }
 }

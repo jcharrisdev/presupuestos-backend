@@ -146,6 +146,24 @@ async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) 
   );
 
   for (const gasto of gastos) {
+    // Para metas de ahorro: verificar si ya se alcanzó la meta por aportaciones manuales
+    if (gasto.tipo === 'ahorro' && gasto.numero_quincena !== null) {
+      const [[{ ya_aportado }]] = await db.execute(
+        `SELECT COALESCE(SUM(monto), 0) AS ya_aportado FROM aportaciones_ahorro WHERE gasto_id = ?`,
+        [gasto.id]
+      );
+      const [[{ ya_pagado }]] = await db.execute(
+        `SELECT COALESCE(SUM(monto_pagado_real), 0) AS ya_pagado FROM movimientos WHERE gasto_id = ? AND pagado = 1`,
+        [gasto.id]
+      );
+      // Si la meta ya fue cubierta por aportaciones, cerrar el ahorro sin generar más movimientos
+      const metaTotal = gasto.monto * gasto.numero_quincena;
+      if ((parseFloat(ya_aportado) + parseFloat(ya_pagado)) >= metaTotal) {
+        await db.execute(`UPDATE gastos SET numero_quincena = 0 WHERE id = ?`, [gasto.id]);
+        continue;
+      }
+    }
+
     // Insertamos el movimiento con estado pagado=0 (pendiente de pago)
     await db.execute(
       `INSERT INTO movimientos
@@ -681,8 +699,11 @@ app.get('/ahorros', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
     const [ahorros] = await db.execute(
-      `SELECT g.id, g.descripcion AS nombre, g.monto AS monto_meta,
+      `SELECT g.id, g.descripcion AS nombre,
+              g.monto AS cuota_periodo,
+              g.numero_quincena AS periodos_restantes,
               COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado,
+              COUNT(m.id) AS cuotas_pagadas,
               COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total_aportaciones
        FROM gastos g
        LEFT JOIN movimientos m ON m.gasto_id = g.id AND m.pagado = 1
@@ -690,7 +711,19 @@ app.get('/ahorros', async (req, res) => {
        GROUP BY g.id`,
       [firebase_uid]
     );
-    res.json(ahorros);
+
+    // Calcular campos derivados: total ahorrado (movimientos + aportaciones) y si está completado
+    const result = ahorros.map(a => {
+      const totalAhorrado = parseFloat(a.monto_ahorrado) + parseFloat(a.total_aportaciones);
+      const completado    = a.periodos_restantes === 0;
+      return {
+        ...a,
+        monto_meta: a.cuota_periodo, // compatibilidad hacia atrás
+        total_ahorrado: parseFloat(totalAhorrado.toFixed(2)),
+        completado,
+      };
+    });
+    res.json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener ahorros' });
@@ -810,6 +843,12 @@ app.get('/presupuestos/:id/detalle', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
+    const [[presupuesto]] = await db.execute(
+      `SELECT id, nombre, monto_total FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
     const periodo = await getPeriodoActivo(id, firebase_uid);
 
     const [movimientos] = await db.execute(
@@ -828,14 +867,20 @@ app.get('/presupuestos/:id/detalle', async (req, res) => {
     });
 
     const pagados = movimientos.filter(m => m.pagado === 1).length;
+    const totalGastado = totalFijo + totalNoFijo + totalAhorro;
+    const montoTotal   = Number(presupuesto.monto_total);
+    const balanceDisponible   = Math.round((montoTotal - totalGastado) * 100) / 100;
+    const porcentajeUtilizado = montoTotal > 0 ? parseFloat((totalGastado / montoTotal * 100).toFixed(1)) : 0;
 
     res.json({
       periodo,
       movimientos,
+      presupuesto: { monto_total: montoTotal, nombre: presupuesto.nombre },
       resumen: {
         totalFijo, totalNoFijo, totalAhorro,
-        totalGastado: totalFijo + totalNoFijo + totalAhorro,
-        // Porcentaje de movimientos marcados como pagados (0.0 a 1.0)
+        totalGastado,
+        balance_disponible:    balanceDisponible,
+        porcentaje_utilizado:  porcentajeUtilizado,
         porcentajePagados: movimientos.length > 0 ? pagados / movimientos.length : 0,
       },
     });
@@ -1137,7 +1182,13 @@ app.get('/produccion', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [rows] = await db.execute(
-      `SELECT p.*, COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
+      `SELECT p.*, COALESCE(SUM(
+         CASE
+           WHEN i.cantidad_usada IS NOT NULL AND i.precio_total_paquete IS NOT NULL
+             THEN i.precio_total_paquete * (i.cantidad_usada / i.cantidad)
+           ELSE i.cantidad * i.precio_unitario
+         END
+       ), 0) AS total_invertido
        FROM presupuestos_produccion p
        LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = p.id
        WHERE p.firebase_uid = ?
@@ -1174,7 +1225,13 @@ app.get('/produccion/:id', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[presupuesto]] = await db.execute(
-      `SELECT p.*, COALESCE(SUM(i.cantidad * i.precio_unitario), 0) AS total_invertido
+      `SELECT p.*, COALESCE(SUM(
+         CASE
+           WHEN i.cantidad_usada IS NOT NULL AND i.precio_total_paquete IS NOT NULL
+             THEN i.precio_total_paquete * (i.cantidad_usada / i.cantidad)
+           ELSE i.cantidad * i.precio_unitario
+         END
+       ), 0) AS total_invertido
        FROM presupuestos_produccion p
        LEFT JOIN items_produccion i ON i.presupuesto_produccion_id = p.id
        WHERE p.id = ? AND p.firebase_uid = ? GROUP BY p.id`,
@@ -1195,16 +1252,24 @@ app.get('/produccion/:id', async (req, res) => {
 /** POST /produccion/:id/items — Agrega un ítem de insumo al presupuesto */
 app.post('/produccion/:id/items', async (req, res) => {
   const { id } = req.params;
-  const { nombre, cantidad, precio_unitario, firebase_uid } = req.body;
-  if (!nombre || !cantidad || !precio_unitario || !firebase_uid)
+  const { nombre, cantidad, precio_unitario, firebase_uid, precio_total_paquete, cantidad_usada } = req.body;
+  if (!nombre || !cantidad || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
+  // precio_unitario puede derivarse de precio_total_paquete / cantidad
+  const precioUnitario = precio_unitario
+    ? Number(precio_unitario)
+    : (precio_total_paquete ? Number(precio_total_paquete) / Number(cantidad) : null);
+  if (!precioUnitario || precioUnitario <= 0)
+    return res.status(400).json({ error: 'Se requiere precio_unitario o precio_total_paquete' });
   try {
     const [result] = await db.execute(
-      `INSERT INTO items_produccion (presupuesto_produccion_id, firebase_uid, nombre, cantidad, precio_unitario)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, firebase_uid, nombre, cantidad, precio_unitario]
+      `INSERT INTO items_produccion (presupuesto_produccion_id, firebase_uid, nombre, cantidad, precio_unitario, precio_total_paquete, cantidad_usada)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, firebase_uid, nombre, cantidad, precioUnitario,
+       precio_total_paquete ? Number(precio_total_paquete) : null,
+       cantidad_usada ? Number(cantidad_usada) : null]
     );
-    res.status(201).json({ id: result.insertId, nombre, cantidad, precio_unitario });
+    res.status(201).json({ id: result.insertId, nombre, cantidad, precio_unitario: precioUnitario, precio_total_paquete, cantidad_usada });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -1445,9 +1510,9 @@ app.get('/ventas/:id', async (req, res) => {
     const invertido      = Number(venta.total_invertido);
 
     const ganancia          = totalCobrado - invertido;
-    // Bug 2: margen = (ganancia / total_cobrado) × 100 (antes dividía entre invertido)
-    const margen            = totalCobrado > 0 ? (ganancia / totalCobrado * 100) : 0;
-    const margenEsperado    = totalEsperado > 0 ? ((totalEsperado - invertido) / totalEsperado * 100) : 0;
+    // Markup: ganancia sobre lo invertido (ganancia/costo × 100). Ej: $12 costo, $18 venta → 50% markup.
+    const margen            = invertido > 0 ? (ganancia / invertido * 100) : 0;
+    const margenEsperado    = invertido > 0 ? ((totalEsperado - invertido) / invertido * 100) : 0;
     const porcentajeCobrado = totalEsperado > 0 ? (totalCobrado / totalEsperado * 100) : 0;
 
     // Fase 6: costo estimado desde recetas × precios de insumos
@@ -2112,6 +2177,8 @@ app.post('/variantes/:id/receta', async (req, res) => {
   const { rendimiento, unidad, notas, firebase_uid } = req.body;
   if (rendimiento == null || !firebase_uid)
     return res.status(400).json({ error: 'Datos incompletos' });
+  if (Number(rendimiento) <= 0)
+    return res.status(400).json({ error: 'El rendimiento debe ser mayor a 0' });
   try {
     // Verificar propiedad
     const [[vp]] = await db.execute(
@@ -2152,6 +2219,8 @@ app.put('/recetas/:id', async (req, res) => {
   const { id } = req.params;
   const { rendimiento, unidad, notas, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  if (rendimiento != null && Number(rendimiento) <= 0)
+    return res.status(400).json({ error: 'El rendimiento debe ser mayor a 0' });
   try {
     await db.execute(
       `UPDATE recetas r
@@ -2560,9 +2629,12 @@ function calcularSplits(monto, regla, miembros) {
     return miembros.map(m => ({ firebase_uid: m.firebase_uid, monto_responsabilidad: parte }));
   }
   if (regla === 'porcentual') {
+    // Normalizar porcentajes por si no suman exactamente 100
+    const totalPct = miembros.reduce((s, m) => s + (parseFloat(m.porcentaje) || 0), 0);
+    const factor = totalPct > 0 ? 100 / totalPct : 1;
     return miembros.map(m => ({
       firebase_uid: m.firebase_uid,
-      monto_responsabilidad: Math.round(monto * ((m.porcentaje || 50) / 100) * 100) / 100,
+      monto_responsabilidad: Math.round(monto * ((parseFloat(m.porcentaje) || 0) * factor / 100) * 100) / 100,
     }));
   }
   if (regla === 'proporcional') {
@@ -2576,12 +2648,14 @@ function calcularSplits(monto, regla, miembros) {
       monto_responsabilidad: Math.round(monto * ((parseFloat(m.ingreso_declarado) || 0) / totalIngresos) * 100) / 100,
     }));
   }
+  // pool_contribucion: sin splits individuales, el gasto se registra pero sin deuda entre personas
+  if (regla === 'pool_contribucion') return [];
   return [];
 }
 
 // POST /shared-budgets
 app.post('/shared-budgets', async (req, res) => {
-  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, firebase_uid } = req.body;
+  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, contribucion_owner, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   const conn = await db.getConnection();
   await conn.beginTransaction();
@@ -2594,10 +2668,11 @@ app.post('/shared-budgets', async (req, res) => {
     const budgetId = r.insertId;
     const pct = regla_reparto === 'porcentual' ? (porcentaje_owner || 50) : 50;
     const ingreso = regla_reparto === 'proporcional' ? (ingreso_owner || null) : null;
+    const contribucion = regla_reparto === 'pool_contribucion' ? (contribucion_owner || null) : null;
     await conn.execute(
-      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado)
-       VALUES (?, ?, 'owner', ?, ?)`,
-      [budgetId, firebase_uid, pct, ingreso]
+      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual)
+       VALUES (?, ?, 'owner', ?, ?, ?)`,
+      [budgetId, firebase_uid, pct, ingreso, contribucion]
     );
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
@@ -2647,9 +2722,29 @@ app.get('/shared-budgets/:id', async (req, res) => {
     );
     if (!budget) return res.status(404).json({ error: 'No encontrado' });
     const [members] = await db.execute(
-      `SELECT firebase_uid, rol, porcentaje, ingreso_declarado, joined_at FROM shared_budget_members WHERE shared_budget_id = ?`,
+      `SELECT firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual, joined_at FROM shared_budget_members WHERE shared_budget_id = ?`,
       [id]
     );
+
+    // Modo pool_contribucion: calcular balance del fondo común sin deudas individuales
+    if (budget.regla_reparto === 'pool_contribucion') {
+      const totalContribucion = members.reduce((s, m) => s + (parseFloat(m.contribucion_mensual) || 0), 0);
+      const [[{ total_gastos_pool }]] = await db.execute(
+        `SELECT COALESCE(SUM(monto), 0) AS total_gastos_pool FROM shared_expenses WHERE shared_budget_id = ? AND es_personal = 0`,
+        [id]
+      );
+      const balancePool = Math.round((totalContribucion - parseFloat(total_gastos_pool)) * 100) / 100;
+      return res.json({
+        ...budget,
+        members,
+        modo_pool: true,
+        total_contribucion: totalContribucion,
+        total_gastos: parseFloat(total_gastos_pool),
+        balance_disponible: balancePool,
+        balance_neto: null,
+      });
+    }
+
     // Calcular balance: lo que cada miembro debe al otro menos lo que ya pagó via settlements
     const [splits] = await db.execute(
       `SELECT ses.firebase_uid, ses.monto_responsabilidad, se.pagado_por
@@ -2678,7 +2773,7 @@ app.get('/shared-budgets/:id', async (req, res) => {
       if (st.receptor_uid === firebase_uid) otroLeDebe -= parseFloat(st.monto);
     }
     const balanceNeto = Math.round((debeAOtro - otroLeDebe) * 100) / 100;
-    res.json({ ...budget, members, balance_neto: balanceNeto });
+    res.json({ ...budget, members, balance_neto: balanceNeto, modo_pool: false });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2799,17 +2894,14 @@ app.post('/shared-budget-invitations/:token/accept', async (req, res) => {
     await conn.execute(
       `UPDATE shared_budget_invitations SET estado = 'accepted' WHERE id = ?`, [inv.id]
     );
-    // Obtener owner para calcular porcentaje del nuevo miembro
-    const [[ownerMember]] = await conn.execute(
-      `SELECT porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ? AND rol = 'owner'`,
-      [inv.shared_budget_id]
-    );
     const [[budget]] = await conn.execute(`SELECT regla_reparto FROM shared_budgets WHERE id = ?`, [inv.shared_budget_id]);
-    const pctMember = budget.regla_reparto === 'porcentual' ? (100 - (ownerMember.porcentaje || 50)) : 50;
+    // Nuevo miembro entra con porcentaje 0 y contribucion_mensual del body si aplica.
+    // El owner debe rebalancear porcentajes usando PATCH /shared-budgets/:id/members/:uid.
+    const contribucionNuevo = budget.regla_reparto === 'pool_contribucion' ? (ingreso_declarado || null) : null;
     await conn.execute(
-      `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado)
-       VALUES (?, ?, 'member', ?, ?)`,
-      [inv.shared_budget_id, firebase_uid, pctMember, ingreso_declarado || null]
+      `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual)
+       VALUES (?, ?, 'member', 0, ?, ?)`,
+      [inv.shared_budget_id, firebase_uid, ingreso_declarado || null, contribucionNuevo]
     );
     await conn.execute(
       `UPDATE shared_budgets SET estado = 'active' WHERE id = ?`, [inv.shared_budget_id]
@@ -2842,6 +2934,54 @@ app.post('/shared-budget-invitations/:token/reject', async (req, res) => {
     if (inv.email_invitado !== firebase_uid) return res.status(403).json({ error: 'No autorizado' });
     await db.execute(`UPDATE shared_budget_invitations SET estado = 'rejected' WHERE id = ?`, [inv.id]);
     res.json({ message: 'Invitación rechazada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /shared-budgets/:id/members/:uid — Editar porcentaje/contribución de un miembro (solo el owner)
+app.patch('/shared-budgets/:id/members/:uid', async (req, res) => {
+  const { id, uid } = req.params;
+  const { porcentaje, ingreso_declarado, contribucion_mensual, firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Verificar que el que hace el cambio es el owner
+    const [[budget]] = await db.execute(
+      `SELECT owner_uid, regla_reparto FROM shared_budgets WHERE id = ?`, [id]
+    );
+    if (!budget) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+    if (budget.owner_uid !== firebase_uid) return res.status(403).json({ error: 'Solo el owner puede editar miembros' });
+
+    // Validar que los porcentajes no superen 100% si regla es porcentual
+    if (budget.regla_reparto === 'porcentual' && porcentaje != null) {
+      const [[{ total_pct }]] = await db.execute(
+        `SELECT COALESCE(SUM(porcentaje), 0) AS total_pct FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid != ?`,
+        [id, uid]
+      );
+      if (parseFloat(total_pct) + parseFloat(porcentaje) > 100.01) {
+        return res.status(400).json({
+          error: `Los porcentajes sumarían ${(parseFloat(total_pct) + parseFloat(porcentaje)).toFixed(1)}%. Máximo 100%.`
+        });
+      }
+    }
+
+    await db.execute(
+      `UPDATE shared_budget_members SET
+         porcentaje          = COALESCE(?, porcentaje),
+         ingreso_declarado   = CASE WHEN ? IS NOT NULL THEN ? ELSE ingreso_declarado END,
+         contribucion_mensual = CASE WHEN ? IS NOT NULL THEN ? ELSE contribucion_mensual END
+       WHERE shared_budget_id = ? AND firebase_uid = ?`,
+      [porcentaje != null ? parseFloat(porcentaje) : null,
+       ingreso_declarado, ingreso_declarado,
+       contribucion_mensual, contribucion_mensual,
+       id, uid]
+    );
+    await db.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'editar_miembro', ?)`,
+      [id, firebase_uid, JSON.stringify({ uid, porcentaje, ingreso_declarado, contribucion_mensual })]
+    );
+    res.json({ message: 'Miembro actualizado' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3248,6 +3388,21 @@ app.post('/jobs/:id/team-members', async (req, res) => {
     return res.status(400).json({ error: 'firebase_uid, nombre y tipo_compensacion son requeridos' });
   }
   try {
+    // Validar que la suma de porcentajes de colaboradores no supere el 100%
+    if (tipo_compensacion === 'porcentual') {
+      const pct = parseFloat(porcentaje) || 0;
+      if (pct <= 0) return res.status(400).json({ error: 'El porcentaje debe ser mayor a 0' });
+      const [[{ total_pct }]] = await db.execute(
+        `SELECT COALESCE(SUM(porcentaje), 0) AS total_pct FROM job_team_members WHERE job_id = ? AND tipo_compensacion = 'porcentual'`,
+        [req.params.id]
+      );
+      if (parseFloat(total_pct) + pct > 100) {
+        return res.status(400).json({
+          error: `Los porcentajes sumarían ${(parseFloat(total_pct) + pct).toFixed(1)}%. El total no puede superar 100%.`
+        });
+      }
+    }
+
     let calculado = 0;
     if (tipo_compensacion === 'fijo') calculado = parseFloat(monto_acordado) || 0;
     else if (tipo_compensacion === 'por_horas') calculado = (parseFloat(horas_trabajadas) || 0) * (parseFloat(tarifa_hora) || 0);
@@ -3358,6 +3513,31 @@ app.post('/jobs/:id/team-member-payments', async (req, res) => {
     return res.status(400).json({ error: 'firebase_uid, team_member_id y monto son requeridos' });
   }
   try {
+    // Calcular advertencia si el colaborador es porcentual y se supera lo acordado
+    let advertencia = null;
+    const [[miembro]] = await db.execute(
+      `SELECT jtm.tipo_compensacion, jtm.porcentaje,
+              COALESCE(SUM(tmp.monto), 0) AS ya_pagado
+       FROM job_team_members jtm
+       LEFT JOIN team_member_payments tmp ON tmp.team_member_id = jtm.id
+       WHERE jtm.id = ? GROUP BY jtm.id`,
+      [team_member_id]
+    );
+    if (miembro && miembro.tipo_compensacion === 'porcentual' && miembro.porcentaje > 0) {
+      const [[{ rec }]] = await db.execute(
+        `SELECT COALESCE(SUM(monto),0) AS rec FROM customer_payments WHERE job_id = ?`, [req.params.id]
+      );
+      const [[{ gas }]] = await db.execute(
+        `SELECT COALESCE(SUM(monto),0) AS gas FROM operational_expenses WHERE job_id = ?`, [req.params.id]
+      );
+      const utilidad = parseFloat(rec) - parseFloat(gas);
+      const sugerido = parseFloat((utilidad * miembro.porcentaje / 100).toFixed(2));
+      const totalConNuevo = parseFloat(miembro.ya_pagado) + parseFloat(monto);
+      if (totalConNuevo > sugerido && sugerido > 0) {
+        advertencia = `El total pagado ($${totalConNuevo.toFixed(2)}) supera el ${miembro.porcentaje}% acordado ($${sugerido.toFixed(2)}).`;
+      }
+    }
+
     const [result] = await db.execute(
       `INSERT INTO team_member_payments (job_id, team_member_id, firebase_uid, monto, nota) VALUES (?, ?, ?, ?, ?)`,
       [req.params.id, team_member_id, firebase_uid, monto, nota || null]
@@ -3371,7 +3551,7 @@ app.post('/jobs/:id/team-member-payments', async (req, res) => {
        JOIN job_team_members jtm ON jtm.id = tmp.team_member_id WHERE tmp.id = ?`,
       [result.insertId]
     );
-    res.status(201).json(payment);
+    res.status(201).json({ ...payment, advertencia });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3418,6 +3598,28 @@ app.get('/jobs/:id/financial-summary', async (req, res) => {
     const utilidad = rec - gas - cob;
     const margen = rec > 0 ? (utilidad / rec) * 100 : 0;
 
+    // Sugerencia de pagos para colaboradores con compensación porcentual
+    const [teamMembers] = await db.execute(
+      `SELECT jtm.id, jtm.nombre, jtm.tipo_compensacion, jtm.porcentaje,
+              COALESCE(SUM(tmp.monto), 0) AS ya_pagado
+       FROM job_team_members jtm
+       LEFT JOIN team_member_payments tmp ON tmp.team_member_id = jtm.id
+       WHERE jtm.job_id = ?
+       GROUP BY jtm.id`,
+      [req.params.id]
+    );
+    const utilidadBruta = rec - gas; // antes de pagar colaboradores
+    const pagosSugeridos = teamMembers
+      .filter(m => m.tipo_compensacion === 'porcentual' && m.porcentaje > 0)
+      .map(m => ({
+        id: m.id,
+        nombre: m.nombre,
+        porcentaje: m.porcentaje,
+        pago_sugerido: parseFloat((utilidadBruta * m.porcentaje / 100).toFixed(2)),
+        ya_pagado: parseFloat(m.ya_pagado),
+        pendiente: parseFloat((utilidadBruta * m.porcentaje / 100 - parseFloat(m.ya_pagado)).toFixed(2)),
+      }));
+
     res.json({
       monto_total: parseFloat(job.monto_total),
       total_recibido: rec,
@@ -3426,6 +3628,7 @@ app.get('/jobs/:id/financial-summary', async (req, res) => {
       total_pagos_colaboradores: cob,
       utilidad_neta: utilidad,
       margen: parseFloat(margen.toFixed(2)),
+      pagos_sugeridos_colaboradores: pagosSugeridos,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
