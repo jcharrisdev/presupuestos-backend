@@ -9,6 +9,9 @@ class InvoiceOfflineQueue {
   }
 
   static Future<void> queueScan(String qrContent, String firebaseUid) async {
+    if (!Hive.isBoxOpen(_boxName)) {
+      await Hive.openBox<Map>(_boxName);
+    }
     final box = Hive.box<Map>(_boxName);
     await box.add({'qr_content': qrContent, 'firebase_uid': firebaseUid});
   }

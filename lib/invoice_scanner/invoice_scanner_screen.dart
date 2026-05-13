@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../theme/app_theme.dart';
@@ -14,14 +15,19 @@ class InvoiceScannerScreen extends StatefulWidget {
 }
 
 class _InvoiceScannerScreenState extends State<InvoiceScannerScreen> {
+  // Bug 2 fix: resolución HD + DetectionSpeed.normal (más compatible con QR densos DGI)
   final MobileScannerController _ctrl = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
+    cameraResolution: const Size(1280, 720),
   );
-  bool _processing = false;
-  bool _torchOn    = false;
+  bool    _processing = false;
+  bool    _torchOn    = false;
+  String  _statusMsg  = 'Consultando DGI...';
+  Timer?  _statusTimer;
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _ctrl.dispose();
     super.dispose();
   }
@@ -29,12 +35,24 @@ class _InvoiceScannerScreenState extends State<InvoiceScannerScreen> {
   Future<void> _onDetect(BarcodeCapture capture) async {
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null || _processing) return;
-    setState(() => _processing = true);
+
+    setState(() {
+      _processing = true;
+      _statusMsg  = 'Consultando DGI...';
+    });
     await _ctrl.stop();
+
+    // Bug 3 fix: mensaje dinámico tras 8s para indicar cold start de Render
+    _statusTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted && _processing) {
+        setState(() => _statusMsg = 'Despertando servidor,\nespera un momento...');
+      }
+    });
 
     try {
       final result = await InvoiceScannerService.processQrScan(raw, widget.firebaseUid);
 
+      _statusTimer?.cancel();
       if (!mounted) return;
 
       if (result['duplicate'] == true) {
@@ -88,8 +106,13 @@ class _InvoiceScannerScreenState extends State<InvoiceScannerScreen> {
         ),
       );
     } catch (e) {
-      // Modo offline: guardar en cola Hive
-      await InvoiceOfflineQueue.queueScan(raw, widget.firebaseUid);
+      _statusTimer?.cancel();
+      // Bug 1 fix: queueScan abre el box lazily si no está inicializado
+      try {
+        await InvoiceOfflineQueue.queueScan(raw, widget.firebaseUid);
+      } catch (_) {
+        // Si Hive falla, continúa igual para mostrar el SnackBar
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Sin conexión. Factura guardada para sincronizar luego.'),
@@ -97,6 +120,7 @@ class _InvoiceScannerScreenState extends State<InvoiceScannerScreen> {
       ));
       Navigator.pop(context);
     } finally {
+      _statusTimer?.cancel();
       if (mounted) setState(() => _processing = false);
     }
   }
@@ -158,8 +182,11 @@ class _InvoiceScannerScreenState extends State<InvoiceScannerScreen> {
                   children: [
                     CircularProgressIndicator(color: AppTheme.primary),
                     const SizedBox(height: 16),
-                    Text('Consultando DGI...',
-                        style: TextStyle(color: AppTheme.textPrimary)),
+                    Text(
+                      _statusMsg,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                    ),
                   ],
                 ),
               ),
