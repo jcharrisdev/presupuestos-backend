@@ -3941,55 +3941,106 @@ async function recalcularStatusFactura(invoiceId) {
   await db.query('UPDATE scanned_invoices SET status = ?, updated_at = NOW() WHERE id = ?', [status, invoiceId]);
 }
 
-// Helper: parsea el QR string para extraer CUFE y URL
+// Helper: parsea el QR string DGI Panama para extraer CUFE limpio y URL de consulta
+// QR DGI formato: https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE/FE01200001...
+// CUFE Panama: 66 chars alfanuméricos + guiones + T (NO es hex puro)
 function parsearQrFactura(qrContent) {
-  const urlMatch = qrContent.match(/https?:\/\/[^\s]+/i);
-  const cufeMatch = qrContent.match(/[A-Fa-f0-9]{96}/);
-  const cufeFromUrl = qrContent.match(/[?&](?:cufe|CUFE|qr)=([A-Za-z0-9_\-]+)/i);
+  const q = qrContent.trim();
+
+  // Extraer CUFE del path /FacturasPorCUFE/{CUFE}
+  const pathMatch = q.match(/FacturasPorCUFE\/([A-Z0-9][A-Z0-9\-]{40,70})/i);
+  if (pathMatch) {
+    const cufe = pathMatch[1];
+    const url_fiscal = `https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE/${cufe}`;
+    return { url_fiscal, cufe };
+  }
+
+  // CUFE suelto (sin URL): FE + dígitos + RUC + T + ...
+  const cufeMatch = q.match(/\b(FE[0-9]{2}[12][A-Z0-9\-]{20,60}T[A-Z0-9]{20,50})\b/i);
+  if (cufeMatch) {
+    const cufe = cufeMatch[1];
+    const url_fiscal = `https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE/${cufe}`;
+    return { url_fiscal, cufe };
+  }
+
+  // Fallback: usar contenido completo como identificador
+  const urlMatch = q.match(/https?:\/\/[^\s]+/i);
   return {
     url_fiscal: urlMatch ? urlMatch[0] : null,
-    cufe: cufeMatch ? cufeMatch[0] : (cufeFromUrl ? cufeFromUrl[1] : qrContent.trim().substring(0, 500)),
+    cufe: q.substring(0, 500),
   };
 }
 
-// Helper: intenta obtener datos de la DGI via el URL del QR
+// Helper: obtiene datos de la DGI usando el HTML real de /Consultas/FacturasPorCUFE/{CUFE}
+// Estructura HTML verificada con factura real DGI Panama (ACE INTERNAT, 2026-05-06)
 async function consultarDgi(urlFiscal) {
   if (!urlFiscal) return null;
   try {
-    const resp = await fetch(urlFiscal, { timeout: 8000 });
+    const resp = await fetch(urlFiscal, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 12000,
+    });
     if (!resp.ok) return null;
     const html = await resp.text();
-    // Extrae campos básicos del HTML de respuesta DGI Panama
-    const merchantMatch = html.match(/Nombre(?:\s+del)?\s+Emisor[^>]*>([^<]+)/i) ||
-                          html.match(/Raz[oó]n\s+Social[^>]*>([^<]+)/i);
-    const rucMatch     = html.match(/RUC[^>]*>([^<\s]{5,20})/i);
-    const totalMatch   = html.match(/Total\s+(?:a\s+Pagar|General)[^>]*>\s*B\/?\.\s*([\d,\.]+)/i) ||
-                         html.match(/TOTAL[^>]*>([\d,\.]+)/i);
-    const taxMatch     = html.match(/(?:ITBMS|Impuesto)[^>]*>([\d,\.]+)/i);
-    const fechaMatch   = html.match(/Fecha[^>]*>([0-9]{2}[\/\-][0-9]{2}[\/\-][0-9]{4})/i);
-    const numFactMatch = html.match(/N[uú]mero\s+de\s+Factura[^>]*>([^<]+)/i) ||
-                         html.match(/Factura[^\d]*(\d{3}-\d{3}-\d+)/i);
 
-    const parseNum = (s) => s ? parseFloat(s.replace(/,/g, '').replace(/\s/g,'')) : null;
-    const parseFecha = (s) => {
-      if (!s) return null;
-      const parts = s.split(/[\/\-]/);
-      if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
-      return null;
+    // Extrae valor de un par <dt class="small">LABEL</dt><dd>VALOR</dd>
+    const dtdd = (label) => {
+      const r = html.match(new RegExp(
+        '<dt[^>]*>\\s*' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*<\\/dt><dd>([^<]*)<\\/dd>', 'i'
+      ));
+      return r ? r[1].trim() : null;
     };
 
-    const total = parseNum(totalMatch ? totalMatch[1] : null);
-    const tax   = parseNum(taxMatch   ? taxMatch[1]   : null);
+    // Campos del EMISOR
+    const merchantName = dtdd('NOMBRE');
+    const ruc          = dtdd('RUC');
+
+    // Número de factura: <h5>\n No. 0000108630</h5>
+    const numMatch = html.match(/No\.\s+(\d{7,12})/);
+
+    // Fecha de emisión: primera <h5> con dd/mm/yyyy (ej: <h5>06/05/2026 18:06:25</h5>)
+    const fechaMatch = html.match(/<h5>(\d{2}\/\d{2}\/\d{4})/);
+
+    // Totales del tfoot DGI:
+    //   Valor Total: <div style="width: 100px;display: inline-block;">4.00</div>
+    //   ITBMS Total: <div style="width: 100px;display: inline-block;">0.26</div>
+    const totalMatch = html.match(/Valor Total:\s*<div[^>]*>([\d\.]+)<\/div>/i);
+    const taxMatch   = html.match(/ITBMS Total:\s*<div[^>]*>([\d\.]+)<\/div>/i);
+
+    // Ítems del detalle: filas de la tabla
+    const itemsRaw = [];
+    const rowRegex = /<tr>[\s\S]*?<td[^>]*data-title="Descripci[oó]n"[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*data-title="Cantidad"[^>]*>([\d\.]+)<\/td>[\s\S]*?<td[^>]*data-title="Precio"[^>]*>([\d\.]+)<\/td>[\s\S]*?<td[^>]*data-title="Descuento"[^>]*>([\d\.]+)<\/td>[\s\S]*?<td[^>]*data-title="Monto"[^>]*>([\d\.]+)<\/td>[\s\S]*?<td[^>]*data-title="Impuesto"[^>]*>([\d\.]+)<\/td>[\s\S]*?<td[^>]*data-title="Total"[^>]*>([\d\.]+)<\/td>/gi;
+    let rowMatch;
+    while ((rowMatch = rowRegex.exec(html)) !== null) {
+      itemsRaw.push({
+        descripcion:     rowMatch[1].trim(),
+        cantidad:        parseFloat(rowMatch[2]),
+        precio_unitario: parseFloat(rowMatch[3]),
+        subtotal:        parseFloat(rowMatch[5]),
+        impuesto:        parseFloat(rowMatch[6]),
+      });
+    }
+
+    const parseFechaDDMMYYYY = (s) => {
+      if (!s) return null;
+      const [d, m, y] = s.split('/');
+      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    };
+
+    const total = totalMatch ? parseFloat(totalMatch[1]) : null;
+    const tax   = taxMatch   ? parseFloat(taxMatch[1])   : null;
+
     return {
-      merchant_name:    merchantMatch ? merchantMatch[1].trim() : null,
-      merchant_ruc:     rucMatch      ? rucMatch[1].trim()      : null,
-      numero_factura:   numFactMatch  ? numFactMatch[1].trim()  : null,
+      merchant_name:    merchantName || null,
+      merchant_ruc:     ruc || null,
+      numero_factura:   numMatch ? numMatch[1] : null,
       total_amount:     total,
       tax_amount:       tax,
       subtotal_amount:  (total != null && tax != null) ? Math.round((total - tax) * 100) / 100 : null,
-      invoice_date:     parseFecha(fechaMatch ? fechaMatch[1] : null),
+      invoice_date:     parseFechaDDMMYYYY(fechaMatch ? fechaMatch[1] : null),
       dgi_validated:    1,
       dgi_raw_response: html.substring(0, 4000),
+      items:            itemsRaw,
     };
   } catch (_) {
     return null;
@@ -4041,13 +4092,26 @@ app.post('/invoice-scanner/process', async (req, res) => {
     );
     const invoiceId = result.insertId;
 
+    // Insertar ítems obtenidos de DGI
+    const dgiItems = dgiData?.items || [];
+    if (dgiItems.length > 0) {
+      const itemVals = dgiItems.map(it =>
+        [invoiceId, it.descripcion, it.cantidad, it.precio_unitario, it.subtotal, it.impuesto]
+      );
+      await db.query(
+        `INSERT INTO scanned_invoice_items (invoice_id, descripcion, cantidad, precio_unitario, subtotal, impuesto) VALUES ?`,
+        [itemVals]
+      );
+    }
+
     await db.query(
       `INSERT INTO invoice_activity_logs (invoice_id, firebase_uid, action, details) VALUES (?,?,?,?)`,
       [invoiceId, firebase_uid, 'scanned', JSON.stringify({ url_fiscal, cufe, dgi_validated: dgiData?.dgi_validated || 0 })]
     );
 
     const [[invoice]] = await db.query('SELECT * FROM scanned_invoices WHERE id = ?', [invoiceId]);
-    res.status(201).json({ duplicate: false, invoice: { ...invoice, items: [] } });
+    const [items]     = await db.query('SELECT * FROM scanned_invoice_items WHERE invoice_id = ?', [invoiceId]);
+    res.status(201).json({ duplicate: false, invoice: { ...invoice, items } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
