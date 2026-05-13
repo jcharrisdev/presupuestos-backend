@@ -26,10 +26,13 @@ import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/pdf_service.dart';
+import 'services/gustitos_service.dart';
 import 'editar_presupuesto.dart';
 import 'widgets/presupuestos/balance_card.dart';
 import 'widgets/presupuestos/pago_form_sheet.dart';
 import 'widgets/presupuestos/gasto_form_sheet.dart';
+import 'gustitos/crear_gustito_sheet.dart';
+import 'gustitos/gustitos_screen.dart';
 
 /// Pantalla de detalle de un presupuesto con movimientos del período activo.
 class DetallesPresupuesto extends StatefulWidget {
@@ -45,7 +48,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
   List<dynamic> movimientos = [];
   Map<String, dynamic>? periodo;
 
-  double totalFijo = 0, totalNoFijo = 0, totalAhorro = 0;
+  double totalFijo = 0, totalNoFijo = 0, totalAhorro = 0, totalGustitos = 0;
   double montoTotal = 0;
   double porcentajePagados = 0;
   bool isLoading = true;
@@ -119,6 +122,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
           totalFijo         = _d(data['resumen']['totalFijo']);
           totalNoFijo       = _d(data['resumen']['totalNoFijo']);
           totalAhorro       = _d(data['resumen']['totalAhorro']);
+          totalGustitos     = _d(data['resumen']['totalGustitos']);
           porcentajePagados = _d(data['resumen']['porcentajePagados']);
           isLoading         = false;
         });
@@ -165,6 +169,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     String? fechaPagoExacta,
     bool generaNotificacion = false,
     int diasAnticipacion = 3,
+    String? subcategoria,
   }) async {
     if (desc.trim().isEmpty || monto <= 0) return;
     final body = {
@@ -179,6 +184,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     if (diaPago != null) body['dia_pago'] = diaPago;
     if (frecuenciaPago != null) body['frecuencia_pago'] = frecuenciaPago;
     if (fechaPagoExacta != null) body['fecha_pago_exacta'] = fechaPagoExacta;
+    if (subcategoria != null) body['subcategoria'] = subcategoria;
 
     final res = await ApiClient.post('/gastos', body);
     if (res.statusCode != 201) return;
@@ -191,7 +197,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       if (id == null) { _cargar(); return; }
       await ApiClient.post('/presupuestos/${widget.presupuesto['id']}/movimientos', {
         'firebase_uid': widget.firebaseUid,
-        'items': [{'gasto_id': id, 'monto': monto}],
+        'items': [{'gasto_id': id, 'monto': monto, 'subcategoria': subcategoria}],
       });
     }
     _cargar();
@@ -237,6 +243,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       fechaPagoExacta,
       generaNotificacion = false,
       diasAnticipacion = 3,
+      subcategoria,
     }) => _agregarGasto(
       desc, monto, tipo,
       tipoFecha: tipoFecha,
@@ -245,6 +252,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       fechaPagoExacta: fechaPagoExacta,
       generaNotificacion: generaNotificacion,
       diasAnticipacion: diasAnticipacion,
+      subcategoria: subcategoria,
     ),
   );
 
@@ -355,15 +363,16 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final totalGastado = totalFijo + totalNoFijo + totalAhorro;
-    final pctGasto     = montoTotal > 0 ? (totalGastado / montoTotal).clamp(0.0, 1.0) : 0.0;
-    final disponible   = montoTotal - totalGastado;
+    final totalGastado    = totalFijo + totalNoFijo + totalAhorro;
+    final totalConGustitos = totalGastado + totalGustitos;
+    final pctGasto     = montoTotal > 0 ? (totalConGustitos / montoTotal).clamp(0.0, 1.0) : 0.0;
+    final disponible   = montoTotal - totalConGustitos;
 
     // Color de la barra de progreso según el nivel de gasto
     Color barColor;
-    if (totalGastado > montoTotal) barColor = AppTheme.danger;       // excedido
-    else if (pctGasto >= 0.85)     barColor = AppTheme.warning;      // cerca del límite
-    else                           barColor = AppTheme.success;       // bajo control
+    if (totalConGustitos > montoTotal) barColor = AppTheme.danger;   // excedido
+    else if (pctGasto >= 0.85)         barColor = AppTheme.warning;  // cerca del límite
+    else                               barColor = AppTheme.success;   // bajo control
 
     return Scaffold(
       appBar: AppBar(
@@ -474,7 +483,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                   // ── BALANCE PRINCIPAL ─────────────────────────────────────
                   BalanceCard(
                     montoTotal: montoTotal,
-                    totalGastado: totalGastado,
+                    totalGastado: totalConGustitos,
                     disponible: disponible,
                     pctGasto: pctGasto,
                     barColor: barColor,
@@ -484,12 +493,18 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
 
                   // ── STAT CARDS POR TIPO ───────────────────────────────────
                   Row(children: [
-                    _StatCard('Fijos',    totalFijo,   AppTheme.colorFijo),
+                    _StatCard('Fijos',    totalFijo,    AppTheme.colorFijo),
                     const SizedBox(width: 8),
                     _StatCard('Variables', totalNoFijo, AppTheme.colorNoFijo),
                     const SizedBox(width: 8),
-                    _StatCard('Ahorro',   totalAhorro, AppTheme.colorAhorro),
+                    _StatCard('Ahorro',   totalAhorro,  AppTheme.colorAhorro),
                   ]),
+                  if (totalGustitos > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      _StatCard('Gustitos', totalGustitos, AppTheme.primary),
+                    ]),
+                  ],
 
                   const SizedBox(height: 14),
 
@@ -550,6 +565,82 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     )),
                   ]),
 
+                  const SizedBox(height: 20),
+
+                  // ── SECCIÓN GUSTITOS ──────────────────────────────────────
+                  const LabelDivider('GUSTITOS'),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.primary.withOpacity(0.25)),
+                    ),
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.bolt, color: AppTheme.primary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(
+                          totalGustitos > 0
+                              ? '\$${totalGustitos.toStringAsFixed(2)} en Gustitos'
+                              : 'Sin Gustitos este período',
+                          style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14),
+                        ),
+                        const Text('Compras espontáneas registradas',
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      ])),
+                      Row(children: [
+                        GestureDetector(
+                          onTap: () => CrearGustitoSheet.show(
+                            context,
+                            budgetId: widget.presupuesto['id'] as int,
+                            firebaseUid: widget.firebaseUid,
+                            onCreado: _cargar,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                            ),
+                            child: const Icon(Icons.add, color: AppTheme.primary, size: 16),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => GustitosScreen(
+                              budgetId: widget.presupuesto['id'] as int,
+                              budgetNombre: widget.presupuesto['nombre'] as String,
+                              firebaseUid: widget.firebaseUid,
+                            ),
+                          )).then((_) => _cargar()),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceAlt,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppTheme.border),
+                            ),
+                            child: const Icon(Icons.arrow_forward_ios,
+                                color: AppTheme.textSecondary, size: 14),
+                          ),
+                        ),
+                      ]),
+                    ]),
+                  ),
                   const SizedBox(height: 20),
                   const LabelDivider('MOVIMIENTOS'),
 
@@ -799,6 +890,23 @@ class _MovimientoTile extends StatelessWidget {
           const SizedBox(height: 3),
           Row(children: [
             TipoChip(tipo),
+            // Subcategoría (si existe)
+            if ((m['subcategoria'] as String?) != null) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Text(m['subcategoria'] as String,
+                    style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ],
             // Diferencia presupuestado vs real (solo si pagado y hay dato real)
             if (pagado && real != null) ...[
               const SizedBox(width: 6),

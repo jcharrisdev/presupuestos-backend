@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
+const _subcategorias = [
+  'supermercado', 'gasolina', 'educación', 'entretenimiento',
+  'salud', 'restaurantes', 'ropa', 'transporte',
+  'mantenimiento', 'tecnología', 'hogar', 'otros',
+];
+
 class GastoFormSheet {
   static void show(
     BuildContext context, {
@@ -14,24 +20,26 @@ class GastoFormSheet {
       String? fechaPagoExacta,
       bool generaNotificacion,
       int diasAnticipacion,
+      String? subcategoria,
     }) onGuardado,
   }) {
     final descCtrl  = TextEditingController();
     final montoCtrl = TextEditingController();
-    String tipo       = 'fijo';
-    String tipoFecha  = 'flexible';
-    int diaPago       = 1;
-    String frecuencia = 'mensual';
+    String tipo          = 'fijo';
+    String tipoFecha     = 'flexible';
+    int diaPago          = 1;
+    String frecuencia    = 'mensual';
     DateTime? fechaExacta;
-    bool notif        = false;
+    bool notif           = false;
     int diasAnticipacion = 3;
+    String? subcategoria;
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => StatefulBuilder(builder: (ctx, setS) => DraggableScrollableSheet(
-        initialChildSize: 0.7, maxChildSize: 0.95, minChildSize: 0.5,
+        initialChildSize: 0.75, maxChildSize: 0.95, minChildSize: 0.5,
         expand: false,
         builder: (_, sc) => SingleChildScrollView(
           controller: sc,
@@ -70,6 +78,33 @@ class GastoFormSheet {
                 )),
               ),
             )).toList()),
+
+            // ── SUBCATEGORÍA ────────────────────────────────────────────────
+            const SizedBox(height: 16),
+            const Text('Subcategoría (opcional)',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              ..._subcategorias.map((s) => GestureDetector(
+                onTap: () => setS(() => subcategoria = subcategoria == s ? null : s),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: subcategoria == s
+                        ? AppTheme.primary.withOpacity(0.15)
+                        : AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: subcategoria == s ? AppTheme.primary : AppTheme.border,
+                    ),
+                  ),
+                  child: Text(s, style: TextStyle(
+                    color: subcategoria == s ? AppTheme.primary : AppTheme.textMuted,
+                    fontSize: 11, fontWeight: FontWeight.w500,
+                  )),
+                ),
+              )),
+            ]),
 
             const SizedBox(height: 20),
             const Divider(color: AppTheme.border),
@@ -197,6 +232,7 @@ class GastoFormSheet {
                       : null,
                   generaNotificacion: notif,
                   diasAnticipacion: diasAnticipacion,
+                  subcategoria: subcategoria,
                 );
               },
               child: const Text('Agregar gasto'),

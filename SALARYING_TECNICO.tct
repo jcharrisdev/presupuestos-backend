@@ -1,8 +1,8 @@
 ================================================================================
 SALARYING - DOCUMENTO TECNICO COMPLETO
 Generado:        2026-05-06
-Ultima actualizacion: 2026-05-11 (sesion 2 - modulo servicios)
-Version App:     1.1.0+2
+Ultima actualizacion: 2026-05-13 (sesion - subcategorias + modulo Gustitos)
+Version App:     1.2.0+3
 ================================================================================
 
 ================================================================================
@@ -11,7 +11,7 @@ Version App:     1.1.0+2
 
 Nombre:              Salarying
 Descripcion:         Gestor de finanzas personales y pequeños negocios
-Version Flutter:     1.1.0+2
+Version Flutter:     1.2.0+3
 Package ID Android:  com.example.salarying
 Plataformas:         Android (principal), iOS, Web, Windows, Linux, macOS
 
@@ -44,7 +44,7 @@ BACKEND (Node.js)
   Cron jobs:         node-cron ^3.0.3
   HTTP client:       node-fetch ^3.3.2
   Puerto:            3002 (configurable por env PORT)
-  Version servidor:  2.5
+  Version servidor:  2.6
 
 INFRAESTRUCTURA
   Backend hosting:   Render (plan gratuito, duerme tras inactividad)
@@ -104,6 +104,7 @@ COMPONENTES INTERNOS FLUTTER:
   PdfService         → generacion de PDF
   SharedBudgetService → CRUD presupuestos compartidos
   ServiciosService   → CRUD modulo Ofrecimiento de Servicios (jobs)
+  GustitosService    → CRUD modulo Gustitos (compras espontaneas)
 
 ESTRATEGIA DE CACHE:
   - Lista presupuestos: cache-first (Hive, 24h TTL)
@@ -144,13 +145,16 @@ presupuestos-backend/
 │   ├── shared_budget_create.dart
 │   ├── shared_budget_invitations.dart
 │   ├── shared_budgets_list_screen.dart
-│   ├── servicios/                          ← NUEVO: modulo Ofrecimiento de Servicios
-│   │   ├── servicios_dashboard.dart        ← lista de trabajos con estados
-│   │   ├── crear_trabajo_screen.dart       ← formulario crear trabajo
-│   │   ├── trabajo_detalle_screen.dart     ← detalle con 4 secciones colapsables
+│   ├── servicios/                          ← modulo Ofrecimiento de Servicios
+│   │   ├── servicios_dashboard.dart
+│   │   ├── crear_trabajo_screen.dart
+│   │   ├── trabajo_detalle_screen.dart
 │   │   ├── registro_pago_cliente_screen.dart
 │   │   ├── registro_gastos_screen.dart
-│   │   └── financiero_dashboard_screen.dart ← metricas globales de utilidad neta
+│   │   └── financiero_dashboard_screen.dart
+│   ├── gustitos/                           ← NUEVO: modulo Gustitos
+│   │   ├── gustitos_screen.dart            ← lista de Gustitos con total y FAB
+│   │   └── crear_gustito_sheet.dart        ← bottom sheet crear Gustito
 │   ├── theme/
 │   │   └── app_theme.dart
 │   ├── services/
@@ -160,7 +164,8 @@ presupuestos-backend/
 │   │   ├── notification_service.dart
 │   │   ├── pdf_service.dart
 │   │   ├── shared_budget_service.dart      ← ACTUALIZADO: confirmarMiParte, requestDelete
-│   │   ├── servicios_service.dart          ← NUEVO: CRUD jobs/servicios
+│   │   ├── servicios_service.dart          ← CRUD jobs/servicios
+│   │   ├── gustitos_service.dart           ← NUEVO: CRUD Gustitos
 │   │   ├── products_service.dart
 │   │   ├── sales_service.dart
 │   │   ├── savings_service.dart
@@ -173,20 +178,21 @@ presupuestos-backend/
 │       ├── presupuestos/
 │       │   ├── balance_card.dart
 │       │   ├── pago_form_sheet.dart
-│       │   └── gasto_form_sheet.dart
+│       │   └── gasto_form_sheet.dart       ← ACTUALIZADO: campo subcategoria
 │       └── ventas/
 │           ├── cliente_tile.dart
 │           ├── margen_objetivo_card.dart
 │           ├── costos_produccion_card.dart
 │           └── reporte_produccion_modal.dart
 ├── backend/
-│   ├── server.js                           ← ACTUALIZADO: +12 rutas modulo jobs
+│   ├── server.js                           ← ACTUALIZADO: +13 rutas (Gustitos) + subcategoria
 │   ├── package.json
 │   ├── migration_shared_budgets.sql
 │   └── .env
 ├── database/
 │   └── migrations/
-│       ├── add_servicios_jobs.sql          ← NUEVO: 6 tablas del modulo servicios
+│       ├── add_gustitos_subcategorias.sql  ← NUEVO: tabla gustitos + col subcategoria
+│       ├── add_servicios_jobs.sql
 │       ├── add_indexes.sql
 │       ├── add_aportaciones_ahorro.sql
 │       └── add_historial_precios.sql
@@ -391,13 +397,13 @@ Caracteristicas:
   - Tap tarjeta → DetallesPresupuesto
 
 ────────────────────────────────────────────────────────
-7.6 detalles_presupuesto.dart  [PANTALLA MAS COMPLEJA]
+7.6 detalles_presupuesto.dart  [PANTALLA MAS COMPLEJA]  [ACTUALIZADO 2026-05-13]
 ────────────────────────────────────────────────────────
 Tipo:       Screen
 Funcion:    Detalle completo del periodo activo de un presupuesto
 
 Tabs:
-  Tab 1 → Periodo actual (movimientos, balance, pagos)
+  Tab 1 → Periodo actual (movimientos, balance, pagos, Gustitos)
   Tab 2 → Historial (ultimos 6 periodos, lazy loading)
 
 APIs:
@@ -406,15 +412,32 @@ APIs:
   POST /presupuestos/:id/movimientos
   PUT /movimientos/:id/pagar
   PUT /presupuestos/:id/gastos/reanudar-fijos
+  GET /presupuestos/:id/gustitos/summary?firebase_uid=xxx (indirecto via _cargar)
+  POST /gustitos (via CrearGustitoSheet)
 
-Respuesta del detalle:
+Respuesta del detalle (ACTUALIZADA):
   {
     periodo: { id, fecha_inicio, fecha_fin, estado },
-    movimientos: [{ id, descripcion, monto, tipo, pagado, monto_pagado_real }],
-    resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado, porcentajePagados }
+    movimientos: [{ id, descripcion, monto, tipo, pagado, monto_pagado_real,
+                    subcategoria }],   ← NUEVO
+    resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado,
+               totalGustitos,          ← NUEVO
+               balance_disponible, porcentajePagados }
   }
   NOTA: totalGastado en resumen usa m.monto (presupuestado), NO monto_pagado_real.
         Para gastado real usar SUM(monto_pagado_real) WHERE pagado=1.
+  NOTA: balance_disponible = monto_total - totalGastado - totalGustitos
+
+CAMBIOS 2026-05-13:
+  - Estado: totalGustitos (double) leido de resumen.totalGustitos
+  - Build: totalConGustitos = totalGastado + totalGustitos para BalanceCard y pctGasto
+  - Seccion GUSTITOS entre los botones de accion y la seccion MOVIMIENTOS:
+      Card con total, boton + (abre CrearGustitoSheet) y boton → (abre GustitosScreen)
+  - Stat card extra "Gustitos" aparece si totalGustitos > 0
+  - MovimientoTile: muestra subcategoria como chip pequeño gris si existe
+  - _agregarGasto() acepta subcategoria opcional y la pasa al body de POST /gastos
+    y al item de POST /presupuestos/:id/movimientos
+  - _modalNuevoGasto() pasa subcategoria del GastoFormSheet a _agregarGasto()
 
 ────────────────────────────────────────────────────────
 7.7 shared_budgets_list_screen.dart
@@ -734,6 +757,18 @@ Metodos:
   requestDelete(budgetId, uid)         → POST /shared-budgets/:id/request-delete   [NUEVO]
 
 ────────────────────────────────────────────────────────
+gustitos_service.dart  [NUEVO 2026-05-13]
+────────────────────────────────────────────────────────
+CRUD estatico del modulo Gustitos.
+
+Metodos:
+  listarPorPresupuesto(budgetId, uid) → GET /presupuestos/:id/gustitos
+  resumen(budgetId, uid)              → GET /presupuestos/:id/gustitos/summary
+  crear(body)                         → POST /gustitos
+  eliminar(id, uid)                   → DELETE /gustitos/:id
+  editar(id, body)                    → PATCH /gustitos/:id
+
+────────────────────────────────────────────────────────
 auth_service.dart
 ────────────────────────────────────────────────────────
   signIn()        → abre selector de cuenta Google
@@ -801,11 +836,16 @@ GET /presupuestos/:id/detalle?firebase_uid=xxx
   Retorna:
     {
       periodo: { id, fecha_inicio, fecha_fin, estado },
-      movimientos: [{ id, descripcion, monto, tipo, pagado, monto_pagado_real }],
-      resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado, porcentajePagados }
+      movimientos: [{ id, descripcion, monto, tipo, pagado, monto_pagado_real,
+                      subcategoria }],   ← NUEVO campo
+      resumen: { totalFijo, totalNoFijo, totalAhorro, totalGastado,
+                 totalGustitos,          ← NUEVO campo
+                 balance_disponible,     ← ahora = monto_total - totalGastado - totalGustitos
+                 porcentaje_utilizado, porcentajePagados }
     }
   NOTA: totalGastado = suma de m.monto (montos presupuestados, no lo pagado real)
   Para gastado real: SUM(monto_pagado_real) WHERE pagado=1 desde movimientos
+  NOTA: balance_disponible ya descuenta los Gustitos del periodo
 
 GET /presupuestos/:id/historico?firebase_uid=xxx
   Ultimos 6 periodos.
@@ -816,17 +856,84 @@ POST /presupuestos
 PUT /presupuestos/:id
 
 ────────────────────────────────────────────────────────
-10.2 GASTOS Y MOVIMIENTOS
+10.2 GASTOS Y MOVIMIENTOS  [ACTUALIZADO 2026-05-13]
 ────────────────────────────────────────────────────────
 POST /gastos
+  Body: { ..., subcategoria? }   ← NUEVO campo opcional
+  subcategoria: string libre, ej: 'gasolina', 'supermercado', 'educacion'
+  Se propaga automaticamente al movimiento auto-creado para fijo/ahorro
+
 POST /gastos/ahorroMeta
 GET /presupuestos/:id/gastos?firebase_uid=xxx
+  Retorna: incluye subcategoria (NULL si no fue asignada)
+
 GET /presupuestos/:id/gastos-seleccionables?firebase_uid=xxx
 PUT /gastos/:id
 PUT /presupuestos/:id/gastos/reanudar-fijos
 DELETE /gastos/:id?firebase_uid=xxx
+
 POST /presupuestos/:id/movimientos
+  Items: [{ gasto_id, monto, subcategoria? }]   ← subcategoria por item NUEVO
+  Si subcategoria no viene en el item, hereda la del gasto
+
 PUT /movimientos/:id/pagar   Body: { pagado, monto_pagado_real, firebase_uid }
+
+SUBCATEGORIAS SUGERIDAS (validacion en frontend, backend acepta VARCHAR libre):
+  supermercado, gasolina, educacion, entretenimiento, salud, restaurantes,
+  ropa, transporte, mantenimiento, tecnologia, hogar, otros
+
+────────────────────────────────────────────────────────
+10.9 GUSTITOS  [NUEVO 2026-05-13]
+────────────────────────────────────────────────────────
+Un Gustito es una compra pequena, espontanea o personal registrada con
+conciencia financiera sin generar culpa psicologica.
+Afecta directamente el disponible del presupuesto.
+Preparado para integracion futura con facturas QR (scanned_invoice_id).
+
+Regla financiera:
+  availableAmount = budgetTotal - paidExpenses - totalGustitos
+
+IMPORTANTE: Nunca usar "gasto hormiga" en la UI. Siempre usar "Gustito/Gustitos".
+
+POST /gustitos
+  Body: { user_id, budget_id, name, amount, spent_at,
+          description?, merchant?, category?, emotion_tag?, source? }
+  Requeridos: user_id (firebase_uid), budget_id, name, amount > 0, spent_at
+  Valida que budget_id pertenece a user_id
+  source ENUM: manual | scanned_invoice | imported  (default: manual)
+  emotion_tag ENUM: antojo | premio | social | impulso | estres | otro
+  category: string libre (mismas opciones que subcategoria de gastos)
+  Retorna: registro completo creado
+
+GET /gustitos?firebase_uid=xxx
+  Lista todos los Gustitos del usuario (deleted_at IS NULL), orden spent_at DESC
+
+GET /gustitos/:id?firebase_uid=xxx
+  Detalle de un Gustito. 404 si no existe o no pertenece al usuario.
+
+PATCH /gustitos/:id
+  Body: { firebase_uid, name?, amount?, description?, merchant?,
+          category?, emotion_tag?, spent_at? }
+  Solo actualiza los campos enviados. Construye SET dinamico.
+  Retorna: registro actualizado
+
+DELETE /gustitos/:id?firebase_uid=xxx
+  Soft delete: SET deleted_at = NOW()
+  El Gustito deja de aparecer en listados y ya no descuenta del disponible.
+
+GET /presupuestos/:budgetId/gustitos?firebase_uid=xxx
+  Lista Gustitos de un presupuesto especifico (deleted_at IS NULL), orden DESC
+
+GET /presupuestos/:budgetId/gustitos/summary?firebase_uid=xxx
+  Retorna:
+    {
+      total:               decimal (suma de amounts),
+      count:               int,
+      promedio:            decimal,
+      categoria_frecuente: string | null,
+      dia_con_mas:         date | null,
+      ultimos:             [ ...3 registros recientes ]
+    }
 
 ────────────────────────────────────────────────────────
 10.3 AHORROS
@@ -1061,6 +1168,35 @@ TABLAS SERVICIOS (jobs module) [NUEVO 2026-05-11 sesion 2]:
   job_activity_logs     → historial de acciones del trabajo
     id, job_id, firebase_uid, accion, detalle, created_at
     FK: job_id → jobs(id) ON DELETE CASCADE
+
+TABLAS GUSTITOS (modulo Gustitos) [NUEVO 2026-05-13]:
+  gustitos
+    id                 INT AUTO_INCREMENT PK
+    user_id            VARCHAR(128) NOT NULL          ← firebase_uid
+    budget_id          INT NOT NULL                   ← FK presupuestos(id) CASCADE
+    scanned_invoice_id INT NULL                       ← preparado para QR futuro
+    name               VARCHAR(255) NOT NULL
+    description        TEXT NULL
+    merchant           VARCHAR(255) NULL
+    amount             DECIMAL(10,2) NOT NULL
+    category           VARCHAR(100) NULL
+    emotion_tag        ENUM(antojo|premio|social|impulso|estres|otro) NULL
+    source             ENUM(manual|scanned_invoice|imported) DEFAULT manual
+    spent_at           DATE NOT NULL
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at         TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    deleted_at         TIMESTAMP NULL                 ← soft delete
+    INDEX: idx_gustitos_user(user_id), idx_gustitos_budget(budget_id)
+
+COLUMNAS NUEVAS EN TABLAS EXISTENTES [2026-05-13]:
+  gastos.subcategoria      VARCHAR(100) NULL DEFAULT NULL
+  movimientos.subcategoria VARCHAR(100) NULL DEFAULT NULL
+  Comportamiento: nullable, compatibles con todos los registros previos.
+  La subcategoria se hereda del gasto al movimiento si no se especifica en el item.
+
+MIGRACION EJECUTADA (2026-05-13):
+  database/migrations/add_gustitos_subcategorias.sql → ejecutado en Clever Cloud OK
+  Incluye: ALTER gastos, ALTER movimientos, CREATE TABLE gustitos.
 
 MIGRACION EJECUTADA (2026-05-11 sesion 2):
   database/migrations/add_servicios_jobs.sql → ejecutado en Clever Cloud OK
@@ -1456,6 +1592,106 @@ VERIFICACION:
   - Tocar X en el sub-tile → pago eliminado, badge vuelve a "Pendiente"
   - Sin cobros del cliente → Resumen real muestra utilidad $0
   - Proyeccion muestra ganancia esperada = monto_total - $500 - gastos
+
+================================================================================
+21. SESION 2026-05-13 - SUBCATEGORIAS DE GASTOS + MODULO GUSTITOS
+================================================================================
+
+OBJETIVO:
+  1. Agregar subcategorizacion a gastos existentes (fijo/variable/ahorro).
+  2. Implementar el modulo Gustitos: compras espontaneas con conciencia financiera.
+
+CAMBIOS BACKEND (server.js):
+
+  1. POST /gastos — acepta campo opcional subcategoria (VARCHAR 100)
+     La subcategoria se propaga al movimiento auto-creado (fijo/ahorro).
+
+  2. POST /presupuestos/:id/movimientos — items[] ahora acepta subcategoria por item.
+     Si no viene en el item, hereda del gasto origen.
+
+  3. GET /presupuestos/:id/detalle — ACTUALIZADO:
+     - Consulta totalGustitos: SUM(amount) FROM gustitos WHERE budget_id AND deleted_at IS NULL
+     - balance_disponible = monto_total - totalGastado - totalGustitos
+     - porcentaje_utilizado incluye Gustitos en el calculo
+     - Respuesta incluye totalGustitos en el objeto resumen
+
+  4. Nuevo modulo Gustitos (7 endpoints):
+     POST   /gustitos
+     GET    /gustitos?firebase_uid=
+     GET    /gustitos/:id?firebase_uid=
+     PATCH  /gustitos/:id
+     DELETE /gustitos/:id?firebase_uid=  (soft delete)
+     GET    /presupuestos/:budgetId/gustitos?firebase_uid=
+     GET    /presupuestos/:budgetId/gustitos/summary?firebase_uid=
+
+CAMBIOS BASE DE DATOS:
+  Migración: database/migrations/add_gustitos_subcategorias.sql
+  Ejecutada en Clever Cloud el 2026-05-13.
+  - ALTER TABLE gastos ADD COLUMN subcategoria VARCHAR(100) NULL
+  - ALTER TABLE movimientos ADD COLUMN subcategoria VARCHAR(100) NULL
+  - CREATE TABLE gustitos (15 campos, soft delete, FK a presupuestos)
+
+CAMBIOS FLUTTER:
+
+  1. lib/widgets/presupuestos/gasto_form_sheet.dart
+     - Nuevo selector de subcategoria: chips en Wrap (12 opciones predefinidas)
+     - El chip seleccionado puede deseleccionarse tocandolo de nuevo
+     - Callback onGuardado recibe subcategoria? opcional al final
+
+  2. lib/services/gustitos_service.dart (NUEVO)
+     - 5 metodos estaticos: listarPorPresupuesto, resumen, crear, eliminar, editar
+
+  3. lib/gustitos/crear_gustito_sheet.dart (NUEVO)
+     - Bottom sheet con: nombre, monto, comercio (opcional), fecha (date picker)
+     - Chips de categoria (12) y emotion_tag (6: antojo/premio/social/impulso/estres/otro)
+     - Mensaje guia: "Compra consciente sin culpa"
+
+  4. lib/gustitos/gustitos_screen.dart (NUEVO)
+     - Lista de Gustitos del presupuesto con total acumulado en header card
+     - _GustitoTile: icono bolt, nombre, categoria, emocion, comercio, fecha, monto, eliminar
+     - Soft delete con confirmacion AlertDialog
+     - FAB "Agregar Gustito"
+     - Estado vacio con mensaje amigable
+
+  5. lib/detalles_presupuesto.dart (ACTUALIZADO)
+     - Import: gustitos_service.dart, crear_gustito_sheet.dart, gustitos_screen.dart
+     - Estado: double totalGustitos
+     - _cargar(): lee resumen.totalGustitos
+     - build(): totalConGustitos = totalGastado + totalGustitos para balance y barra
+     - Stat card "Gustitos" aparece si totalGustitos > 0 (segunda fila de stat cards)
+     - Nueva seccion GUSTITOS entre [botones de accion] y [MOVIMIENTOS]:
+         Card con icono bolt, total, boton + (CrearGustitoSheet), boton → (GustitosScreen)
+     - _MovimientoTile: muestra subcategoria como chip gris pequeño si existe
+     - _agregarGasto() acepta subcategoria y la envia en POST /gastos y POST movimientos
+     - _modalNuevoGasto() propaga subcategoria del GastoFormSheet
+
+APK GENERADO:
+  build/app/outputs/flutter-apk/app-release.apk  24.5 MB  (2026-05-13)
+  Compilacion exitosa sin warnings relevantes.
+
+REGLA DE EXPERIENCIA (GUSTITOS):
+  NUNCA mostrar "gasto hormiga" en la UI. Siempre: "Gustito" / "Gustitos".
+  Tono financiero amigable, sin generar culpa.
+  Preparado para futura integracion QR: campo scanned_invoice_id nullable en tabla.
+
+FLUJO FINANCIERO COMPLETO:
+  balance_disponible = monto_total - SUM(movimientos.monto) - SUM(gustitos.amount)
+  Los Gustitos no reemplazan gastos planificados, son una capa adicional de registro.
+
+CONSIDERACIONES DE ESTABILIDAD:
+  - Las columnas subcategoria son nullable: ninguna query existente se rompe.
+  - La tabla gustitos es completamente nueva: ningun modulo existente la toca.
+  - El calculo de balance en GET /detalle es aditivo: si no hay Gustitos, totalGustitos=0
+    y el resultado es identico al anterior.
+  - Soft delete en gustitos: al eliminar, el disponible se recupera en el proximo _cargar().
+
+RIESGOS FUTUROS IDENTIFICADOS:
+  - La integracion con QR (scanned_invoice_id) no esta implementada; solo el campo FK.
+  - Los Gustitos no tienen periodo asociado: si un usuario tiene muchos Gustitos en
+    presupuestos viejos, todos siguen descontando del disponible actual.
+    Considerar filtrar por fecha en el futuro (ej: solo Gustitos del periodo activo).
+  - La subcategoria es un VARCHAR libre: si en el futuro se necesita validacion estricta
+    o catalogo de categorias, requiere migracion a FK hacia tabla categorias.
 
 ================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING

@@ -441,3 +441,41 @@ CREATE TABLE IF NOT EXISTS aportaciones_ahorro (
 -- [Fase 6 — costo estimado]:
 -- ALTER TABLE receta_insumos ADD COLUMN precio_unitario DECIMAL(10,2) NULL DEFAULT NULL AFTER unidad;
 -- =============================================================================
+
+-- =============================================================================
+-- MÓDULO: SUBCATEGORÍAS + GUSTITOS  (migración: add_gustitos_subcategorias.sql)
+-- =============================================================================
+
+-- Campo subcategoria en gastos y movimientos (nullable, no rompe registros existentes)
+-- ALTER TABLE gastos      ADD COLUMN subcategoria VARCHAR(100) NULL DEFAULT NULL;
+-- ALTER TABLE movimientos ADD COLUMN subcategoria VARCHAR(100) NULL DEFAULT NULL;
+--
+-- Subcategorías sugeridas (el backend acepta cualquier string):
+--   supermercado, gasolina, educacion, entretenimiento, salud, restaurantes,
+--   ropa, transporte, mantenimiento_vehiculo, servicios_basicos, tecnologia, hogar, otros
+
+-- Tabla gustitos: compras pequeñas/espontáneas con conciencia financiera
+CREATE TABLE IF NOT EXISTS gustitos (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  user_id            VARCHAR(128)   NOT NULL,          -- firebase_uid del usuario
+  budget_id          INT            NOT NULL,           -- FK a presupuestos.id
+  scanned_invoice_id INT            NULL,               -- preparado para QR futuro
+  name               VARCHAR(255)   NOT NULL,
+  description        TEXT           NULL,
+  merchant           VARCHAR(255)   NULL,
+  amount             DECIMAL(10,2)  NOT NULL,
+  category           VARCHAR(100)   NULL,
+  emotion_tag        ENUM('antojo','premio','social','impulso','estres','otro') NULL,
+  source             ENUM('manual','scanned_invoice','imported') NOT NULL DEFAULT 'manual',
+  spent_at           DATE           NOT NULL,
+  created_at         TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
+  updated_at         TIMESTAMP      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at         TIMESTAMP      NULL,               -- soft delete
+  INDEX idx_gustitos_user   (user_id),
+  INDEX idx_gustitos_budget (budget_id),
+  FOREIGN KEY (budget_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+);
+-- Regla financiera:
+--   availableAmount = budgetTotal - paidExpenses - totalGustitos
+-- Impacta: GET /presupuestos/:id/detalle → resumen.totalGustitos + balance_disponible
+-- =============================================================================

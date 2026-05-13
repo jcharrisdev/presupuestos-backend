@@ -9,6 +9,7 @@ import 'shared_budgets_list_screen.dart';
 import 'services/auth_service.dart';
 import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
+import 'invoice_scanner/invoice_history_screen.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -149,6 +150,16 @@ class MainMenu extends StatelessWidget {
                 color: AppTheme.success,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => VentasLandingScreen(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
+              _NavCard(
+                icon: Icons.qr_code_scanner,
+                title: 'Facturas QR',
+                subtitle: 'Escanea y asigna facturas electrónicas DGI',
+                color: AppTheme.primary,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => InvoiceHistoryScreen(firebaseUid: firebaseUid),
                 )),
               ),
 

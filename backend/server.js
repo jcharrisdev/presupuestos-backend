@@ -539,7 +539,8 @@ app.post('/gastos', async (req, res) => {
     frecuencia_pago = null,     // 'unico' | 'mensual' | 'quincenal' | 'anual'
     fecha_pago_exacta = null,   // Solo para frecuencia='unico'
     genera_notificacion = false,
-    dias_anticipacion = 3
+    dias_anticipacion = 3,
+    subcategoria = null         // ej: 'supermercado', 'gasolina', 'educacion'
   } = req.body;
 
   if (!presupuesto_id || !descripcion || monto == null || !tipo || !fecha || !firebase_uid)
@@ -553,11 +554,11 @@ app.post('/gastos', async (req, res) => {
     const [result] = await db.execute(
       `INSERT INTO gastos
        (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid,
-        tipo_fecha, dia_pago, frecuencia_pago, fecha_pago_exacta, genera_notificacion, dias_anticipacion)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+        tipo_fecha, dia_pago, frecuencia_pago, fecha_pago_exacta, genera_notificacion, dias_anticipacion, subcategoria)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [presupuesto_id, descripcion, monto, tipo, fechaStr, firebase_uid,
        tipo_fecha, dia_pago, frecuencia_pago, fechaPagoStr,
-       genera_notificacion ? 1 : 0, dias_anticipacion]
+       genera_notificacion ? 1 : 0, dias_anticipacion, subcategoria || null]
     );
     const gastoId = result.insertId;
 
@@ -567,9 +568,9 @@ app.post('/gastos', async (req, res) => {
         const periodo = await getPeriodoActivo(presupuesto_id, firebase_uid);
         await db.execute(
           `INSERT INTO movimientos
-           (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
-          [presupuesto_id, periodo.id, gastoId, descripcion, monto, tipo, firebase_uid]
+           (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, subcategoria, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NOW())`,
+          [presupuesto_id, periodo.id, gastoId, descripcion, monto, tipo, firebase_uid, subcategoria || null]
         );
         console.log(`✅ Movimiento auto-creado para gasto ${gastoId} en periodo ${periodo.id}`);
       } catch (err) { console.error('⚠️ No se pudo auto-crear movimiento:', err.message); }
@@ -866,11 +867,21 @@ app.get('/presupuestos/:id/detalle', async (req, res) => {
       if (m.tipo === 'ahorro')                               totalAhorro += Number(m.monto);
     });
 
+    // Total de Gustitos del presupuesto (módulo independiente)
+    const [[gustitosRow]] = await db.execute(
+      `SELECT COALESCE(SUM(amount), 0) AS totalGustitos
+       FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL`,
+      [id, firebase_uid]
+    );
+    const totalGustitos = Math.round(Number(gustitosRow.totalGustitos) * 100) / 100;
+
     const pagados = movimientos.filter(m => m.pagado === 1).length;
     const totalGastado = totalFijo + totalNoFijo + totalAhorro;
     const montoTotal   = Number(presupuesto.monto_total);
-    const balanceDisponible   = Math.round((montoTotal - totalGastado) * 100) / 100;
-    const porcentajeUtilizado = montoTotal > 0 ? parseFloat((totalGastado / montoTotal * 100).toFixed(1)) : 0;
+    // availableAmount = budgetTotal - paidExpenses - totalGustitos
+    const balanceDisponible   = Math.round((montoTotal - totalGastado - totalGustitos) * 100) / 100;
+    const porcentajeUtilizado = montoTotal > 0 ? parseFloat(((totalGastado + totalGustitos) / montoTotal * 100).toFixed(1)) : 0;
 
     res.json({
       periodo,
@@ -879,6 +890,7 @@ app.get('/presupuestos/:id/detalle', async (req, res) => {
       resumen: {
         totalFijo, totalNoFijo, totalAhorro,
         totalGastado,
+        totalGustitos,
         balance_disponible:    balanceDisponible,
         porcentaje_utilizado:  porcentajeUtilizado,
         porcentajePagados: movimientos.length > 0 ? pagados / movimientos.length : 0,
@@ -939,7 +951,7 @@ app.get('/presupuestos/:id/historico', async (req, res) => {
  */
 app.post('/presupuestos/:id/movimientos', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid, items } = req.body; // items: [{gasto_id, monto}]
+  const { firebase_uid, items } = req.body; // items: [{gasto_id, monto, subcategoria?}]
 
   if (!firebase_uid || !Array.isArray(items) || items.length === 0)
     return res.status(400).json({ error: 'Datos incompletos' });
@@ -948,7 +960,7 @@ app.post('/presupuestos/:id/movimientos', async (req, res) => {
     const periodo = await getPeriodoActivo(id, firebase_uid);
 
     for (const item of items) {
-      const { gasto_id, monto } = item;
+      const { gasto_id, monto, subcategoria } = item;
       if (!gasto_id || monto == null || monto <= 0) continue;
 
       // Verificamos que el gasto existe y pertenece al usuario
@@ -968,11 +980,14 @@ app.post('/presupuestos/:id/movimientos', async (req, res) => {
         if (existing) continue; // Ya existe, no duplicar
       }
 
+      // subcategoria: usa la del item si viene, si no hereda la del gasto
+      const subcategoriaFinal = subcategoria || gasto.subcategoria || null;
+
       await db.execute(
         `INSERT INTO movimientos
-         (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
-        [id, periodo.id, gasto.id, gasto.descripcion, monto, gasto.tipo, firebase_uid]
+         (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, subcategoria, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NOW())`,
+        [id, periodo.id, gasto.id, gasto.descripcion, monto, gasto.tipo, firebase_uid, subcategoriaFinal]
       );
     }
 
@@ -3632,6 +3647,691 @@ app.get('/jobs/:id/financial-summary', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// MÓDULO: GUSTITOS
+// Un Gustito es una compra pequeña, espontánea o personal, registrada para
+// dar conciencia financiera sin generar culpa psicológica.
+// Afecta el disponible del presupuesto (ver GET /presupuestos/:id/detalle).
+// Preparado para integración futura con facturas QR (scanned_invoice_id).
+// =============================================================================
+
+/**
+ * POST /gustitos
+ * Registra un nuevo Gustito asociado a un presupuesto.
+ */
+app.post('/gustitos', async (req, res) => {
+  const {
+    user_id, budget_id, name, amount, spent_at,
+    description = null, merchant = null, category = null,
+    emotion_tag = null, source = 'manual', scanned_invoice_id = null
+  } = req.body;
+
+  if (!user_id || !budget_id || !name || amount == null || !spent_at)
+    return res.status(400).json({ error: 'Datos incompletos: user_id, budget_id, name, amount y spent_at son requeridos' });
+
+  if (Number(amount) <= 0)
+    return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+
+  try {
+    // Verificar que el presupuesto pertenece al usuario
+    const [[presupuesto]] = await db.execute(
+      `SELECT id FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [budget_id, user_id]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    const spentAtStr = spent_at.split('T')[0];
+
+    const [result] = await db.execute(
+      `INSERT INTO gustitos
+       (user_id, budget_id, scanned_invoice_id, name, description, merchant, amount, category, emotion_tag, source, spent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user_id, budget_id, scanned_invoice_id, name, description, merchant,
+       Number(amount), category, emotion_tag, source, spentAtStr]
+    );
+
+    const [[gustito]] = await db.execute(
+      `SELECT * FROM gustitos WHERE id = ?`, [result.insertId]
+    );
+    res.status(201).json(gustito);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /gustitos?firebase_uid=
+ * Lista todos los Gustitos del usuario, más recientes primero.
+ */
+app.get('/gustitos', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [gustitos] = await db.execute(
+      `SELECT * FROM gustitos WHERE user_id = ? AND deleted_at IS NULL ORDER BY spent_at DESC, id DESC`,
+      [firebase_uid]
+    );
+    res.json(gustitos);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /gustitos/:id?firebase_uid=
+ * Detalle de un Gustito específico.
+ */
+app.get('/gustitos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[gustito]] = await db.execute(
+      `SELECT * FROM gustitos WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      [id, firebase_uid]
+    );
+    if (!gustito) return res.status(404).json({ error: 'Gustito no encontrado' });
+    res.json(gustito);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /gustitos/:id
+ * Actualiza campos de un Gustito. Solo se actualizan los campos enviados.
+ */
+app.patch('/gustitos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, name, amount, description, merchant, category, emotion_tag, spent_at } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+
+  try {
+    const [[gustito]] = await db.execute(
+      `SELECT id FROM gustitos WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      [id, firebase_uid]
+    );
+    if (!gustito) return res.status(404).json({ error: 'Gustito no encontrado' });
+
+    if (amount != null && Number(amount) <= 0)
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+
+    const campos = [];
+    const valores = [];
+
+    if (name       != null) { campos.push('name = ?');        valores.push(name); }
+    if (amount     != null) { campos.push('amount = ?');      valores.push(Number(amount)); }
+    if (description != null){ campos.push('description = ?'); valores.push(description); }
+    if (merchant   != null) { campos.push('merchant = ?');    valores.push(merchant); }
+    if (category   != null) { campos.push('category = ?');    valores.push(category); }
+    if (emotion_tag != null){ campos.push('emotion_tag = ?'); valores.push(emotion_tag); }
+    if (spent_at   != null) { campos.push('spent_at = ?');    valores.push(spent_at.split('T')[0]); }
+
+    if (campos.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+    campos.push('updated_at = NOW()');
+    valores.push(id, firebase_uid);
+
+    await db.execute(
+      `UPDATE gustitos SET ${campos.join(', ')} WHERE id = ? AND user_id = ?`,
+      valores
+    );
+
+    const [[updated]] = await db.execute(
+      `SELECT * FROM gustitos WHERE id = ?`, [id]
+    );
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /gustitos/:id?firebase_uid=
+ * Soft delete de un Gustito (deleted_at = NOW()).
+ */
+app.delete('/gustitos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[gustito]] = await db.execute(
+      `SELECT id FROM gustitos WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      [id, firebase_uid]
+    );
+    if (!gustito) return res.status(404).json({ error: 'Gustito no encontrado' });
+
+    await db.execute(
+      `UPDATE gustitos SET deleted_at = NOW() WHERE id = ? AND user_id = ?`,
+      [id, firebase_uid]
+    );
+    res.json({ message: 'Gustito eliminado correctamente' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /presupuestos/:budgetId/gustitos?firebase_uid=
+ * Lista los Gustitos de un presupuesto específico.
+ */
+app.get('/presupuestos/:budgetId/gustitos', async (req, res) => {
+  const { budgetId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[presupuesto]] = await db.execute(
+      `SELECT id FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [budgetId, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    const [gustitos] = await db.execute(
+      `SELECT * FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL
+       ORDER BY spent_at DESC, id DESC`,
+      [budgetId, firebase_uid]
+    );
+    res.json(gustitos);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /presupuestos/:budgetId/gustitos/summary?firebase_uid=
+ * Resumen estadístico de Gustitos para mostrar en el detalle del presupuesto.
+ */
+app.get('/presupuestos/:budgetId/gustitos/summary', async (req, res) => {
+  const { budgetId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[presupuesto]] = await db.execute(
+      `SELECT id FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [budgetId, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    const [[stats]] = await db.execute(
+      `SELECT
+         COALESCE(SUM(amount), 0)   AS total,
+         COUNT(*)                   AS count,
+         COALESCE(AVG(amount), 0)   AS promedio
+       FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL`,
+      [budgetId, firebase_uid]
+    );
+
+    // Categoría más frecuente
+    const [[catRow]] = await db.execute(
+      `SELECT category AS categoria_frecuente, COUNT(*) AS freq
+       FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL AND category IS NOT NULL
+       GROUP BY category
+       ORDER BY freq DESC
+       LIMIT 1`,
+      [budgetId, firebase_uid]
+    );
+
+    // Día con más Gustitos
+    const [[diaRow]] = await db.execute(
+      `SELECT DATE(spent_at) AS dia_con_mas, COUNT(*) AS freq
+       FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL
+       GROUP BY DATE(spent_at)
+       ORDER BY freq DESC
+       LIMIT 1`,
+      [budgetId, firebase_uid]
+    );
+
+    // Últimos 3 registros
+    const [ultimos] = await db.execute(
+      `SELECT id, name, merchant, amount, category, emotion_tag, spent_at
+       FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL
+       ORDER BY spent_at DESC, id DESC
+       LIMIT 3`,
+      [budgetId, firebase_uid]
+    );
+
+    res.json({
+      total:               Math.round(Number(stats.total) * 100) / 100,
+      count:               Number(stats.count),
+      promedio:            Math.round(Number(stats.promedio) * 100) / 100,
+      categoria_frecuente: catRow ? catRow.categoria_frecuente : null,
+      dia_con_mas:         diaRow ? diaRow.dia_con_mas : null,
+      ultimos,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// INVOICE SCANNER — FACTURAS ESCANEADAS QR DGI PANAMA
+// =============================================================================
+
+// Helper: recalcula y actualiza el status de una factura según lo asignado
+async function recalcularStatusFactura(invoiceId) {
+  const [[invoice]] = await db.query(
+    'SELECT total_amount FROM scanned_invoices WHERE id = ?',
+    [invoiceId]
+  );
+  if (!invoice) return;
+  const [[agg]] = await db.query(
+    'SELECT COALESCE(SUM(amount_assigned),0) AS total_assigned FROM scanned_invoice_assignments WHERE invoice_id = ?',
+    [invoiceId]
+  );
+  const total = parseFloat(invoice.total_amount) || 0;
+  const assigned = parseFloat(agg.total_assigned) || 0;
+  let status = 'unassigned';
+  if (assigned >= total && total > 0) status = 'assigned';
+  else if (assigned > 0) status = 'partially_assigned';
+  await db.query('UPDATE scanned_invoices SET status = ?, updated_at = NOW() WHERE id = ?', [status, invoiceId]);
+}
+
+// Helper: parsea el QR string para extraer CUFE y URL
+function parsearQrFactura(qrContent) {
+  const urlMatch = qrContent.match(/https?:\/\/[^\s]+/i);
+  const cufeMatch = qrContent.match(/[A-Fa-f0-9]{96}/);
+  const cufeFromUrl = qrContent.match(/[?&](?:cufe|CUFE|qr)=([A-Za-z0-9_\-]+)/i);
+  return {
+    url_fiscal: urlMatch ? urlMatch[0] : null,
+    cufe: cufeMatch ? cufeMatch[0] : (cufeFromUrl ? cufeFromUrl[1] : qrContent.trim().substring(0, 500)),
+  };
+}
+
+// Helper: intenta obtener datos de la DGI via el URL del QR
+async function consultarDgi(urlFiscal) {
+  if (!urlFiscal) return null;
+  try {
+    const resp = await fetch(urlFiscal, { timeout: 8000 });
+    if (!resp.ok) return null;
+    const html = await resp.text();
+    // Extrae campos básicos del HTML de respuesta DGI Panama
+    const merchantMatch = html.match(/Nombre(?:\s+del)?\s+Emisor[^>]*>([^<]+)/i) ||
+                          html.match(/Raz[oó]n\s+Social[^>]*>([^<]+)/i);
+    const rucMatch     = html.match(/RUC[^>]*>([^<\s]{5,20})/i);
+    const totalMatch   = html.match(/Total\s+(?:a\s+Pagar|General)[^>]*>\s*B\/?\.\s*([\d,\.]+)/i) ||
+                         html.match(/TOTAL[^>]*>([\d,\.]+)/i);
+    const taxMatch     = html.match(/(?:ITBMS|Impuesto)[^>]*>([\d,\.]+)/i);
+    const fechaMatch   = html.match(/Fecha[^>]*>([0-9]{2}[\/\-][0-9]{2}[\/\-][0-9]{4})/i);
+    const numFactMatch = html.match(/N[uú]mero\s+de\s+Factura[^>]*>([^<]+)/i) ||
+                         html.match(/Factura[^\d]*(\d{3}-\d{3}-\d+)/i);
+
+    const parseNum = (s) => s ? parseFloat(s.replace(/,/g, '').replace(/\s/g,'')) : null;
+    const parseFecha = (s) => {
+      if (!s) return null;
+      const parts = s.split(/[\/\-]/);
+      if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+      return null;
+    };
+
+    const total = parseNum(totalMatch ? totalMatch[1] : null);
+    const tax   = parseNum(taxMatch   ? taxMatch[1]   : null);
+    return {
+      merchant_name:    merchantMatch ? merchantMatch[1].trim() : null,
+      merchant_ruc:     rucMatch      ? rucMatch[1].trim()      : null,
+      numero_factura:   numFactMatch  ? numFactMatch[1].trim()  : null,
+      total_amount:     total,
+      tax_amount:       tax,
+      subtotal_amount:  (total != null && tax != null) ? Math.round((total - tax) * 100) / 100 : null,
+      invoice_date:     parseFecha(fechaMatch ? fechaMatch[1] : null),
+      dgi_validated:    1,
+      dgi_raw_response: html.substring(0, 4000),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+// POST /invoice-scanner/process
+app.post('/invoice-scanner/process', async (req, res) => {
+  const { firebase_uid, qr_content } = req.body;
+  if (!firebase_uid || !qr_content) {
+    return res.status(400).json({ error: 'firebase_uid y qr_content son requeridos' });
+  }
+  try {
+    const { url_fiscal, cufe } = parsearQrFactura(qr_content);
+
+    // Verificar duplicado
+    const [[existing]] = await db.query(
+      `SELECT si.*,
+        (SELECT COALESCE(SUM(amount_assigned),0) FROM scanned_invoice_assignments WHERE invoice_id = si.id) AS total_assigned
+       FROM scanned_invoices si WHERE si.firebase_uid = ? AND si.cufe = ?`,
+      [firebase_uid, cufe]
+    );
+    if (existing) {
+      const items = await db.query('SELECT * FROM scanned_invoice_items WHERE invoice_id = ?', [existing.id]);
+      return res.json({ duplicate: true, invoice: { ...existing, items: items[0] } });
+    }
+
+    // Consultar DGI
+    const dgiData = await consultarDgi(url_fiscal);
+
+    // Insertar factura
+    const [result] = await db.query(
+      `INSERT INTO scanned_invoices
+        (firebase_uid, cufe, qr_raw, url_fiscal, numero_factura, merchant_name, merchant_ruc,
+         total_amount, tax_amount, subtotal_amount, invoice_date, status, dgi_validated, dgi_raw_response)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)`,
+      [
+        firebase_uid, cufe, qr_content, url_fiscal,
+        dgiData?.numero_factura  || null,
+        dgiData?.merchant_name   || null,
+        dgiData?.merchant_ruc    || null,
+        dgiData?.total_amount    || null,
+        dgiData?.tax_amount      || null,
+        dgiData?.subtotal_amount || null,
+        dgiData?.invoice_date    || null,
+        dgiData?.dgi_validated   || 0,
+        dgiData?.dgi_raw_response|| null,
+      ]
+    );
+    const invoiceId = result.insertId;
+
+    await db.query(
+      `INSERT INTO invoice_activity_logs (invoice_id, firebase_uid, action, details) VALUES (?,?,?,?)`,
+      [invoiceId, firebase_uid, 'scanned', JSON.stringify({ url_fiscal, cufe, dgi_validated: dgiData?.dgi_validated || 0 })]
+    );
+
+    const [[invoice]] = await db.query('SELECT * FROM scanned_invoices WHERE id = ?', [invoiceId]);
+    res.status(201).json({ duplicate: false, invoice: { ...invoice, items: [] } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /invoice-scanner/invoices
+app.get('/invoice-scanner/invoices', async (req, res) => {
+  const { firebase_uid, status, date_from, date_to, merchant } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    let where = 'WHERE si.firebase_uid = ?';
+    const params = [firebase_uid];
+    if (status)    { where += ' AND si.status = ?';         params.push(status); }
+    if (date_from) { where += ' AND si.invoice_date >= ?';  params.push(date_from); }
+    if (date_to)   { where += ' AND si.invoice_date <= ?';  params.push(date_to); }
+    if (merchant)  { where += ' AND si.merchant_name LIKE ?'; params.push(`%${merchant}%`); }
+
+    const [rows] = await db.query(
+      `SELECT si.*,
+        COALESCE(SUM(sia.amount_assigned),0) AS total_assigned,
+        COUNT(sia.id) AS num_assignments
+       FROM scanned_invoices si
+       LEFT JOIN scanned_invoice_assignments sia ON sia.invoice_id = si.id
+       ${where}
+       GROUP BY si.id
+       ORDER BY si.created_at DESC`,
+      params
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      total_assigned:    Math.round(Number(r.total_assigned) * 100) / 100,
+      remaining:         Math.round((Number(r.total_amount || 0) - Number(r.total_assigned)) * 100) / 100,
+      num_assignments:   Number(r.num_assignments),
+    })));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /invoice-scanner/invoices/:id
+app.get('/invoice-scanner/invoices/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[invoice]] = await db.query(
+      'SELECT * FROM scanned_invoices WHERE id = ? AND firebase_uid = ?',
+      [id, firebase_uid]
+    );
+    if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+
+    const [items]       = await db.query('SELECT * FROM scanned_invoice_items WHERE invoice_id = ?', [id]);
+    const [assignments] = await db.query(
+      'SELECT * FROM scanned_invoice_assignments WHERE invoice_id = ? ORDER BY created_at DESC',
+      [id]
+    );
+    const [[agg]] = await db.query(
+      'SELECT COALESCE(SUM(amount_assigned),0) AS total_assigned FROM scanned_invoice_assignments WHERE invoice_id = ?',
+      [id]
+    );
+    const total_assigned = Math.round(Number(agg.total_assigned) * 100) / 100;
+    const remaining      = Math.round((Number(invoice.total_amount || 0) - total_assigned) * 100) / 100;
+
+    res.json({
+      ...invoice,
+      items,
+      assignments,
+      total_assigned,
+      remaining,
+      is_overpaid: remaining < 0,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /invoice-scanner/invoices/:id/assign
+app.post('/invoice-scanner/invoices/:id/assign', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, assignment_type, target_id, amount_assigned, notes, periodo_id, presupuesto_id } = req.body;
+  if (!firebase_uid || !assignment_type || !amount_assigned) {
+    return res.status(400).json({ error: 'firebase_uid, assignment_type y amount_assigned son requeridos' });
+  }
+  if (amount_assigned <= 0) return res.status(400).json({ error: 'amount_assigned debe ser mayor a 0' });
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[invoice]] = await conn.query(
+      'SELECT * FROM scanned_invoices WHERE id = ? AND firebase_uid = ?',
+      [id, firebase_uid]
+    );
+    if (!invoice) { await conn.rollback(); conn.release(); return res.status(404).json({ error: 'Factura no encontrada' }); }
+
+    const [[agg]] = await conn.query(
+      'SELECT COALESCE(SUM(amount_assigned),0) AS total_assigned FROM scanned_invoice_assignments WHERE invoice_id = ?',
+      [id]
+    );
+    const remaining  = Number(invoice.total_amount || 0) - Number(agg.total_assigned);
+    const overpaid   = amount_assigned > remaining;
+
+    let createdTargetId = target_id || null;
+
+    // Acciones por tipo de asignación
+    if (assignment_type === 'gasto_existente' && target_id) {
+      await conn.query(
+        `UPDATE movimientos SET monto_pagado_real = COALESCE(monto_pagado_real,0) + ?, pagado = 1, fecha_pagado = NOW() WHERE id = ? AND firebase_uid = ?`,
+        [amount_assigned, target_id, firebase_uid]
+      );
+    } else if (assignment_type === 'gasto_nuevo' && presupuesto_id) {
+      const periodoResult = await getPeriodoActivo(presupuesto_id, firebase_uid);
+      const usePeriodoId  = periodo_id || periodoResult?.id;
+      const [mvResult] = await conn.query(
+        `INSERT INTO movimientos (presupuesto_id, periodo_id, descripcion, monto, tipo, pagado, monto_pagado_real, pagado_por_uid, fecha_pagado, firebase_uid)
+         VALUES (?,?,'Gasto factura QR',?,?,1,?,?,NOW(),?)`,
+        [presupuesto_id, usePeriodoId, amount_assigned, 'no fijo', amount_assigned, firebase_uid, firebase_uid]
+      );
+      createdTargetId = mvResult.insertId;
+    } else if (assignment_type === 'gustito' && presupuesto_id) {
+      const [gtResult] = await conn.query(
+        `INSERT INTO gustitos (user_id, budget_id, name, amount, merchant, category, source, scanned_invoice_id, spent_at, created_at)
+         VALUES (?,?,?,?,?,'otro','scanned_invoice',?,NOW(),NOW())`,
+        [firebase_uid, presupuesto_id, invoice.merchant_name || 'Factura QR', amount_assigned, invoice.merchant_name || null, id]
+      );
+      createdTargetId = gtResult.insertId;
+    } else if (assignment_type === 'presupuesto_compartido' && target_id) {
+      const [seResult] = await conn.query(
+        `INSERT INTO shared_expenses (budget_id, paid_by_uid, description, amount, paid_at, created_at)
+         VALUES (?,?,'Factura QR',?,NOW(),NOW())`,
+        [target_id, firebase_uid, amount_assigned]
+      );
+      createdTargetId = seResult.insertId;
+    } else if (['gasto_operativo_servicio','gasto_empresarial','compra_inventario'].includes(assignment_type) && target_id) {
+      const categoria = assignment_type === 'compra_inventario' ? 'inventario' :
+                        assignment_type === 'gasto_empresarial' ? 'empresarial' : 'operativo';
+      const [opResult] = await conn.query(
+        `INSERT INTO operational_expenses (job_id, firebase_uid, description, amount, categoria, scanned_invoice_id, expense_date)
+         VALUES (?,?,?,?,?,?,NOW())`,
+        [target_id, firebase_uid, invoice.merchant_name || 'Factura QR', amount_assigned, categoria, id]
+      );
+      createdTargetId = opResult.insertId;
+    }
+    // sin_asignar: no acción adicional
+
+    const [asgnResult] = await conn.query(
+      `INSERT INTO scanned_invoice_assignments (invoice_id, firebase_uid, assignment_type, target_id, amount_assigned, notes)
+       VALUES (?,?,?,?,?,?)`,
+      [id, firebase_uid, assignment_type, createdTargetId, amount_assigned, notes || null]
+    );
+
+    await conn.query(
+      `INSERT INTO invoice_activity_logs (invoice_id, firebase_uid, action, details) VALUES (?,?,?,?)`,
+      [id, firebase_uid, 'assigned', JSON.stringify({ assignment_type, target_id: createdTargetId, amount_assigned, overpaid })]
+    );
+
+    await conn.commit();
+    conn.release();
+
+    await recalcularStatusFactura(id);
+
+    const [[updatedInvoice]] = await db.query('SELECT * FROM scanned_invoices WHERE id = ?', [id]);
+    res.status(201).json({
+      assignment_id:  asgnResult.insertId,
+      target_id:      createdTargetId,
+      overpaid,
+      excess:         overpaid ? Math.round((amount_assigned - remaining) * 100) / 100 : 0,
+      invoice_status: updatedInvoice.status,
+    });
+  } catch (error) {
+    await conn.rollback();
+    conn.release();
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /invoice-scanner/invoices/:id/assignments/:assignmentId
+app.delete('/invoice-scanner/invoices/:id/assignments/:assignmentId', async (req, res) => {
+  const { id, assignmentId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[asgn]] = await db.query(
+      'SELECT * FROM scanned_invoice_assignments WHERE id = ? AND invoice_id = ? AND firebase_uid = ?',
+      [assignmentId, id, firebase_uid]
+    );
+    if (!asgn) return res.status(404).json({ error: 'Asignación no encontrada' });
+
+    await db.query('DELETE FROM scanned_invoice_assignments WHERE id = ?', [assignmentId]);
+    await db.query(
+      `INSERT INTO invoice_activity_logs (invoice_id, firebase_uid, action, details) VALUES (?,?,?,?)`,
+      [id, firebase_uid, 'assignment_removed', JSON.stringify({ assignment_id: assignmentId, assignment_type: asgn.assignment_type })]
+    );
+    await recalcularStatusFactura(id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /invoice-scanner/invoices/:id
+app.delete('/invoice-scanner/invoices/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[invoice]] = await db.query(
+      'SELECT * FROM scanned_invoices WHERE id = ? AND firebase_uid = ?',
+      [id, firebase_uid]
+    );
+    if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+    if (!['unassigned','pending'].includes(invoice.status)) {
+      return res.status(400).json({ error: 'Solo se pueden eliminar facturas sin asignar o pendientes' });
+    }
+    await db.query('DELETE FROM scanned_invoices WHERE id = ?', [id]);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /invoice-scanner/invoices/:id/logs
+app.get('/invoice-scanner/invoices/:id/logs', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[invoice]] = await db.query(
+      'SELECT id FROM scanned_invoices WHERE id = ? AND firebase_uid = ?',
+      [id, firebase_uid]
+    );
+    if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+    const [logs] = await db.query(
+      'SELECT * FROM invoice_activity_logs WHERE invoice_id = ? ORDER BY created_at DESC',
+      [id]
+    );
+    res.json(logs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /invoice-scanner/invoices/:id — actualizar campos manuales (cuando DGI no responde)
+app.patch('/invoice-scanner/invoices/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, merchant_name, merchant_ruc, numero_factura, total_amount, tax_amount, invoice_date } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[invoice]] = await db.query(
+      'SELECT id FROM scanned_invoices WHERE id = ? AND firebase_uid = ?',
+      [id, firebase_uid]
+    );
+    if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+
+    const fields = [];
+    const vals   = [];
+    if (merchant_name  != null) { fields.push('merchant_name = ?');  vals.push(merchant_name); }
+    if (merchant_ruc   != null) { fields.push('merchant_ruc = ?');   vals.push(merchant_ruc); }
+    if (numero_factura != null) { fields.push('numero_factura = ?'); vals.push(numero_factura); }
+    if (total_amount   != null) {
+      fields.push('total_amount = ?');    vals.push(total_amount);
+      const tax = tax_amount != null ? tax_amount : 0;
+      fields.push('tax_amount = ?');      vals.push(tax);
+      fields.push('subtotal_amount = ?'); vals.push(Math.round((total_amount - tax) * 100) / 100);
+    }
+    if (invoice_date   != null) { fields.push('invoice_date = ?');   vals.push(invoice_date); }
+    if (fields.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
+
+    fields.push('updated_at = NOW()');
+    vals.push(id);
+    await db.query(`UPDATE scanned_invoices SET ${fields.join(', ')} WHERE id = ?`, vals);
+    await recalcularStatusFactura(id);
+    const [[updated]] = await db.query('SELECT * FROM scanned_invoices WHERE id = ?', [id]);
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 

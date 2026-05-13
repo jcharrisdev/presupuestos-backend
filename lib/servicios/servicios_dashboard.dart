@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/servicios_service.dart';
+import '../invoice_scanner/invoice_scanner_screen.dart';
 import 'crear_trabajo_screen.dart';
 import 'trabajo_detalle_screen.dart';
 import 'financiero_dashboard_screen.dart';
@@ -102,6 +103,13 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
       appBar: AppBar(
         title: const Text('Ofrecimiento de servicios'),
         actions: [
+          IconButton(
+            icon: Icon(Icons.qr_code_scanner, size: 22, color: AppTheme.primary),
+            tooltip: 'Escanear factura',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => InvoiceScannerScreen(firebaseUid: widget.firebaseUid),
+            )),
+          ),
           IconButton(
             icon: const Icon(Icons.bar_chart_outlined, size: 22),
             tooltip: 'Dashboard financiero',
