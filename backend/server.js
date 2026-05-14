@@ -5194,6 +5194,142 @@ app.delete('/deudas/:id', async (req, res) => {
 });
 
 // =============================================================================
+// GET /presupuestos/:id/proyeccion — Vista mes a mes (pasado real + futuro estimado)
+// Máximo 2 queries al pool. Devuelve 12 tarjetas mensuales.
+// =============================================================================
+app.get('/presupuestos/:id/proyeccion', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+
+  try {
+    // Query 1: income + datos del presupuesto
+    const [[presRow]] = await db.execute(
+      `SELECT p.monto_total, p.tipo_periodo, p.dia_inicio_periodo,
+              bi.ingreso_neto
+       FROM presupuestos p
+       LEFT JOIN budget_income bi ON bi.presupuesto_id = p.id AND bi.firebase_uid = p.firebase_uid
+       WHERE p.id = ? AND p.firebase_uid = ? LIMIT 1`,
+      [id, firebase_uid]
+    );
+    if (!presRow) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    const ingresoNeto    = presRow.ingreso_neto   ? parseFloat(presRow.ingreso_neto)   : parseFloat(presRow.monto_total);
+    const tipoPeriodo    = presRow.tipo_periodo;
+    const diaInicio      = presRow.dia_inicio_periodo || 1;
+
+    // Query 2: todos los periodos con totales (single JOIN — no N+1)
+    const [rows] = await db.execute(
+      `SELECT
+         p.id, p.numero_periodo, p.fecha_inicio, p.fecha_fin, p.estado,
+         COALESCE(SUM(CASE WHEN m.tipo IN ('fijo','fijo_x_periodo') AND m.pagado=1
+                          THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_fijo,
+         COALESCE(SUM(CASE WHEN m.tipo = 'no fijo' AND m.pagado=1
+                          THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_variable,
+         COALESCE(SUM(CASE WHEN m.tipo = 'ahorro' AND m.pagado=1
+                          THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_ahorro,
+         COALESCE(SUM(CASE WHEN m.pagado=1
+                          THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_gastado,
+         COUNT(m.id) AS total_movimientos
+       FROM periodos p
+       LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
+       WHERE p.presupuesto_id = ? AND p.firebase_uid = ?
+       GROUP BY p.id ORDER BY p.fecha_inicio ASC`,
+      [id, firebase_uid]
+    );
+
+    // Calcular promedios de los últimos 3 periodos cerrados
+    const cerrados = rows.filter(r => r.estado === 'cerrado');
+    const ultimos3 = cerrados.slice(-3);
+    const avgFijo     = ultimos3.length > 0 ? ultimos3.reduce((s, r) => s + parseFloat(r.total_fijo),     0) / ultimos3.length : 0;
+    const avgVariable = ultimos3.length > 0 ? ultimos3.reduce((s, r) => s + parseFloat(r.total_variable), 0) / ultimos3.length : 0;
+    const avgAhorro   = ultimos3.length > 0 ? ultimos3.reduce((s, r) => s + parseFloat(r.total_ahorro),   0) / ultimos3.length : 0;
+
+    // Construir el mes_label en formato "Ene 2026"
+    const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const mesLabel = (fechaStr) => {
+      const d = new Date(fechaStr + 'T12:00:00Z');
+      return `${MESES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    };
+
+    // Función para calcular siguiente fecha_fin desde un fecha_inicio y tipo
+    const siguienteFechaFin = (inicioStr, tipo) => {
+      const d = new Date(inicioStr + 'T12:00:00Z');
+      const dias = tipo === 'quincenal' ? 14 : 30;
+      d.setUTCDate(d.getUTCDate() + dias - 1);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const siguienteFechaInicio = (finStr, tipo, dia) => {
+      const d = new Date(finStr + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString().slice(0, 10);
+    };
+
+    // Construir meses reales
+    const meses = rows.map(r => ({
+      tipo:                r.estado === 'cerrado' ? 'real' : 'activo',
+      periodo_id:          r.id,
+      numero_periodo:      r.numero_periodo,
+      mes_label:           mesLabel(r.fecha_inicio),
+      fecha_inicio:        r.fecha_inicio,
+      fecha_fin:           r.fecha_fin,
+      ingreso_proyectado:  ingresoNeto,
+      gastos_proyectados:  parseFloat(r.total_fijo) + parseFloat(r.total_variable) + parseFloat(r.total_ahorro),
+      saldo_estimado:      ingresoNeto - parseFloat(r.total_fijo) - parseFloat(r.total_variable) - parseFloat(r.total_ahorro),
+      total_fijo:          parseFloat(r.total_fijo),
+      total_variable:      parseFloat(r.total_variable),
+      total_ahorro:        parseFloat(r.total_ahorro),
+      total_gastado:       parseFloat(r.total_gastado),
+      porcentaje_ejecutado: ingresoNeto > 0 ? parseFloat(r.total_gastado) / ingresoNeto : null,
+    }));
+
+    // Rellenar con meses proyectados hasta llegar a 12
+    const activo = rows.find(r => r.estado === 'activo');
+    let ultimaFechaFin = activo
+      ? activo.fecha_fin
+      : (rows.length > 0 ? rows[rows.length - 1].fecha_fin : new Date().toISOString().slice(0, 10));
+    let numeroPeriodo = rows.length > 0 ? rows[rows.length - 1].numero_periodo : 0;
+
+    while (meses.length < 12) {
+      const nuevoInicio = siguienteFechaInicio(ultimaFechaFin, tipoPeriodo, diaInicio);
+      const nuevoFin    = siguienteFechaFin(nuevoInicio, tipoPeriodo);
+      numeroPeriodo++;
+      const gastosProyect = avgFijo + avgVariable + avgAhorro;
+      meses.push({
+        tipo:                'proyectado',
+        periodo_id:          null,
+        numero_periodo:      numeroPeriodo,
+        mes_label:           mesLabel(nuevoInicio),
+        fecha_inicio:        nuevoInicio,
+        fecha_fin:           nuevoFin,
+        ingreso_proyectado:  ingresoNeto,
+        gastos_proyectados:  parseFloat(gastosProyect.toFixed(2)),
+        saldo_estimado:      parseFloat((ingresoNeto - gastosProyect).toFixed(2)),
+        total_fijo:          parseFloat(avgFijo.toFixed(2)),
+        total_variable:      parseFloat(avgVariable.toFixed(2)),
+        total_ahorro:        parseFloat(avgAhorro.toFixed(2)),
+        total_gastado:       null,
+        porcentaje_ejecutado: null,
+      });
+      ultimaFechaFin = nuevoFin;
+    }
+
+    res.json({
+      ingreso_neto:  ingresoNeto,
+      tiene_income:  !!presRow.ingreso_neto,
+      avg_fijo:      parseFloat(avgFijo.toFixed(2)),
+      avg_variable:  parseFloat(avgVariable.toFixed(2)),
+      avg_ahorro:    parseFloat(avgAhorro.toFixed(2)),
+      meses,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
 const PORT = process.env.PORT || 3002;

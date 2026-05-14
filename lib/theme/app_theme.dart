@@ -69,6 +69,9 @@ class AppTheme {
   /// Verde para gastos de ahorro (metas, reservas).
   static const Color colorAhorro   = Color(0xFF0ECB81);
 
+  /// Rojo para deudas dentro del presupuesto.
+  static const Color colorDeuda    = Color(0xFFF6465D);
+
   // ─── TEMA GLOBAL ──────────────────────────────────────────────────────────
 
   /// [ThemeData] completo para inyectar en [MaterialApp.theme].
@@ -198,9 +201,10 @@ class AppTheme {
   static Color gastoColor(String tipo) {
     switch (tipo) {
       case 'fijo':            return colorFijo;
-      case 'fijo_x_periodo':  return colorFijo;   // mismo color que fijo
+      case 'fijo_x_periodo':  return colorFijo;
       case 'no fijo':         return colorNoFijo;
       case 'ahorro':          return colorAhorro;
+      case 'deuda':           return colorDeuda;
       default:                return textSecondary;
     }
   }
@@ -214,6 +218,7 @@ class AppTheme {
       case 'fijo_x_periodo':  return 'Fijo x período';
       case 'no fijo':         return 'Variable';
       case 'ahorro':          return 'Ahorro';
+      case 'deuda':           return 'Deuda';
       default:                return tipo;
     }
   }

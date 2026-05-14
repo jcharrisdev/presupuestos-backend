@@ -108,4 +108,16 @@ class IncomeService {
       return null;
     }
   }
+
+  // Proyección 12 meses (pasado real + presente live + futuro estimado)
+  static Future<Map<String, dynamic>?> getProyeccion(
+      int presupuestoId, String uid) async {
+    try {
+      final res = await ApiClient.get(
+          '/presupuestos/$presupuestoId/proyeccion?firebase_uid=$uid');
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
 }
