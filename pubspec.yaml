@@ -1,7 +1,7 @@
 name: salarying
 description: "Gestor de finanzas personales."
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.1+5
 
 environment:
   sdk: ^3.5.1
