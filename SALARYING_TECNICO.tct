@@ -2093,5 +2093,60 @@ ARCHIVO MODIFICADO:
     - Al tap navega a DetallesPresupuesto
 
 ================================================================================
+SESION 5 (2026-05-13) — Reestructuración módulo presupuestos
+================================================================================
+
+OBJETIVO: Convertir módulo de presupuestos de "registro manual" a
+"sistema de decisión financiera" con flujo guiado: Ingresos > Gastos > Proyección.
+
+DB MIGRATION (ejecutada en Clever Cloud):
+  database/migrations/add_budget_module_v2.sql
+  ALTER TABLE gastos ADD COLUMN tipo_deuda, descuento_directo, fecha_fin, num_cuotas
+  ALTER TABLE budget_income ADD COLUMN calcular_automatico, ingreso_bruto_mensual
+
+NUEVO ENDPOINT BACKEND (server.js antes de app.listen):
+  GET /presupuestos/:id/proyeccion?firebase_uid=
+  - 2 queries totales (respeta pool=3)
+  - Devuelve 12 tarjetas (real/activo/proyectado) con promedios de últimos 3 períodos
+
+ARCHIVOS NUEVOS FLUTTER:
+  lib/widgets/presupuestos/analisis_financiero_section.dart
+    - ExpansionTile colapsable con ClasificacionCard, 50/30/20, Fondo, Patrones, Alertas
+  lib/widgets/presupuestos/proyeccion_mes_card.dart
+    - Card por mes con badge real/activo/proyectado, prefijo ~ en estimados
+
+ARCHIVOS MODIFICADOS FLUTTER:
+  lib/crear_presupuesto.dart
+    - Wizard 3 pasos: Básicos > Ingreso (con auto-calc Panamá) > Gastos
+    - PageView + PageController + _StepDots indicador
+    - Submit: POST /presupuestos + /income + /gastos + /movimientos secuencial
+  lib/detalles_presupuesto.dart
+    - TabController length: 2 → 3 (Período / Proyección / Historial)
+    - Tab1 reorden: Ingreso > Este Período > Movimientos > Análisis colapsable > Gustitos
+    - Tab2 nuevo: ListView de ProyeccionMesCard, FAB "Agregar meta"
+    - _cargarProyeccion() lazy (igual patrón que _cargarHistorico)
+    - CapacidadCard al tope como punto de entrada al sistema de ingreso
+  lib/widgets/presupuestos/income_form_sheet.dart
+    - Toggle auto-cálculo Panamá: CSS 9.75%, Educativo 1.25%, ISR (>916.67 * 15%)
+    - Labels: "Seguro Social (CSS)", "Educativo (IFARHU)"
+    - Campos auto-calculados en readOnly con ícono calculadora
+  lib/widgets/presupuestos/gasto_form_sheet.dart
+    - Tipo 'deuda' nuevo con chip rojo
+    - Switch "Descuento directo del salario" (solo para deuda)
+    - DatePicker "fecha_fin" (deuda y variable)
+    - TextField "Número de cuotas" (variable)
+  lib/theme/app_theme.dart
+    - colorDeuda = Color(0xFFF6465D)
+    - gastoColor/gastoLabel con case 'deuda'
+  lib/services/income_service.dart
+    - getProyeccion() → GET /presupuestos/:id/proyeccion
+
+APK GENERADO:
+  build/app/outputs/flutter-apk/app-release.apk  34.0 MB  (2026-05-13 sesion 5)
+
+COMMIT:
+  eaad646 feat: reestructuracion modulo presupuestos (wizard + proyeccion + analisis)
+
+================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING
 ================================================================================
