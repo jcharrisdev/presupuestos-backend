@@ -4400,6 +4400,413 @@ app.patch('/invoice-scanner/invoices/:id', async (req, res) => {
 });
 
 // =============================================================================
+// HELPER: CIERRE MANUAL DE PERÍODO (reutilizable por endpoint y por auto-cierre)
+// =============================================================================
+async function cerrarPeriodoManual(periodoId, presupuestoId, firebaseUid) {
+  await db.execute(
+    `UPDATE periodos SET estado = 'cerrado', closed_at = NOW() WHERE id = ? AND presupuesto_id = ? AND firebase_uid = ?`,
+    [periodoId, presupuestoId, firebaseUid]
+  );
+  const [[cerrado]] = await db.execute(
+    `SELECT fecha_fin, tipo_periodo FROM periodos WHERE id = ?`,
+    [periodoId]
+  );
+  return crearNuevoPeriodo(presupuestoId, firebaseUid, cerrado.tipo_periodo, cerrado.fecha_fin);
+}
+
+// =============================================================================
+// P1 — INGRESO NETO REAL
+// =============================================================================
+
+// GET /presupuestos/:id/income — obtener income configurado (204 si no existe)
+app.get('/presupuestos/:id/income', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[row]] = await db.execute(
+      `SELECT * FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ? LIMIT 1`,
+      [id, firebase_uid]
+    );
+    if (!row) return res.status(204).send();
+    res.json(row);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /presupuestos/:id/income — crear o actualizar income (upsert)
+app.post('/presupuestos/:id/income', async (req, res) => {
+  const { id } = req.params;
+  const {
+    firebase_uid, tipo_ingreso,
+    ingreso_bruto, desc_seguro, desc_pension, desc_impuesto, desc_otros,
+    ingreso_neto: ingreso_neto_raw, nota
+  } = req.body;
+  if (!firebase_uid || !tipo_ingreso) {
+    return res.status(400).json({ error: 'firebase_uid y tipo_ingreso son requeridos' });
+  }
+  try {
+    const [[presupuesto]] = await db.execute(
+      `SELECT id FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+
+    let ingreso_neto;
+    let bruto = null, seguro = 0, pension = 0, impuesto = 0, otros = 0;
+
+    if (tipo_ingreso === 'salario') {
+      bruto     = parseFloat(ingreso_bruto)   || 0;
+      seguro    = parseFloat(desc_seguro)     || 0;
+      pension   = parseFloat(desc_pension)    || 0;
+      impuesto  = parseFloat(desc_impuesto)   || 0;
+      otros     = parseFloat(desc_otros)      || 0;
+      ingreso_neto = Math.round((bruto - seguro - pension - impuesto - otros) * 100) / 100;
+    } else {
+      ingreso_neto = parseFloat(ingreso_neto_raw) || 0;
+    }
+
+    if (ingreso_neto <= 0) return res.status(400).json({ error: 'ingreso_neto debe ser mayor a 0' });
+
+    await db.execute(
+      `INSERT INTO budget_income
+         (presupuesto_id, firebase_uid, tipo_ingreso, ingreso_bruto,
+          desc_seguro, desc_pension, desc_impuesto, desc_otros, ingreso_neto, nota)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         tipo_ingreso  = VALUES(tipo_ingreso),
+         ingreso_bruto = VALUES(ingreso_bruto),
+         desc_seguro   = VALUES(desc_seguro),
+         desc_pension  = VALUES(desc_pension),
+         desc_impuesto = VALUES(desc_impuesto),
+         desc_otros    = VALUES(desc_otros),
+         ingreso_neto  = VALUES(ingreso_neto),
+         nota          = VALUES(nota),
+         updated_at    = NOW()`,
+      [id, firebase_uid, tipo_ingreso, bruto, seguro, pension, impuesto, otros, ingreso_neto, nota || null]
+    );
+
+    const [[saved]] = await db.execute(
+      `SELECT * FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    res.json(saved);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// P2 — CAPACIDAD REAL DE PAGO
+// =============================================================================
+
+// GET /presupuestos/:id/capacidad
+app.get('/presupuestos/:id/capacidad', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    // 1. Ingreso neto configurado
+    const [[incomeRow]] = await db.execute(
+      `SELECT ingreso_neto FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ? LIMIT 1`,
+      [id, firebase_uid]
+    );
+
+    // 2. Gastos fijos del período activo
+    const [[fijoRow]] = await db.execute(
+      `SELECT COALESCE(SUM(m.monto), 0) AS gastos_fijos
+       FROM movimientos m
+       JOIN periodos p ON p.id = m.periodo_id
+       WHERE m.presupuesto_id = ? AND m.firebase_uid = ?
+         AND p.estado = 'activo'
+         AND m.tipo IN ('fijo', 'fijo_x_periodo')`,
+      [id, firebase_uid]
+    );
+
+    // 3. Promedio de variables en últimos 3 períodos cerrados
+    const [periodosCerrados] = await db.execute(
+      `SELECT p.id,
+              COALESCE(SUM(CASE WHEN m.tipo = 'no fijo' AND m.pagado = 1 THEN m.monto_pagado_real ELSE 0 END), 0) AS total_variable
+       FROM periodos p
+       LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
+       WHERE p.presupuesto_id = ? AND p.firebase_uid = ? AND p.estado = 'cerrado'
+       GROUP BY p.id
+       ORDER BY p.numero_periodo DESC
+       LIMIT 3`,
+      [id, firebase_uid]
+    );
+
+    const ingreso_neto = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
+    const gastos_fijos = parseFloat(fijoRow.gastos_fijos);
+    const promedio_variable = periodosCerrados.length > 0
+      ? periodosCerrados.reduce((s, r) => s + parseFloat(r.total_variable), 0) / periodosCerrados.length
+      : 0;
+    const promedio_variable_r = Math.round(promedio_variable * 100) / 100;
+
+    const capacidad_real = ingreso_neto !== null
+      ? Math.round((ingreso_neto - gastos_fijos - promedio_variable_r) * 100) / 100
+      : null;
+
+    res.json({
+      ingreso_neto,
+      gastos_fijos_totales: gastos_fijos,
+      promedio_variable_historico: promedio_variable_r,
+      capacidad_real,
+      tiene_income: incomeRow != null,
+      periodos_historico: periodosCerrados.length
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// P3 — FONDO DE SEGURIDAD
+// =============================================================================
+
+// GET /presupuestos/:id/fondo-seguridad
+app.get('/presupuestos/:id/fondo-seguridad', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    // 1. Gastos fijos del período activo (proxy de esenciales)
+    const [[fijoRow]] = await db.execute(
+      `SELECT COALESCE(SUM(m.monto), 0) AS gastos_fijos
+       FROM movimientos m
+       JOIN periodos p ON p.id = m.periodo_id
+       WHERE m.presupuesto_id = ? AND m.firebase_uid = ?
+         AND p.estado = 'activo'
+         AND m.tipo IN ('fijo', 'fijo_x_periodo')`,
+      [id, firebase_uid]
+    );
+
+    // 2. Total ahorrado del usuario en todas sus metas de ahorro
+    const [[ahorroRow]] = await db.execute(
+      `SELECT COALESCE(SUM(sub.total), 0) AS total_ahorrado
+       FROM (
+         SELECT g.id,
+           COALESCE(SUM(CASE WHEN m.pagado = 1 THEN m.monto_pagado_real ELSE 0 END), 0)
+           + COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total
+         FROM gastos g
+         LEFT JOIN movimientos m ON m.gasto_id = g.id
+         WHERE g.firebase_uid = ? AND g.tipo = 'ahorro'
+         GROUP BY g.id
+       ) sub`,
+      [firebase_uid]
+    );
+
+    const gastos_fijos = parseFloat(fijoRow.gastos_fijos);
+    const total_ahorrado = parseFloat(ahorroRow.total_ahorrado);
+    const objetivo_nivel1 = Math.round(gastos_fijos * 100) / 100;
+    const objetivo_nivel2 = Math.round(gastos_fijos * 2 * 100) / 100;
+    const objetivo_nivel3 = Math.round(gastos_fijos * 6 * 100) / 100;
+
+    let nivel_actual = 0;
+    if (total_ahorrado >= objetivo_nivel3) nivel_actual = 3;
+    else if (total_ahorrado >= objetivo_nivel2) nivel_actual = 2;
+    else if (total_ahorrado >= objetivo_nivel1) nivel_actual = 1;
+
+    const pct_nivel1 = objetivo_nivel1 > 0
+      ? Math.min(Math.round((total_ahorrado / objetivo_nivel1) * 1000) / 1000, 1.0)
+      : 0;
+
+    res.json({
+      total_ahorrado_actual: total_ahorrado,
+      gastos_fijos_un_periodo: gastos_fijos,
+      objetivo_nivel1,
+      objetivo_nivel2,
+      objetivo_nivel3,
+      nivel_actual,
+      pct_nivel1
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// P5 — PATRONES DE GUSTITOS (aprendizaje)
+// =============================================================================
+
+// GET /presupuestos/:id/gustitos/patrones
+app.get('/presupuestos/:id/gustitos/patrones', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [patrones] = await db.execute(
+      `SELECT
+         g.category,
+         COUNT(DISTINCT p.id)              AS periodos_con_gasto,
+         COUNT(*)                          AS total_registros,
+         ROUND(SUM(g.amount), 2)           AS monto_total,
+         ROUND(AVG(g.amount), 2)           AS monto_promedio
+       FROM gustitos g
+       JOIN periodos p ON (
+         g.spent_at >= p.fecha_inicio AND g.spent_at <= p.fecha_fin
+         AND p.presupuesto_id = ? AND p.firebase_uid = ?
+       )
+       WHERE g.budget_id = ? AND g.user_id = ?
+         AND g.deleted_at IS NULL
+         AND g.category IS NOT NULL AND g.category != ''
+       GROUP BY g.category
+       HAVING periodos_con_gasto >= 2
+       ORDER BY periodos_con_gasto DESC, monto_total DESC`,
+      [id, firebase_uid, id, firebase_uid]
+    );
+    res.json({ tiene_patrones: patrones.length > 0, patrones });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// P4 — CIERRE DE PERÍODO (resumen + cierre manual)
+// =============================================================================
+
+// GET /presupuestos/:id/periodo/:periodoId/resumen-cierre
+app.get('/presupuestos/:id/periodo/:periodoId/resumen-cierre', async (req, res) => {
+  const { id, periodoId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    // Datos del período
+    const [[periodo]] = await db.execute(
+      `SELECT * FROM periodos WHERE id = ? AND presupuesto_id = ? AND firebase_uid = ?`,
+      [periodoId, id, firebase_uid]
+    );
+    if (!periodo) return res.status(404).json({ error: 'Período no encontrado' });
+
+    // Presupuesto (monto_total)
+    const [[presupuesto]] = await db.execute(
+      `SELECT monto_total FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+
+    // Gastado real y ahorro del período
+    const [[gastadoRow]] = await db.execute(
+      `SELECT
+         COALESCE(SUM(CASE WHEN pagado = 1 THEN monto_pagado_real ELSE 0 END), 0) AS total_gastado_real,
+         COALESCE(SUM(CASE WHEN tipo = 'ahorro' AND pagado = 1 THEN monto_pagado_real ELSE 0 END), 0) AS total_ahorro
+       FROM movimientos WHERE periodo_id = ? AND firebase_uid = ?`,
+      [periodoId, firebase_uid]
+    );
+
+    // Ingreso neto configurado
+    const [[incomeRow]] = await db.execute(
+      `SELECT ingreso_neto FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+
+    // Gustitos del período
+    const fechaIni = periodo.fecha_inicio instanceof Date
+      ? periodo.fecha_inicio.toISOString().split('T')[0]
+      : String(periodo.fecha_inicio);
+    const fechaFin = periodo.fecha_fin instanceof Date
+      ? periodo.fecha_fin.toISOString().split('T')[0]
+      : String(periodo.fecha_fin);
+
+    const [[gustitosRow]] = await db.execute(
+      `SELECT COALESCE(SUM(amount), 0) AS total_gustitos, COUNT(*) AS count_gustitos
+       FROM gustitos
+       WHERE budget_id = ? AND user_id = ? AND deleted_at IS NULL
+         AND spent_at BETWEEN ? AND ?`,
+      [id, firebase_uid, fechaIni, fechaFin]
+    );
+
+    const ingreso_neto    = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
+    const monto_total     = parseFloat(presupuesto.monto_total);
+    const total_gastado   = parseFloat(gastadoRow.total_gastado_real);
+    const total_ahorro    = parseFloat(gastadoRow.total_ahorro);
+    const total_gustitos  = parseFloat(gustitosRow.total_gustitos);
+    const disponible_real = ingreso_neto !== null
+      ? Math.round((ingreso_neto - total_gastado - total_gustitos) * 100) / 100
+      : Math.round((monto_total - total_gastado - total_gustitos) * 100) / 100;
+
+    // Calcular si puede cerrar manualmente
+    const hoy = new Date();
+    const finDate = new Date(fechaFin + 'T23:59:59');
+    const diffDias = Math.ceil((finDate - hoy) / (1000 * 60 * 60 * 24));
+    const puede_cerrar_manualmente = periodo.estado === 'activo' && diffDias <= 2;
+
+    // Aprendizajes automáticos
+    const aprendizajes = [];
+    if (total_gustitos > 0) {
+      const pctGustitos = ingreso_neto ? total_gustitos / ingreso_neto : total_gustitos / monto_total;
+      if (pctGustitos >= 0.10) {
+        aprendizajes.push(`Gastaste $${total_gustitos.toFixed(2)} en Gustitos (${Math.round(pctGustitos * 100)}% de tu ingreso). Considera agregar una categoría para gastos espontáneos.`);
+      } else {
+        aprendizajes.push(`Tuviste $${total_gustitos.toFixed(2)} en Gustitos este período. ¡Buen control!`);
+      }
+    }
+    if (ingreso_neto && total_ahorro > 0) {
+      const tasaAhorro = total_ahorro / ingreso_neto;
+      if (tasaAhorro >= 0.20) {
+        aprendizajes.push(`Tu tasa de ahorro fue ${Math.round(tasaAhorro * 100)}%. ¡Excelente!`);
+      } else if (tasaAhorro >= 0.10) {
+        aprendizajes.push(`Ahorraste ${Math.round(tasaAhorro * 100)}% de tu ingreso. La meta recomendada es 20%.`);
+      } else {
+        aprendizajes.push(`Tu ahorro fue bajo (${Math.round(tasaAhorro * 100)}%). Considera aumentarlo el próximo período.`);
+      }
+    }
+    if (total_gastado > monto_total) {
+      aprendizajes.push(`Superaste tu presupuesto por $${(total_gastado - monto_total).toFixed(2)}. Revisa tus gastos variables.`);
+    } else if (disponible_real > 0) {
+      aprendizajes.push(`Cerraste con $${disponible_real.toFixed(2)} disponibles. ¡Bien manejado!`);
+    }
+
+    res.json({
+      periodo: {
+        id: periodo.id,
+        numero_periodo: periodo.numero_periodo,
+        fecha_inicio: fechaIni,
+        fecha_fin: fechaFin,
+        estado: periodo.estado
+      },
+      monto_total,
+      ingreso_neto,
+      total_gastado_real: total_gastado,
+      total_ahorro,
+      total_gustitos,
+      disponible_real,
+      tiene_income: incomeRow != null,
+      puede_cerrar_manualmente,
+      aprendizajes
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /presupuestos/:id/periodo/:periodoId/cerrar — cierre manual
+app.post('/presupuestos/:id/periodo/:periodoId/cerrar', async (req, res) => {
+  const { id, periodoId } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
+  try {
+    const [[periodo]] = await db.execute(
+      `SELECT id FROM periodos WHERE id = ? AND presupuesto_id = ? AND firebase_uid = ? AND estado = 'activo'`,
+      [periodoId, id, firebase_uid]
+    );
+    if (!periodo) return res.status(409).json({ error: 'El período ya fue cerrado' });
+
+    const nuevoPeriodo = await cerrarPeriodoManual(periodoId, id, firebase_uid);
+    res.json({ message: 'Período cerrado', nuevo_periodo: nuevoPeriodo });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
 const PORT = process.env.PORT || 3002;

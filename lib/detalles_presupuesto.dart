@@ -27,10 +27,16 @@ import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/pdf_service.dart';
 import 'services/gustitos_service.dart';
+import 'services/income_service.dart';
 import 'editar_presupuesto.dart';
+import 'cierre_periodo_screen.dart';
 import 'widgets/presupuestos/balance_card.dart';
 import 'widgets/presupuestos/pago_form_sheet.dart';
 import 'widgets/presupuestos/gasto_form_sheet.dart';
+import 'widgets/presupuestos/income_form_sheet.dart';
+import 'widgets/presupuestos/capacidad_card.dart';
+import 'widgets/presupuestos/fondo_seguridad_card.dart';
+import 'widgets/presupuestos/patrones_gustitos_banner.dart';
 import 'gustitos/crear_gustito_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
 
@@ -52,6 +58,12 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
   double montoTotal = 0;
   double porcentajePagados = 0;
   bool isLoading = true;
+
+  // Nuevas métricas financieras (P1-P5)
+  Map<String, dynamic>? _income;
+  Map<String, dynamic>? _capacidad;
+  Map<String, dynamic>? _fondo;
+  Map<String, dynamic>? _patrones;
 
   // Historial de períodos (tab Historial)
   late TabController _tabController;
@@ -133,6 +145,70 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error al cargar detalle')));
     }
+    _cargarExtras();
+  }
+
+  // Carga métricas financieras adicionales sin bloquear la UI principal
+  Future<void> _cargarExtras() async {
+    final id  = widget.presupuesto['id'] as int;
+    final uid = widget.firebaseUid;
+    try {
+      final results = await Future.wait([
+        IncomeService.getIncome(id, uid),
+        IncomeService.getCapacidad(id, uid),
+        IncomeService.getFondoSeguridad(id, uid),
+        IncomeService.getPatronesGustitos(id, uid),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _income   = results[0];
+        _capacidad = results[1];
+        _fondo    = results[2];
+        _patrones = results[3];
+      });
+    } catch (_) {}
+  }
+
+  void _abrirIncomeForm() {
+    IncomeFormSheet.show(
+      context,
+      presupuestoId: widget.presupuesto['id'] as int,
+      firebaseUid: widget.firebaseUid,
+      incomeActual: _income,
+      onGuardado: (inc) {
+        if (mounted) setState(() => _income = inc);
+        _cargarExtras();
+      },
+    );
+  }
+
+  bool _mostrarBotonCierre() {
+    if (periodo == null) return false;
+    try {
+      final finStr = periodo!['fecha_fin']?.toString() ?? '';
+      if (finStr.isEmpty) return false;
+      final fin = DateTime.parse(finStr);
+      final hoy = DateTime.now();
+      final diff = fin.difference(DateTime(hoy.year, hoy.month, hoy.day)).inDays;
+      return diff <= 2;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _navegarACierre() async {
+    if (periodo == null) return;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CierrePeriodoScreen(
+          presupuesto: widget.presupuesto,
+          periodo: periodo!,
+          firebaseUid: widget.firebaseUid,
+        ),
+      ),
+    );
+    if (result == true && mounted) _cargar();
   }
 
   /// Llama al endpoint que re-crea movimientos de gastos fijos no presentes en el período.
@@ -565,6 +641,24 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     )),
                   ]),
 
+                  // Botón cierre de período (últimos 2 días o vencido)
+                  if (_mostrarBotonCierre()) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _navegarACierre,
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: const Text('Cerrar período'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.warning,
+                          side: const BorderSide(color: AppTheme.warning),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 20),
 
                   // ── SECCIÓN GUSTITOS ──────────────────────────────────────
@@ -642,6 +736,23 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     ]),
                   ),
                   const SizedBox(height: 20),
+
+                  // ── P2: Capacidad real de pago ────────────────────────────
+                  CapacidadCard(
+                    capacidad: _capacidad,
+                    onConfigurar: _abrirIncomeForm,
+                  ),
+
+                  // ── P3: Fondo de seguridad ────────────────────────────────
+                  if (_fondo != null)
+                    FondoSeguridadCard(fondo: _fondo!),
+
+                  // ── P5: Patrones de gustitos ──────────────────────────────
+                  PatronesGustitosBanner(
+                    patrones: _patrones,
+                    onAgregarGasto: (_) => _modalNuevoGasto(),
+                  ),
+
                   const LabelDivider('MOVIMIENTOS'),
 
                   // ── LISTA DE MOVIMIENTOS ──────────────────────────────────

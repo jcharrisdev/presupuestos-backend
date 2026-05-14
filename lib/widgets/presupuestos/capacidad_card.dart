@@ -1,0 +1,147 @@
+import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+
+class CapacidadCard extends StatelessWidget {
+  final Map<String, dynamic>? capacidad;
+  final VoidCallback onConfigurar;
+
+  const CapacidadCard({
+    super.key,
+    required this.capacidad,
+    required this.onConfigurar,
+  });
+
+  double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0.0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (capacidad == null) return const SizedBox.shrink();
+
+    final tieneIncome = capacidad!['tiene_income'] == true;
+
+    if (!tieneIncome) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.account_balance_wallet_outlined,
+                color: AppTheme.textSecondary, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text('Capacidad real de pago',
+                      style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13)),
+                  SizedBox(height: 2),
+                  Text('Configura tu ingreso para ver cuánto puedes comprometer',
+                      style: TextStyle(
+                          color: AppTheme.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: onConfigurar,
+              style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+              child: const Text('Configurar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final ingresoNeto = _d(capacidad!['ingreso_neto']);
+    final fijos       = _d(capacidad!['gastos_fijos_totales']);
+    final variables   = _d(capacidad!['promedio_variable_historico']);
+    final capacidadR  = _d(capacidad!['capacidad_real']);
+    final positivo    = capacidadR >= 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            child: Row(
+              children: const [
+                Icon(Icons.account_balance_wallet_outlined,
+                    color: AppTheme.primary, size: 16),
+                SizedBox(width: 6),
+                Text('Capacidad real de pago',
+                    style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          // Número grande
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text(
+              '\$${capacidadR.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: positivo ? AppTheme.success : AppTheme.danger,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(color: AppTheme.border, height: 1),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                _Fila('Ingreso neto', ingresoNeto, AppTheme.success),
+                _Fila('Gastos fijos', -fijos, AppTheme.danger),
+                _Fila('Var. promedio histórico', -variables, AppTheme.textSecondary),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Fila extends StatelessWidget {
+  final String label;
+  final double monto;
+  final Color color;
+  const _Fila(this.label, this.monto, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    final sign = monto >= 0 ? '+' : '';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  color: AppTheme.textSecondary, fontSize: 12)),
+          Text('$sign\$${monto.abs().toStringAsFixed(2)}',
+              style: TextStyle(
+                  color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
