@@ -262,7 +262,9 @@ class _AhorroCardState extends State<_AhorroCard> {
 
   @override
   Widget build(BuildContext context) {
-    final meta       = double.tryParse(widget.ahorro['monto_meta'].toString()) ?? 0;
+    // monto_meta_total = meta real (cuota × total períodos); monto_meta = cuota (fallback)
+    final metaRaw    = widget.ahorro['monto_meta_total'] ?? widget.ahorro['monto_meta'];
+    final meta       = double.tryParse(metaRaw?.toString() ?? '0') ?? 0;
     final ahorrado   = double.tryParse(widget.ahorro['monto_ahorrado'].toString()) ?? 0;
     final aportado   = double.tryParse(widget.ahorro['total_aportaciones']?.toString() ?? '0') ?? 0;
     final totalReal  = ahorrado + aportado;

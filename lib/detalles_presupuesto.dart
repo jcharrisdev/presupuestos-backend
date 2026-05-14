@@ -65,6 +65,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
   double montoTotal = 0;
   double porcentajePagados = 0;
   bool isLoading = true;
+  bool _bannerNuevoPeriodoVisible = false;
 
   // Métricas financieras P1-P5 + nuevas #4/#6/#7
   Map<String, dynamic>? _income;
@@ -166,6 +167,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
           totalGustitos     = _d(data['resumen']['totalGustitos']);
           porcentajePagados = _d(data['resumen']['porcentajePagados']);
           isLoading         = false;
+          _bannerNuevoPeriodoVisible = _detectarPeriodoNuevo(data['periodo']);
         });
       } else { throw Exception(); }
     } catch (_) {
@@ -218,6 +220,81 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
         if (mounted) setState(() => _income = inc);
         _cargarExtras();
       },
+    );
+  }
+
+  bool _detectarPeriodoNuevo(dynamic p) {
+    if (p == null) return false;
+    try {
+      final inicioStr = p['fecha_inicio']?.toString() ?? '';
+      if (inicioStr.isEmpty) return false;
+      final inicio = DateTime.parse(inicioStr);
+      final hoy = DateTime.now();
+      return hoy.difference(inicio).inDays <= 2;
+    } catch (_) { return false; }
+  }
+
+  Widget _buildBannerNuevoPeriodo() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.wb_sunny_outlined, color: AppTheme.primary, size: 16),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('¡Período nuevo!',
+                style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 14)),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _bannerNuevoPeriodoVisible = false),
+            child: const Icon(Icons.close, color: AppTheme.textMuted, size: 16),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        const Text('¿Tus gastos y metas siguen igual que el período pasado?',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: OutlinedButton(
+            onPressed: () => setState(() => _bannerNuevoPeriodoVisible = false),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.primary),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            child: const Text('Sí, mismo plan', style: TextStyle(fontSize: 12)),
+          )),
+          const SizedBox(width: 10),
+          Expanded(child: ElevatedButton(
+            onPressed: () {
+              setState(() => _bannerNuevoPeriodoVisible = false);
+              GastoFormSheet.show(
+                context,
+                presupuestoId: widget.presupuesto['id'] as int,
+                firebaseUid: widget.firebaseUid,
+                onGuardado: (desc, monto, tipo, {tipoFecha='flexible', diaPago, frecuenciaPago,
+                    fechaPagoExacta, generaNotificacion=false, diasAnticipacion=3,
+                    subcategoria, clasificacion, tipoDeuda=false, descuentoDirecto=false,
+                    fechaFin, numCuotas}) =>
+                  _agregarGasto(desc, monto, tipo,
+                    tipoFecha: tipoFecha, diaPago: diaPago, frecuenciaPago: frecuenciaPago,
+                    fechaPagoExacta: fechaPagoExacta, generaNotificacion: generaNotificacion,
+                    diasAnticipacion: diasAnticipacion, subcategoria: subcategoria,
+                    clasificacion: clasificacion, tipoDeuda: tipoDeuda,
+                    descuentoDirecto: descuentoDirecto, fechaFin: fechaFin, numCuotas: numCuotas),
+              );
+            },
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8)),
+            child: const Text('Quiero ajustar', style: TextStyle(fontSize: 12)),
+          )),
+        ]),
+      ]),
     );
   }
 
@@ -599,6 +676,9 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                 padding: const EdgeInsets.all(16),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
+                  // ── BANNER PERÍODO NUEVO ─────────────────────────────────
+                  if (_bannerNuevoPeriodoVisible) _buildBannerNuevoPeriodo(),
+
                   // ── INFO DEL PERÍODO ─────────────────────────────────────
                   if (periodo != null)
                     Container(
@@ -703,9 +783,36 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     )),
                     const SizedBox(width: 10),
                     Expanded(child: OutlinedButton.icon(
-                      onPressed: _reanudar,
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            backgroundColor: AppTheme.surface,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            title: const Text('Resetear pagos fijos',
+                                style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+                            content: const Text(
+                              'Esto marcará como pendientes todos los gastos fijos del período. '
+                              'Los pagos ya registrados se perderán.\n\n¿Continuar?',
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancelar',
+                                    style: TextStyle(color: AppTheme.textSecondary)),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Resetear',
+                                    style: TextStyle(color: AppTheme.danger)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) _reanudar();
+                      },
                       icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Reanudar fijos'),
+                      label: const Text('Resetear fijos'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.textSecondary,
                         side: const BorderSide(color: AppTheme.border),

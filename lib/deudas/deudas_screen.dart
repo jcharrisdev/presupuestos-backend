@@ -31,8 +31,15 @@ class _DeudasScreenState extends State<DeudasScreen> {
     try {
       final data = await DeudasService.getAll(widget.firebaseUid, incluirSaldadas: _incluirSaldadas);
       if (!mounted) return;
+      final lista = (data['deudas'] as List? ?? []);
+      // Ordenar por tasa de interés DESC (avalanche: pagar primero la más cara)
+      lista.sort((a, b) {
+        final ta = _d(a['tasa_interes']);
+        final tb = _d(b['tasa_interes']);
+        return tb.compareTo(ta);
+      });
       setState(() {
-        _deudas = data['deudas'] as List? ?? [];
+        _deudas = lista;
         _totalPendiente  = _d(data['total_pendiente']);
         _totalPagoMinimo = _d(data['total_pago_minimo']);
         _loading = false;
@@ -149,10 +156,11 @@ class _DeudasScreenState extends State<DeudasScreen> {
         const SizedBox(height: 16),
 
         // ── LISTA DE DEUDAS ──────────────────────────────────────────────
-        ..._deudas.map((d) => _DeudaTile(
-          deuda: d as Map<String, dynamic>,
+        ..._deudas.asMap().entries.map((e) => _DeudaTile(
+          deuda: e.value as Map<String, dynamic>,
+          esMayorTasa: e.key == 0 && _deudas.length > 1 && _d((e.value)['tasa_interes']) > 0,
           onAbono: () => AbonoDeudaSheet.show(context,
-            deuda: d,
+            deuda: e.value,
             firebaseUid: widget.firebaseUid,
             onAbonado: _cargar,
           ),
@@ -200,7 +208,8 @@ class _DeudaTile extends StatelessWidget {
   final Map<String, dynamic> deuda;
   final VoidCallback onAbono;
   final VoidCallback onArchivar;
-  const _DeudaTile({required this.deuda, required this.onAbono, required this.onArchivar});
+  final bool esMayorTasa;
+  const _DeudaTile({required this.deuda, required this.onAbono, required this.onArchivar, this.esMayorTasa = false});
 
   @override
   Widget build(BuildContext context) {
@@ -227,10 +236,27 @@ class _DeudaTile extends StatelessWidget {
           _TipoIcon(tipo),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(nombre, style: TextStyle(
-              color: activa ? AppTheme.textPrimary : AppTheme.textSecondary,
-              fontWeight: FontWeight.w700, fontSize: 15,
-            )),
+            Row(children: [
+              Expanded(child: Text(nombre, style: TextStyle(
+                color: activa ? AppTheme.textPrimary : AppTheme.textSecondary,
+                fontWeight: FontWeight.w700, fontSize: 15,
+              ))),
+              if (esMayorTasa)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.danger.withOpacity(0.4)),
+                  ),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.bolt, color: AppTheme.danger, size: 11),
+                    SizedBox(width: 3),
+                    Text('Atacar primero',
+                        style: TextStyle(color: AppTheme.danger, fontSize: 10, fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+            ]),
             Row(children: [
               _TipoChip(tipo),
               if (!activa) ...[

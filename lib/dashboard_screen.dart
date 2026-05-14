@@ -47,11 +47,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _errorVentas;
 
   final _fmt = NumberFormat('#,##0.00', 'es');
+  bool _conexionLenta = false;
 
   @override
   void initState() {
     super.initState();
+    ApiClient.onSlowConnection = (lento) {
+      if (mounted) setState(() => _conexionLenta = lento);
+    };
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    ApiClient.onSlowConnection = null;
+    super.dispose();
   }
 
   Future<void> _cargar() async {
@@ -60,8 +70,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _loadingPresupuesto = _loadingShared = _loadingPagos = _loadingAhorro = _loadingVentas = _loadingDeudas = _loadingFondo = true;
       _errorPresupuesto = _errorAhorro = _errorVentas = null;
     });
+    // _cargarPresupuesto primero para que _cargarFondo reutilice su ID sin llamada duplicada
+    await _cargarPresupuesto();
     await Future.wait([
-      _cargarPresupuesto(),
       _cargarSharedBudgets(),
       _cargarProximosPagos(now),
       _cargarAhorro(),
@@ -169,7 +180,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Map<String, dynamic>? mejor;
           double mejorPct = -1;
           for (final m in list) {
-            final meta     = double.tryParse(m['monto_meta']?.toString() ?? '0') ?? 0;
+            final metaRaw  = m['monto_meta_total'] ?? m['monto_meta'];
+            final meta     = double.tryParse(metaRaw?.toString() ?? '0') ?? 0;
             final ahorrado = (double.tryParse(m['monto_ahorrado']?.toString() ?? '0') ?? 0)
                            + (double.tryParse(m['total_aportaciones']?.toString() ?? '0') ?? 0);
             final pct = meta > 0 ? ahorrado / meta : 0;
@@ -221,21 +233,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _cargarFondo() async {
     try {
-      final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode != 200) {
+      // Reutiliza el ID del presupuesto ya cargado — evita la llamada duplicada a /presupuestos
+      final id = _presupuesto?['id'] as int?;
+      if (id == null) {
         if (mounted) setState(() => _loadingFondo = false);
         return;
       }
-      final list = json.decode(res.body) as List;
-      final activo = list.firstWhere(
-        (p) => p['estado'] == 'activo' || p['estado'] == null,
-        orElse: () => list.isNotEmpty ? list.first : null,
-      );
-      if (activo == null) {
-        if (mounted) setState(() => _loadingFondo = false);
-        return;
-      }
-      final data = await IncomeService.getFondoSeguridad(activo['id'] as int, widget.firebaseUid);
+      final data = await IncomeService.getFondoSeguridad(id, widget.firebaseUid);
       if (mounted) setState(() {
         _fondo = data;
         _loadingFondo = false;
@@ -280,6 +284,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // Índice de Salud Financiera (0–100)
+  // Control presupuesto: 50 pts | Tasa ahorro: 30 pts | Compromisos cubiertos: 20 pts
   int _calcularPuntaje() {
     if (_presupuesto == null) return 0;
     final total = _totalPresupuesto;
@@ -290,11 +295,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final periodoPct = _getPctPeriodo();
     final diff = gastadoPct - periodoPct;
 
-    // Control de presupuesto (40 pts)
+    // Control de presupuesto (50 pts)
     if (_gastado >= total) score += 0;
-    else if (diff > 0.25) score += 10;
-    else if (diff > 0.10) score += 25;
-    else score += 40;
+    else if (diff > 0.25) score += 15;
+    else if (diff > 0.10) score += 32;
+    else score += 50;
 
     // Tasa de ahorro (30 pts)
     final tasaAhorro = total > 0 ? _totalAhorro / total : 0;
@@ -302,15 +307,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     else if (tasaAhorro >= 0.10) score += 20;
     else if (tasaAhorro >= 0.05) score += 10;
 
-    // Balance compartido (20 pts)
-    final balAbs = _sharedBalanceNeto.abs();
-    if (balAbs < 1) score += 20;
-    else if (balAbs < 50) score += 15;
-    else if (balAbs < 200) score += 8;
-
-    // Flujo de caja positivo (10 pts)
+    // Compromisos cubiertos (20 pts)
+    // Asalariados: si no excedió el presupuesto → compromisos cubiertos
+    // Usuarios con ventas: se exige que cobros >= gastado
     final cobrado = (_resumenVentas?['total_cobrado'] as double?) ?? 0;
-    if (cobrado > 0 && cobrado >= _gastado) score += 10;
+    final totalVentas = (_resumenVentas?['total_ventas'] as num?)?.toInt() ?? 0;
+    if (totalVentas > 0) {
+      if (cobrado >= _gastado) score += 20;
+      else if (cobrado >= _gastado * 0.75) score += 10;
+    } else {
+      // Sin ventas activas: dar puntos por no exceder el presupuesto
+      if (_gastado < total) score += 20;
+      else if (_gastado < total * 1.05) score += 8;
+    }
 
     return score.clamp(0, 100);
   }
@@ -335,6 +344,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (_conexionLenta)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppTheme.info.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
+                ),
+                child: const Row(children: [
+                  SizedBox(width: 12, height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.info)),
+                  SizedBox(width: 10),
+                  Expanded(child: Text(
+                    'Conectando con el servidor... esto puede tardar hasta 1 minuto la primera vez del día.',
+                    style: TextStyle(color: AppTheme.info, fontSize: 11, height: 1.4),
+                  )),
+                ]),
+              ),
             _buildSaludCard(),
             const SizedBox(height: 12),
             _buildPeriodoCard(),
@@ -345,8 +373,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 12),
             _buildFondoSeguridadMiniCard(),
             const SizedBox(height: 12),
-            _buildCompartidoCard(),
-            const SizedBox(height: 12),
+            // Card de compartidos solo visible si hay presupuestos compartidos activos
+            if (!_loadingShared && _sharedBudgets.any((b) => b['estado'] == 'active')) ...[
+              _buildCompartidoCard(),
+              const SizedBox(height: 12),
+            ],
             _buildProximosPagosCard(),
             const SizedBox(height: 12),
             _buildVentasCard(),
@@ -413,7 +444,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (score >= 90) { scoreColor = AppTheme.success; scoreLabel = 'EXCELENTE'; }
     else if (score >= 75) { scoreColor = AppTheme.success; scoreLabel = 'BUENA'; }
     else if (score >= 60) { scoreColor = AppTheme.primary; scoreLabel = 'REGULAR'; }
-    else if (score >= 40) { scoreColor = Colors.orange; scoreLabel = 'BAJA'; }
+    else if (score >= 40) { scoreColor = AppTheme.warning; scoreLabel = 'BAJA'; }
     else { scoreColor = AppTheme.danger; scoreLabel = 'CRÍTICA'; }
 
     final insights = _buildInsights();
@@ -486,13 +517,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final tasaAhorro = _totalAhorro / total;
+      final disponiblePct = total > 0 ? (_totalPresupuesto - _gastado) / total : 0;
       if (tasaAhorro >= 0.20) {
         insights.add(_Insight('Tasa de ahorro excelente (${(tasaAhorro * 100).toStringAsFixed(0)}%)', positive: true));
       } else if (tasaAhorro < 0.10 && tasaAhorro >= 0) {
-        insights.add(_Insight('Tasa de ahorro baja (${(tasaAhorro * 100).toStringAsFixed(0)}%) — meta recomendada: 20%', positive: false));
+        if (disponiblePct < 0.10) {
+          insights.add(_Insight('Tu margen es ajustado. Primero cubre todos tus compromisos fijos.', positive: false));
+        } else {
+          insights.add(_Insight('Tasa de ahorro baja (${(tasaAhorro * 100).toStringAsFixed(0)}%) — intenta reservar al menos el 5%.', positive: false));
+        }
       }
     }
 
+    // Balance compartido: solo informativo, no afecta el score numérico
     final bal = _sharedBalanceNeto;
     if (bal > 100) {
       insights.add(_Insight('Deuda compartida pendiente: \$${_fmt.format(bal)}', positive: false));
@@ -542,7 +579,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final disponible = _disponible;
     final pctGasto = total > 0 ? (gastado / total).clamp(0.0, 1.0) : 0.0;
     final pctPeriodo = _getPctPeriodo();
-    final barColor = pctGasto >= 1.0 ? AppTheme.danger : (pctGasto > 0.85 ? Colors.orange : AppTheme.primary);
+    final barColor = pctGasto >= 1.0 ? AppTheme.danger : (pctGasto > 0.85 ? AppTheme.warning : AppTheme.primary);
 
     // Pace analysis
     final diff = pctGasto - pctPeriodo;
@@ -557,7 +594,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       paceColor = AppTheme.danger; paceIcon = Icons.trending_up;
     } else if (diff > 0.08) {
       paceText = 'Ritmo ligeramente elevado';
-      paceColor = Colors.orange; paceIcon = Icons.trending_up;
+      paceColor = AppTheme.warning; paceIcon = Icons.trending_up;
     } else if (diff < -0.10) {
       paceText = 'Excelente control — gasto por debajo del ritmo';
       paceColor = AppTheme.success; paceIcon = Icons.trending_down;
@@ -653,10 +690,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildFlujoCaja() {
     if (_loadingVentas || _loadingPresupuesto) return _skeleton(height: 90);
-    final cobrado = (_resumenVentas?['total_cobrado'] as double?) ?? 0;
-    final neto = cobrado - _gastado;
-    final pos = neto >= 0;
+    final cantVentas = (_resumenVentas?['cantidad'] as int?) ?? 0;
+    final tieneVentas = cantVentas > 0;
 
+    if (tieneVentas) {
+      // Usuario con ventas: mostrar flujo ventas vs gastos
+      final cobrado = (_resumenVentas?['total_cobrado'] as double?) ?? 0;
+      final neto = cobrado - _gastado;
+      final pos = neto >= 0;
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(width: 3, height: 12,
+                decoration: BoxDecoration(color: AppTheme.success, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 6),
+            const Text('FLUJO NETO',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 1.0, fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 10),
+          Text('${pos ? '+' : '-'}\$${_fmt.format(neto.abs())}',
+              style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 17)),
+          const SizedBox(height: 3),
+          Text(pos ? 'Superávit' : 'Déficit',
+              style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontSize: 11)),
+        ]),
+      );
+    }
+
+    // Asalariado sin ventas: mostrar disponible del período
+    final disponible = (_totalPresupuesto - _gastado);
+    final pos = disponible >= 0;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -665,23 +733,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(
-            width: 3, height: 12,
-            decoration: BoxDecoration(color: AppTheme.success, borderRadius: BorderRadius.circular(2)),
-          ),
+          Container(width: 3, height: 12,
+              decoration: BoxDecoration(
+                  color: pos ? AppTheme.success : AppTheme.danger,
+                  borderRadius: BorderRadius.circular(2))),
           const SizedBox(width: 6),
-          const Text('FLUJO NETO',
+          const Text('DISPONIBLE',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 1.0, fontWeight: FontWeight.w600)),
         ]),
         const SizedBox(height: 10),
-        Text(
-          '${pos ? '+' : '-'}\$${_fmt.format(neto.abs())}',
-          style: TextStyle(
-              color: pos ? AppTheme.success : AppTheme.danger,
-              fontWeight: FontWeight.bold, fontSize: 17),
-        ),
+        Text('\$${_fmt.format(disponible.abs())}',
+            style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 17)),
         const SizedBox(height: 3),
-        Text(pos ? 'Superávit' : 'Déficit',
+        Text(pos ? 'Este período' : 'Excedido',
             style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontSize: 11)),
       ]),
     );
@@ -751,7 +815,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final nombre   = _metaAhorro!['nombre'] ?? _metaAhorro!['descripcion'] ?? '';
-    final meta     = double.tryParse(_metaAhorro!['monto_meta']?.toString() ?? '0') ?? 0;
+    final metaRaw  = _metaAhorro!['monto_meta_total'] ?? _metaAhorro!['monto_meta'];
+    final meta     = double.tryParse(metaRaw?.toString() ?? '0') ?? 0;
     final ahorrado = (double.tryParse(_metaAhorro!['monto_ahorrado']?.toString() ?? '0') ?? 0)
                    + (double.tryParse(_metaAhorro!['total_aportaciones']?.toString() ?? '0') ?? 0);
     final pct = meta > 0 ? (ahorrado / meta).clamp(0.0, 1.0) : 0.0;
@@ -881,14 +946,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildCompartidoCard() {
     if (_loadingShared) return _skeleton(height: 90);
     final activos = _sharedBudgets.where((b) => b['estado'] == 'active').toList();
-    if (activos.isEmpty) {
-      return _cardWrapper(
-        title: 'DEUDAS COMPARTIDAS',
-        accentColor: AppTheme.info,
-        child: const Text('Sin presupuestos compartidos activos',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-      );
-    }
+    // Ocultar la card si no hay presupuestos compartidos — no aporta valor para el asalariado sin pareja financiera
+    if (activos.isEmpty) return const SizedBox.shrink();
 
     final balance = _sharedBalanceNeto;
     final debes = balance > 0.01;

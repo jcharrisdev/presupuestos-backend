@@ -52,8 +52,9 @@ class AppTheme {
   /// Rojo: excedido, vencido, error, pérdida.
   static const Color danger  = Color(0xFFF6465D);
 
-  /// Amarillo: alerta, próximo a vencer (≤3 días), casi al límite (≥85%).
-  static const Color warning = Color(0xFFF0B90B);
+  /// Naranja: alerta, próximo a vencer (≤3 días), casi al límite (≥85%).
+  /// Diferente del primary (#F0B90B amarillo) para distinguir advertencias de estados activos.
+  static const Color warning = Color(0xFFF7931A);
 
   /// Azul informativo (reservado para uso futuro o cobros pendientes).
   static const Color info    = Color(0xFF1890FF);

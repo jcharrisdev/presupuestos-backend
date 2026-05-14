@@ -28,55 +28,66 @@ class AnalisisFinancieroSection extends StatelessWidget {
     this.loading = false,
   });
 
+  bool get _tieneAlertas =>
+      alertas != null && (alertas!['tiene_alertas'] as bool? ?? false);
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: false,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          leading: const Icon(Icons.analytics_outlined,
-              color: AppTheme.textSecondary, size: 18),
-          title: const Text('ANÁLISIS FINANCIERO',
-              style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 11,
-                  letterSpacing: 1.0,
-                  fontWeight: FontWeight.w600)),
-          trailing: const Icon(Icons.expand_more,
-              color: AppTheme.textMuted, size: 20),
-          children: [
-            if (loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: LinearProgressIndicator(
-                    backgroundColor: AppTheme.surfaceAlt,
-                    color: AppTheme.primary),
-              )
-            else ...[
-              AlertasBanner(alertasData: alertas),
-              ClasificacionCard(distribucion: distribucionClasif),
-              RecomendacionPorcentajesCard(
-                recomendacion: recomendacion,
-                onConfigurarIngreso: onConfigurarIngreso,
-              ),
-              if (fondo != null) FondoSeguridadCard(fondo: fondo!),
-              PatronesGustitosBanner(
-                patrones: patrones,
-                onAgregarGasto: (_) => onAgregarGasto(),
-              ),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Alertas activas siempre visibles — no requieren expansión
+      if (!loading && _tieneAlertas)
+        AlertasBanner(alertasData: alertas),
+
+      // Análisis detallado en ExpansionTile
+      Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            leading: const Icon(Icons.analytics_outlined,
+                color: AppTheme.textSecondary, size: 18),
+            title: const Text('ANÁLISIS FINANCIERO',
+                style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w600)),
+            trailing: const Icon(Icons.expand_more,
+                color: AppTheme.textMuted, size: 20),
+            children: [
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: LinearProgressIndicator(
+                      backgroundColor: AppTheme.surfaceAlt,
+                      color: AppTheme.primary),
+                )
+              else ...[
+                // Alertas también dentro del colapsible (para usuarios sin alertas activas)
+                if (!_tieneAlertas) AlertasBanner(alertasData: alertas),
+                ClasificacionCard(distribucion: distribucionClasif),
+                RecomendacionPorcentajesCard(
+                  recomendacion: recomendacion,
+                  onConfigurarIngreso: onConfigurarIngreso,
+                ),
+                if (fondo != null) FondoSeguridadCard(fondo: fondo!),
+                PatronesGustitosBanner(
+                  patrones: patrones,
+                  onAgregarGasto: (_) => onAgregarGasto(),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-    );
+    ]);
   }
 }

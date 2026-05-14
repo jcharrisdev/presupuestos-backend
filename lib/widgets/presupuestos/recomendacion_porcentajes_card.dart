@@ -12,9 +12,11 @@ class RecomendacionPorcentajesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tieneIncome = recomendacion != null && (recomendacion!['tiene_income'] as bool? ?? false);
-    final categorias = recomendacion?['categorias'] as List? ?? [];
-    final sinClasif = _d(recomendacion?['sin_clasificar']);
+    final tieneIncome   = recomendacion != null && (recomendacion!['tiene_income'] as bool? ?? false);
+    final margenAjustado = recomendacion?['margen_ajustado'] as bool? ?? false;
+    final margenDisp    = _d(recomendacion?['margen_disponible']);
+    final categorias    = recomendacion?['categorias'] as List? ?? [];
+    final sinClasif     = _d(recomendacion?['sin_clasificar']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -44,6 +46,39 @@ class RecomendacionPorcentajesCard extends StatelessWidget {
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4)),
           ),
         const SizedBox(height: 14),
+        // Cuando el margen es muy ajustado, priorizar estabilidad antes del 50/30/20
+        if (margenAjustado) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.info_outline, color: AppTheme.info, size: 14),
+                SizedBox(width: 6),
+                Text('Tu margen es ajustado por ahora',
+                    style: TextStyle(color: AppTheme.info, fontWeight: FontWeight.w700, fontSize: 12)),
+              ]),
+              const SizedBox(height: 6),
+              Text(
+                margenDisp >= 0
+                    ? 'Te quedan \$${margenDisp.toStringAsFixed(2)} disponibles. '
+                      'Antes del 50/30/20, la prioridad es cubrir todos tus compromisos fijos. '
+                      'Cuando tengas más margen, te ayudaré a ahorrar e invertir.'
+                    : 'Tus gastos superan tu presupuesto este período. '
+                      'Revisa cuáles gastos puedes ajustar o posponer.',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11, height: 1.5),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          const Text('Distribución actual de tus gastos:',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          const SizedBox(height: 8),
+        ],
         ...categorias.map((c) => _CategoriaRow(c as Map<String, dynamic>)),
         if (sinClasif > 0) ...[
           const Divider(color: AppTheme.border, height: 20),

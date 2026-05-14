@@ -40,6 +40,10 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
 
   bool _loading = false;
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  double get _sumaGastosStep2 =>
+      _gastosStep2.fold(0.0, (s, g) => s + ((g['monto'] as double?) ?? 0));
+
   // ── Helpers de ingreso ────────────────────────────────────────────────────
   double get _netoCalculado {
     if (_tipoIngreso != 'salario') return 0;
@@ -85,6 +89,44 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
     setState(() => _step = step);
     _pageCtrl.animateToPage(step,
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  }
+
+  Future<void> _crearConValidacion() async {
+    if (!_incomeConfigurado) { _crear(); return; }
+
+    final montoTotal = _tipoPeriodo == 'quincenal' ? _netoCalculado / 2 : _netoCalculado;
+    final suma = _sumaGastosStep2;
+    if (suma > 0 && montoTotal > 0 && suma > montoTotal) {
+      final exceso = suma - montoTotal;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: AppTheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Gastos superan el ingreso',
+              style: TextStyle(color: AppTheme.danger, fontSize: 16)),
+          content: Text(
+            'Tus gastos suman \$${suma.toStringAsFixed(2)} y tu ingreso es \$${montoTotal.toStringAsFixed(2)}.\n\n'
+            'Empezarás el período con un déficit de \$${exceso.toStringAsFixed(2)}. '
+            '¿Quieres continuar de todas formas?',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Revisar gastos',
+                  style: TextStyle(color: AppTheme.primary)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continuar de todas formas',
+                  style: TextStyle(color: AppTheme.danger)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    _crear();
   }
 
   // ── Submit final ─────────────────────────────────────────────────────────
@@ -451,17 +493,8 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
         ],
 
         const SizedBox(height: 32),
-        Row(children: [
-          Expanded(child: OutlinedButton(
-            onPressed: () { setState(() => _incomeConfigurado = false); _goTo(2); },
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
-              side: const BorderSide(color: AppTheme.border),
-            ),
-            child: const Text('Omitir'),
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: ElevatedButton(
+        Column(children: [
+          SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () {
               final tieneValor = _tipoIngreso == 'salario'
                   ? _parseD(_brutoCtrl.text) > 0
@@ -471,6 +504,18 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
             },
             child: const Text('Siguiente →'),
           )),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () {
+              setState(() => _incomeConfigurado = false);
+              _goTo(2);
+            },
+            child: const Text(
+              'Continuar sin configurar ingreso\n(el análisis de capacidad no estará disponible)',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+            ),
+          ),
         ]),
       ]),
     );
@@ -601,7 +646,7 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
           )),
           const SizedBox(width: 12),
           Expanded(child: ElevatedButton(
-            onPressed: _loading ? null : _crear,
+            onPressed: _loading ? null : _crearConValidacion,
             child: _loading
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))

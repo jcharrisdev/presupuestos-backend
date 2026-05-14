@@ -53,9 +53,8 @@ class _SimuladorDecisionesScreenState extends State<SimuladorDecisionesScreen> {
     final tasaAhorroActual = widget.ingresoNeto > 0
         ? (widget.totalAhorro / widget.ingresoNeto * 100).clamp(0.0, 100.0)
         : 0.0;
-    final tasaAhorroHip    = widget.ingresoNeto > 0
-        ? ((widget.totalAhorro - _montoHip) / widget.ingresoNeto * 100).clamp(0.0, 100.0)
-        : 0.0;
+    // El plan de ahorro no cambia con un gasto hipotético — lo que cambia es el disponible
+    final tasaAhorroHip    = tasaAhorroActual;
 
     final excede    = disponibleHip < 0;
     final barColor  = pctHip >= 1.0 ? AppTheme.danger
@@ -220,7 +219,7 @@ class _SimuladorDecisionesScreenState extends State<SimuladorDecisionesScreen> {
               excede: excede,
               pctHip: pctHip,
               clasificacion: _clasificacion,
-              tasaAhorro: tasaAhorroHip,
+              disponibleHip: disponibleHip,
             ),
           ] else ...[
             Center(child: Column(children: [
@@ -281,8 +280,8 @@ class _Consejo extends StatelessWidget {
   final bool excede;
   final double pctHip;
   final String clasificacion;
-  final double tasaAhorro;
-  const _Consejo({required this.excede, required this.pctHip, required this.clasificacion, required this.tasaAhorro});
+  final double disponibleHip;
+  const _Consejo({required this.excede, required this.pctHip, required this.clasificacion, required this.disponibleHip});
 
   @override
   Widget build(BuildContext context) {
@@ -294,10 +293,12 @@ class _Consejo extends StatelessWidget {
       texto = 'Este gasto supera tu presupuesto. Considera reducirlo o esperar al próximo período.';
       color = AppTheme.danger; icon = Icons.block;
     } else if (pctHip >= 0.85) {
-      texto = 'Llegarías al ${(pctHip * 100).toStringAsFixed(0)}% del presupuesto. Procede con cuidado.';
+      texto = 'Llegarías al ${(pctHip * 100).toStringAsFixed(0)}% del presupuesto. '
+              'Te quedarían \$${disponibleHip.toStringAsFixed(2)} para lo que reste del período.';
       color = AppTheme.warning; icon = Icons.warning_amber_rounded;
-    } else if (clasificacion == 'flexible' && tasaAhorro < 10) {
-      texto = 'Tu tasa de ahorro proyectada sería baja (${tasaAhorro.toStringAsFixed(1)}%). ¿Puedes posponerlo?';
+    } else if (clasificacion == 'flexible' && disponibleHip < 20) {
+      texto = 'Si haces este gasto, te quedarían \$${disponibleHip.toStringAsFixed(2)} disponibles. '
+              'Asegúrate de tener lo suficiente para imprevistos.';
       color = AppTheme.warning; icon = Icons.savings_outlined;
     } else {
       texto = 'Este gasto cabe bien en tu presupuesto. ¡Adelante!';

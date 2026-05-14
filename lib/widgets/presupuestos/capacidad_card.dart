@@ -57,11 +57,15 @@ class CapacidadCard extends StatelessWidget {
       );
     }
 
-    final ingresoNeto = _d(capacidad!['ingreso_neto']);
-    final fijos       = _d(capacidad!['gastos_fijos_totales']);
-    final variables   = _d(capacidad!['promedio_variable_historico']);
-    final capacidadR  = _d(capacidad!['capacidad_real']);
-    final positivo    = capacidadR >= 0;
+    final ingresoNeto     = _d(capacidad!['ingreso_neto']);
+    final fijos           = _d(capacidad!['gastos_fijos_totales']);
+    final variables       = _d(capacidad!['promedio_variable_historico']);
+    final capacidadR      = _d(capacidad!['capacidad_real']);
+    final positivo        = capacidadR >= 0;
+    final cuotasDeudas    = _d(capacidad!['cuotas_deudas_periodo']);
+    final numDeudas       = (capacidad!['num_deudas_activas'] as num?)?.toInt() ?? 0;
+    // Mostrar aviso si las deudas representan una cantidad significativa y podrían no estar en los fijos
+    final mostrarAvisoDeudas = numDeudas > 0 && cuotasDeudas > 0 && cuotasDeudas > fijos * 0.5;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -109,6 +113,26 @@ class CapacidadCard extends StatelessWidget {
                 _Fila('Ingreso neto', ingresoNeto, AppTheme.success),
                 _Fila('Gastos fijos', -fijos, AppTheme.danger),
                 _Fila('Var. promedio histórico', -variables, AppTheme.textSecondary),
+                if (mostrarAvisoDeudas) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warning.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Icon(Icons.info_outline, color: AppTheme.warning, size: 13),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(
+                        'Tienes cuotas de deuda por \$${cuotasDeudas.toStringAsFixed(2)}/período. '
+                        '¿Están incluidas en tus gastos fijos?',
+                        style: const TextStyle(color: AppTheme.warning, fontSize: 11, height: 1.4),
+                      )),
+                    ]),
+                  ),
+                ],
               ],
             ),
           ),

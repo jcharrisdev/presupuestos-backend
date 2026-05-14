@@ -378,7 +378,7 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
 // Render y el app Flutter usan este endpoint para saber si el backend responde.
 app.get('/', (req, res) => res.json({
   status: 'Backend funcionando correctamente',
-  version: '2.4'  // Incrementar con cada cambio mayor
+  version: '2.6'  // Incrementar con cada cambio mayor
 }));
 
 
@@ -709,7 +709,8 @@ app.get('/ahorros', async (req, res) => {
               g.numero_quincena AS periodos_restantes,
               COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado,
               COUNT(m.id) AS cuotas_pagadas,
-              COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total_aportaciones
+              COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total_aportaciones,
+              (SELECT COUNT(*) FROM movimientos m2 WHERE m2.gasto_id = g.id) AS cuotas_generadas
        FROM gastos g
        LEFT JOIN movimientos m ON m.gasto_id = g.id AND m.pagado = 1
        WHERE g.firebase_uid = ? AND g.tipo = 'ahorro'
@@ -717,13 +718,21 @@ app.get('/ahorros', async (req, res) => {
       [firebase_uid]
     );
 
-    // Calcular campos derivados: total ahorrado (movimientos + aportaciones) y si está completado
+    // monto_meta_total = cuota × (cuotas ya generadas + períodos restantes) = total original
+    // Para ahorros sin límite (periodos_restantes IS NULL) usamos solo cuotas generadas como referencia
     const result = ahorros.map(a => {
-      const totalAhorrado = parseFloat(a.monto_ahorrado) + parseFloat(a.total_aportaciones);
-      const completado    = a.periodos_restantes === 0;
+      const totalAhorrado    = parseFloat(a.monto_ahorrado) + parseFloat(a.total_aportaciones);
+      const completado       = a.periodos_restantes === 0;
+      const cuotasGeneradas  = parseInt(a.cuotas_generadas) || 0;
+      const periodosRestantes = a.periodos_restantes !== null ? parseInt(a.periodos_restantes) : null;
+      const totalCuotas      = periodosRestantes !== null ? cuotasGeneradas + periodosRestantes : null;
+      const metaTotal        = totalCuotas !== null && totalCuotas > 0
+        ? parseFloat((parseFloat(a.cuota_periodo) * totalCuotas).toFixed(2))
+        : null;
       return {
         ...a,
-        monto_meta: a.cuota_periodo, // compatibilidad hacia atrás
+        monto_meta: a.cuota_periodo, // cuota por período (compatibilidad hacia atrás)
+        monto_meta_total: metaTotal, // meta total real — usar este para barras de progreso
         total_ahorrado: parseFloat(totalAhorrado.toFixed(2)),
         completado,
       };
@@ -3207,6 +3216,39 @@ app.post('/shared-budgets/:id/request-delete', async (req, res) => {
   }
 });
 
+// POST /shared-budgets/:id/confirm-delete
+// El co-dueño aprueba la eliminación del presupuesto compartido.
+// Solo puede confirmarlo quien NO hizo la solicitud original.
+app.post('/shared-budgets/:id/confirm-delete', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[budget]] = await db.execute(
+      `SELECT id, delete_requested_by FROM shared_budgets WHERE id = ?`,
+      [id]
+    );
+    if (!budget) return res.status(404).json({ error: 'Presupuesto compartido no encontrado' });
+    if (!budget.delete_requested_by) return res.status(400).json({ error: 'No hay solicitud de eliminación activa' });
+    if (budget.delete_requested_by === firebase_uid) return res.status(403).json({ error: 'No puedes aprobar tu propia solicitud de eliminación' });
+
+    const [[member]] = await db.execute(
+      `SELECT id FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!member) return res.status(403).json({ error: 'No eres miembro de este presupuesto' });
+
+    // Eliminar en cascada: miembros, movimientos, settlements, luego el presupuesto
+    await db.execute(`DELETE FROM shared_budget_members WHERE shared_budget_id = ?`, [id]);
+    await db.execute(`DELETE FROM shared_settlements WHERE shared_budget_id = ?`, [id]);
+    await db.execute(`DELETE FROM shared_budgets WHERE id = ?`, [id]);
+
+    res.json({ message: 'Presupuesto compartido eliminado correctamente' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /shared-budgets/:id/settlements
 app.post('/shared-budgets/:id/settlements', async (req, res) => {
   const { id } = req.params;
@@ -4446,7 +4488,8 @@ app.post('/presupuestos/:id/income', async (req, res) => {
   const {
     firebase_uid, tipo_ingreso,
     ingreso_bruto, desc_seguro, desc_pension, desc_impuesto, desc_otros,
-    ingreso_neto: ingreso_neto_raw, nota
+    ingreso_neto: ingreso_neto_raw, nota,
+    calcular_automatico, ingreso_bruto_mensual
   } = req.body;
   if (!firebase_uid || !tipo_ingreso) {
     return res.status(400).json({ error: 'firebase_uid y tipo_ingreso son requeridos' });
@@ -4474,22 +4517,28 @@ app.post('/presupuestos/:id/income', async (req, res) => {
 
     if (ingreso_neto <= 0) return res.status(400).json({ error: 'ingreso_neto debe ser mayor a 0' });
 
+    const calcAuto = calcular_automatico != null ? (calcular_automatico ? 1 : 0) : null;
+    const brutMensual = ingreso_bruto_mensual != null ? parseFloat(ingreso_bruto_mensual) : null;
+
     await db.execute(
       `INSERT INTO budget_income
          (presupuesto_id, firebase_uid, tipo_ingreso, ingreso_bruto,
-          desc_seguro, desc_pension, desc_impuesto, desc_otros, ingreso_neto, nota)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          desc_seguro, desc_pension, desc_impuesto, desc_otros, ingreso_neto, nota,
+          calcular_automatico, ingreso_bruto_mensual)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         tipo_ingreso  = VALUES(tipo_ingreso),
-         ingreso_bruto = VALUES(ingreso_bruto),
-         desc_seguro   = VALUES(desc_seguro),
-         desc_pension  = VALUES(desc_pension),
-         desc_impuesto = VALUES(desc_impuesto),
-         desc_otros    = VALUES(desc_otros),
-         ingreso_neto  = VALUES(ingreso_neto),
-         nota          = VALUES(nota),
-         updated_at    = NOW()`,
-      [id, firebase_uid, tipo_ingreso, bruto, seguro, pension, impuesto, otros, ingreso_neto, nota || null]
+         tipo_ingreso          = VALUES(tipo_ingreso),
+         ingreso_bruto         = VALUES(ingreso_bruto),
+         desc_seguro           = VALUES(desc_seguro),
+         desc_pension          = VALUES(desc_pension),
+         desc_impuesto         = VALUES(desc_impuesto),
+         desc_otros            = VALUES(desc_otros),
+         ingreso_neto          = VALUES(ingreso_neto),
+         nota                  = VALUES(nota),
+         calcular_automatico   = COALESCE(VALUES(calcular_automatico), calcular_automatico),
+         ingreso_bruto_mensual = COALESCE(VALUES(ingreso_bruto_mensual), ingreso_bruto_mensual),
+         updated_at            = NOW()`,
+      [id, firebase_uid, tipo_ingreso, bruto, seguro, pension, impuesto, otros, ingreso_neto, nota || null, calcAuto, brutMensual]
     );
 
     const [[saved]] = await db.execute(
@@ -4544,6 +4593,17 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
       [id, firebase_uid]
     );
 
+    // 4. Deudas activas del usuario para comparar con gastos fijos registrados
+    const [[presupuestoRow]] = await db.execute(
+      `SELECT tipo_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    const [[deudasRow]] = await db.execute(
+      `SELECT COALESCE(SUM(cuota_mensual), 0) AS total_cuotas_mensual, COUNT(*) AS num_deudas
+       FROM deudas WHERE firebase_uid = ? AND estado = 'activa'`,
+      [firebase_uid]
+    );
+
     const ingreso_neto = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
     const gastos_fijos = parseFloat(fijoRow.gastos_fijos);
     const gastos_variables_presupuestados = parseFloat(fijoRow.gastos_variables_presupuestados);
@@ -4558,6 +4618,13 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
       ? Math.round((ingreso_neto - gastos_fijos - promedio_variable_r) * 100) / 100
       : null;
 
+    // Cuotas de deuda por período (ajustado a quincenal si aplica)
+    const tipoPeriodo = presupuestoRow?.tipo_periodo ?? 'mensual';
+    const divisor = tipoPeriodo === 'quincenal' ? 2 : 1;
+    const cuotasDeudaMensual = parseFloat(deudasRow.total_cuotas_mensual);
+    const cuotasDeudaPeriodo = Math.round((cuotasDeudaMensual / divisor) * 100) / 100;
+    const numDeudas = parseInt(deudasRow.num_deudas);
+
     res.json({
       ingreso_neto,
       gastos_fijos_totales: gastos_fijos,
@@ -4566,7 +4633,9 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
       usa_historico: periodosCerrados.length > 0,
       capacidad_real,
       tiene_income: incomeRow != null,
-      periodos_historico: periodosCerrados.length
+      periodos_historico: periodosCerrados.length,
+      cuotas_deudas_periodo: cuotasDeudaPeriodo,
+      num_deudas_activas: numDeudas,
     });
   } catch (error) {
     console.error(error);
@@ -4940,6 +5009,7 @@ app.get('/presupuestos/:id/alertas', async (req, res) => {
        FROM periodos p
        JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
        WHERE p.presupuesto_id = ? AND p.firebase_uid = ? AND p.estado = 'cerrado'
+       GROUP BY p.id
        ORDER BY p.fecha_fin DESC LIMIT 3`,
       [id, firebase_uid]
     );
@@ -5081,10 +5151,16 @@ app.get('/presupuestos/:id/recomendacion-porcentajes', async (req, res) => {
     const realPorClasif = {};
     clasifRows.forEach(r => { realPorClasif[r.clasificacion] = Number(r.total); });
 
+    const totalGastado = Object.values(realPorClasif).reduce((a, b) => Number(a) + Number(b), 0);
+    const margenDisponible = base - totalGastado;
+    const margenPct = base > 0 ? margenDisponible / base : 0;
+
     const recomendacion = {
       tiene_income: !!incomeRow,
       base_calculo: base,
       regla: '50-30-20',
+      margen_disponible: parseFloat(margenDisponible.toFixed(2)),
+      margen_ajustado: margenPct < 0.15, // true cuando hay < 15% de margen
       categorias: [
         {
           clasificacion: 'esencial',
