@@ -1879,5 +1879,202 @@ REGLAS IMPORTANTES:
   - PatronesGustitosBanner es ignorable localmente (sin persistencia en BD)
 
 ================================================================================
+23. SESION 2026-05-13 (sesion 3) - MEJORAS #4 #6 #7 #8 #9 MODULO PRESUPUESTOS
+================================================================================
+
+OBJETIVO:
+  Agregar 5 mejoras avanzadas al modulo de presupuestos:
+    #4 Clasificacion financiera de gastos (esencial/importante/flexible)
+    #6 Alertas inteligentes preventivas
+    #7 Presupuesto recomendado por porcentajes (regla 50/30/20)
+    #8 Simulador de decisiones (calculo local)
+    #9 Deudas como entidad propia
+
+================================================================================
+10.16 CLASIFICACION FINANCIERA DE GASTOS (#4)
+================================================================================
+
+COLUMNAS NUEVAS:
+  gastos.clasificacion     ENUM('esencial','importante','flexible') NULL
+  movimientos.clasificacion VARCHAR(20) NULL (propagada desde el gasto)
+
+LOGICA:
+  esencial  → primera necesidad (alquiler, comida, servicios)
+  importante→ relevante pero no urgente (seguro, educacion)
+  flexible  → discrecional (ocio, ropa, salidas)
+
+ENDPOINTS:
+  POST /gastos — acepta clasificacion opcional
+  GET  /presupuestos/:id/detalle — movimientos ya incluyen clasificacion (SELECT *)
+  GET  /presupuestos/:id/distribucion-clasificacion?firebase_uid=
+    Retorna:
+      { distribucion: { esencial: {total, cantidad, pct}, importante: {...}, flexible: {...}, sin_clasificar: {...} },
+        monto_total, total_clasificado, pct_clasificado }
+
+FLUTTER:
+  lib/widgets/presupuestos/gasto_form_sheet.dart — chips Esencial/Importante/Flexible
+  lib/widgets/presupuestos/clasificacion_card.dart (NUEVO) — barras de distribucion
+  lib/_MovimientoTile — _ClasifChip coloreado si clasificacion existe
+
+================================================================================
+10.17 ALERTAS INTELIGENTES PREVENTIVAS (#6)
+================================================================================
+
+ENDPOINT:
+  GET /presupuestos/:id/alertas?firebase_uid=
+  Evalua 5 reglas con los datos actuales del periodo:
+    1. ritmo_alto  — gastado >70% en <50% del periodo → danger
+    2. cerca_limite — gasto >=85% del presupuesto → warning
+    3. excedido    — gasto >=100% → danger
+    4. variables_altas — variables actuales >130% del promedio historico → warning
+    5. pagos_pendientes — >0 sin pagar en los ultimos 3 dias → info
+  Retorna: { alertas: [{tipo, nivel, titulo, mensaje}], tiene_alertas: bool }
+
+FLUTTER:
+  lib/widgets/presupuestos/alertas_banner.dart (NUEVO)
+    - Solo renderiza si tiene_alertas=true
+    - Badge de color segun nivel (danger=rojo, warning=amarillo, info=azul)
+  Integrado en detalles_presupuesto.dart antes de ClasificacionCard
+
+================================================================================
+10.18 PRESUPUESTO RECOMENDADO POR PORCENTAJES (#7)
+================================================================================
+
+ENDPOINT:
+  GET /presupuestos/:id/recomendacion-porcentajes?firebase_uid=
+  Base de calculo: ingreso_neto si existe, si no monto_total del presupuesto.
+  Regla 50/30/20:
+    esencial   → 50% (necesidades)
+    importante → 30% (quiero)
+    flexible   → 20% (ahorro/discrecional)
+  Retorna diferencia real vs recomendado por categoria y sin_clasificar total.
+
+FLUTTER:
+  lib/widgets/presupuestos/recomendacion_porcentajes_card.dart (NUEVO)
+    - Muestra 3 categorias con barra de progreso comparando real vs recomendado
+    - Color verde/amarillo/rojo segun diferencia (±10% tolerancia)
+    - CTA "Configurar ingreso" si no tiene income
+  Integrado en detalles_presupuesto.dart despues de ClasificacionCard
+
+================================================================================
+10.19 SIMULADOR DE DECISIONES (#8)
+================================================================================
+
+PANTALLA:
+  lib/simulador_decisiones_screen.dart (NUEVO)
+  Calculo 100% local — sin llamadas API, sin persistencia.
+  Parametros de entrada:
+    montoTotal, gastadoActual, ingresoNeto, totalAhorro, nombrePresupuesto
+  El usuario ingresa: descripcion (opcional), monto hipotetico, clasificacion.
+  Calcula en tiempo real:
+    - disponibleHip = disponibleActual - montoHip
+    - pctHip = (gastadoActual + montoHip) / montoTotal
+    - tasaAhorroHip = (totalAhorro - montoHip) / ingresoNeto * 100
+  Muestra: barra de gasto proyectado, disponible resultante, tasa ahorro,
+           consejo contextual (OK / cuidado / excedido / bajo ahorro)
+
+INTEGRACION:
+  Boton "Simular decision" (Icons.calculate_outlined, color: AppTheme.info)
+  debajo de los botones Agregar/Reanudar en detalles_presupuesto.dart
+  Pasa: montoTotal, totalConGustitos como gastadoActual, _income['ingreso_neto']
+
+================================================================================
+10.20 DEUDAS COMO ENTIDAD PROPIA (#9)
+================================================================================
+
+TABLA:
+  deudas
+    id                 INT PK AUTO_INCREMENT
+    firebase_uid       VARCHAR(255) NOT NULL
+    nombre             VARCHAR(255) NOT NULL
+    tipo               ENUM('tarjeta_credito','prestamo','hipoteca','auto','personal','otro')
+    monto_total        DECIMAL(10,2) NOT NULL  ← deuda original
+    monto_pendiente    DECIMAL(10,2) NOT NULL  ← saldo actual
+    tasa_interes       DECIMAL(5,2) NULL       ← porcentaje mensual
+    pago_minimo        DECIMAL(10,2) NULL
+    fecha_proximo_pago DATE NULL
+    notas              TEXT NULL
+    activa             TINYINT(1) DEFAULT 1    ← 0 = saldada/archivada
+    created_at, updated_at
+    INDEX: idx_deudas_uid, idx_deudas_activa
+
+ENDPOINTS:
+  GET    /deudas?firebase_uid=&incluir_saldadas=
+    Retorna: { deudas: [...], total_pendiente, total_pago_minimo }
+  POST   /deudas
+    Body: { firebase_uid, nombre, tipo, monto_total, monto_pendiente, tasa_interes?,
+            pago_minimo?, fecha_proximo_pago?, notas? }
+  PUT    /deudas/:id   — editar campos con COALESCE dinamico
+  PATCH  /deudas/:id/abono
+    Body: { firebase_uid, monto_abono, fecha_proximo_pago? }
+    Reduce monto_pendiente. Si llega a 0, activa=0 (saldada automaticamente).
+  DELETE /deudas/:id?firebase_uid=   — activa=0 (archivar)
+
+FLUTTER:
+  lib/services/deudas_service.dart (NUEVO)
+    getAll, crear, editar, registrarAbono, archivar
+  lib/deudas/deudas_screen.dart (NUEVO)
+    - Header: total_pendiente (rojo) + total_pago_minimo
+    - Lista de _DeudaTile con barra de progreso pendiente/total
+    - Boton "Registrar abono" → AbonoDeudaSheet
+    - Boton "Archivar" con confirmacion
+    - Toggle incluir/ocultar saldadas
+    - FAB "Nueva deuda" → CrearDeudaSheet
+  lib/deudas/crear_deuda_sheet.dart (NUEVO)
+    - Chips de tipo, campos: nombre, total, pendiente, tasa, pago_min, fecha_proximo
+  lib/deudas/abono_deuda_sheet.dart (NUEVO)
+    - Campo monto (pre-relleno con pago_minimo), fecha_proximo_pago opcional
+    - Llama DeudasService.registrarAbono()
+  lib/main_menu.dart
+    - NavCard "Mis Deudas" (Icons.credit_card_outlined, color: danger)
+    - Entre Calendario y Ventas
+  lib/dashboard_screen.dart
+    - Card "DEUDAS PENDIENTES" — carga _cargarDeudas() al inicio
+    - Solo visible si total_pendiente > 0
+
+================================================================================
+MIGRACION EJECUTADA (2026-05-13 sesion 3):
+  database/migrations/add_clasificacion_deudas.sql → ejecutado en Clever Cloud OK
+  ALTER TABLE gastos ADD COLUMN clasificacion ENUM(...)
+  ALTER TABLE movimientos ADD COLUMN clasificacion VARCHAR(20) NULL
+  CREATE TABLE IF NOT EXISTS deudas (...)
+
+APK GENERADO:
+  build/app/outputs/flutter-apk/app-release.apk  33.9 MB  (2026-05-13 sesion 3)
+  Version: 1.2.0+4
+
+ARCHIVOS NUEVOS (sesion 3):
+  database/migrations/add_clasificacion_deudas.sql
+  lib/widgets/presupuestos/clasificacion_card.dart
+  lib/widgets/presupuestos/alertas_banner.dart
+  lib/widgets/presupuestos/recomendacion_porcentajes_card.dart
+  lib/simulador_decisiones_screen.dart
+  lib/services/deudas_service.dart
+  lib/deudas/deudas_screen.dart
+  lib/deudas/crear_deuda_sheet.dart
+  lib/deudas/abono_deuda_sheet.dart
+
+ARCHIVOS MODIFICADOS (sesion 3):
+  backend/server.js        → +10 rutas nuevas (#4/#6/#7/#9)
+  lib/services/income_service.dart → +3 metodos (distribucion, alertas, recomendacion)
+  lib/widgets/presupuestos/gasto_form_sheet.dart → chips clasificacion
+  lib/detalles_presupuesto.dart → imports, estado, _cargarExtras, build
+  lib/main_menu.dart       → import DeudasScreen, NavCard Mis Deudas
+  lib/dashboard_screen.dart → import, _totalDeudas, _cargarDeudas, _buildDeudasCard
+
+RUTAS NUEVAS EN SERVER.JS (total a partir de esta sesion):
+  GET  /presupuestos/:id/distribucion-clasificacion
+  GET  /presupuestos/:id/alertas
+  GET  /presupuestos/:id/recomendacion-porcentajes
+  GET  /deudas
+  POST /deudas
+  PUT  /deudas/:id
+  PATCH /deudas/:id/abono
+  DELETE /deudas/:id
+
+COMMIT:
+  7a800a1 feat: #4 clasificacion gastos, #6 alertas, #7 regla 50/30/20, #8 simulador, #9 deudas
+
+================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING
 ================================================================================
