@@ -276,8 +276,6 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
               setState(() => _bannerNuevoPeriodoVisible = false);
               GastoFormSheet.show(
                 context,
-                presupuestoId: widget.presupuesto['id'] as int,
-                firebaseUid: widget.firebaseUid,
                 onGuardado: (desc, monto, tipo, {tipoFecha='flexible', diaPago, frecuenciaPago,
                     fechaPagoExacta, generaNotificacion=false, diasAnticipacion=3,
                     subcategoria, clasificacion, tipoDeuda=false, descuentoDirecto=false,

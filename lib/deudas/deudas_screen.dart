@@ -171,7 +171,7 @@ class _DeudasScreenState extends State<DeudasScreen> {
                 backgroundColor: AppTheme.surface,
                 title: const Text('Archivar deuda',
                     style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
-                content: Text('¿Marcar "${d['nombre']}" como saldada/archivada?',
+                content: Text('¿Marcar "${(e.value as Map)['nombre']}" como saldada/archivada?',
                     style: const TextStyle(color: AppTheme.textSecondary)),
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
@@ -179,7 +179,7 @@ class _DeudasScreenState extends State<DeudasScreen> {
                 ],
               ),
             );
-            if (ok == true) _archivar(d['id'] as int);
+            if (ok == true) _archivar((e.value as Map)['id'] as int);
           },
         )),
 
