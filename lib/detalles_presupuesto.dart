@@ -40,9 +40,12 @@ import 'widgets/presupuestos/patrones_gustitos_banner.dart';
 import 'widgets/presupuestos/clasificacion_card.dart';
 import 'widgets/presupuestos/alertas_banner.dart';
 import 'widgets/presupuestos/recomendacion_porcentajes_card.dart';
+import 'widgets/presupuestos/analisis_financiero_section.dart';
+import 'widgets/presupuestos/proyeccion_mes_card.dart';
 import 'gustitos/crear_gustito_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
 import 'simulador_decisiones_screen.dart';
+import 'ahorro_meta.dart';
 
 /// Pantalla de detalle de un presupuesto con movimientos del período activo.
 class DetallesPresupuesto extends StatefulWidget {
@@ -80,13 +83,20 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
   bool _loadingHistorico = false;
   bool _historicoLoaded = false;
 
+  // Proyección 12 meses (tab Proyección)
+  Map<String, dynamic>? _proyeccion;
+  bool _loadingProyeccion = false;
+  bool _proyeccionLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
-      // Lazy loading: cargar historial solo cuando el usuario toca la tab
-      if (_tabController.index == 1 && !_historicoLoaded && mounted) {
+      if (_tabController.index == 1 && !_proyeccionLoaded && mounted) {
+        _cargarProyeccion();
+      }
+      if (_tabController.index == 2 && !_historicoLoaded && mounted) {
         _cargarHistorico();
       }
     });
@@ -121,6 +131,17 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
         setState(() => _loadingHistorico = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al cargar historial: $e')));
       }
+    }
+  }
+
+  Future<void> _cargarProyeccion() async {
+    setState(() { _loadingProyeccion = true; _proyeccionLoaded = true; });
+    try {
+      final data = await IncomeService.getProyeccion(
+          widget.presupuesto['id'] as int, widget.firebaseUid);
+      if (mounted) setState(() { _proyeccion = data; _loadingProyeccion = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingProyeccion = false);
     }
   }
 
@@ -265,9 +286,13 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     int diasAnticipacion = 3,
     String? subcategoria,
     String? clasificacion,
+    bool tipoDeuda = false,
+    bool descuentoDirecto = false,
+    DateTime? fechaFin,
+    int? numCuotas,
   }) async {
     if (desc.trim().isEmpty || monto <= 0) return;
-    final body = {
+    final body = <String, dynamic>{
       'presupuesto_id': widget.presupuesto['id'],
       'descripcion': desc.trim(), 'monto': monto, 'tipo': tipo,
       'fecha': DateTime.now().toIso8601String().split('T')[0],
@@ -281,6 +306,14 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     if (fechaPagoExacta != null) body['fecha_pago_exacta'] = fechaPagoExacta;
     if (subcategoria != null) body['subcategoria'] = subcategoria;
     if (clasificacion != null) body['clasificacion'] = clasificacion;
+    if (tipoDeuda) {
+      body['tipo_deuda'] = 1;
+      body['descuento_directo'] = descuentoDirecto ? 1 : 0;
+    }
+    if (fechaFin != null) {
+      body['fecha_fin'] = '${fechaFin.year}-${fechaFin.month.toString().padLeft(2,'0')}-${fechaFin.day.toString().padLeft(2,'0')}';
+    }
+    if (numCuotas != null) body['num_cuotas'] = numCuotas;
 
     final res = await ApiClient.post('/gastos', body);
     if (res.statusCode != 201) return;
@@ -288,7 +321,6 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     // Para gastos recurrentes, crear también el movimiento del período actual
     if (tipo == 'fijo' || tipo == 'fijo_x_periodo' || tipo == 'ahorro') {
       // FIX: validar que el servidor retornó el id antes de crear el movimiento.
-      // Sin este check, id podía ser null y el movimiento quedaba sin gasto_id vinculado.
       final id = json.decode(res.body)['id'] as int?;
       if (id == null) { _cargar(); return; }
       await ApiClient.post('/presupuestos/${widget.presupuesto['id']}/movimientos', {
@@ -341,6 +373,10 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       diasAnticipacion = 3,
       subcategoria,
       clasificacion,
+      tipoDeuda = false,
+      descuentoDirecto = false,
+      fechaFin,
+      numCuotas,
     }) => _agregarGasto(
       desc, monto, tipo,
       tipoFecha: tipoFecha,
@@ -351,6 +387,10 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       diasAnticipacion: diasAnticipacion,
       subcategoria: subcategoria,
       clasificacion: clasificacion,
+      tipoDeuda: tipoDeuda,
+      descuentoDirecto: descuentoDirecto,
+      fechaFin: fechaFin,
+      numCuotas: numCuotas,
     ),
   );
 
@@ -536,6 +576,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
           controller: _tabController,
           tabs: const [
             Tab(text: 'Período'),
+            Tab(text: 'Proyección'),
             Tab(text: 'Historial'),
           ],
           indicatorColor: AppTheme.primary,
@@ -576,9 +617,21 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                       ]),
                     ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
 
-                  // ── BALANCE PRINCIPAL ─────────────────────────────────────
+                  // ── INGRESO Y CAPACIDAD ───────────────────────────────────
+                  const LabelDivider('INGRESO Y CAPACIDAD'),
+                  const SizedBox(height: 8),
+                  CapacidadCard(
+                    capacidad: _capacidad,
+                    onConfigurar: _abrirIncomeForm,
+                  ),
+
+                  // ── ESTE PERÍODO ──────────────────────────────────────────
+                  const LabelDivider('ESTE PERÍODO'),
+                  const SizedBox(height: 8),
+
+                  // Balance principal
                   BalanceCard(
                     montoTotal: montoTotal,
                     totalGastado: totalConGustitos,
@@ -589,7 +642,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
 
                   const SizedBox(height: 14),
 
-                  // ── STAT CARDS POR TIPO ───────────────────────────────────
+                  // Stat cards por tipo
                   Row(children: [
                     _StatCard('Fijos',    totalFijo,    AppTheme.colorFijo),
                     const SizedBox(width: 8),
@@ -599,14 +652,12 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                   ]),
                   if (totalGustitos > 0) ...[
                     const SizedBox(height: 8),
-                    Row(children: [
-                      _StatCard('Gustitos', totalGustitos, AppTheme.primary),
-                    ]),
+                    Row(children: [_StatCard('Gustitos', totalGustitos, AppTheme.primary)]),
                   ],
 
                   const SizedBox(height: 14),
 
-                  // ── INDICADOR CIRCULAR DE PAGOS ───────────────────────────
+                  // Indicador circular de pagos
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -636,9 +687,9 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     ]),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
 
-                  // ── BOTONES DE ACCIÓN ─────────────────────────────────────
+                  // Botones de acción
                   Row(children: [
                     Expanded(child: OutlinedButton.icon(
                       onPressed: _modalSeleccionar,
@@ -684,8 +735,6 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                       ),
                     ),
                   ),
-
-                  // Botón cierre de período (últimos 2 días o vencido)
                   if (_mostrarBotonCierre()) ...[
                     const SizedBox(height: 10),
                     SizedBox(
@@ -705,7 +754,34 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
 
                   const SizedBox(height: 20),
 
-                  // ── SECCIÓN GUSTITOS ──────────────────────────────────────
+                  // ── MOVIMIENTOS ───────────────────────────────────────────
+                  const LabelDivider('MOVIMIENTOS'),
+                  const SizedBox(height: 8),
+                  if (movimientos.isEmpty)
+                    _emptyMovimientos()
+                  else
+                    ...movimientos.map((m) => _MovimientoTile(
+                      m: m,
+                      onPagar: () => _modalPago(m['id'], _d(m['monto'])),
+                    )),
+
+                  const SizedBox(height: 20),
+
+                  // ── ANÁLISIS FINANCIERO (colapsable) ─────────────────────
+                  AnalisisFinancieroSection(
+                    distribucionClasif: _distribucionClasif,
+                    recomendacion: _recomendacion,
+                    fondo: _fondo,
+                    patrones: _patrones,
+                    alertas: _alertas,
+                    onConfigurarIngreso: _abrirIncomeForm,
+                    onAgregarGasto: _modalNuevoGasto,
+                    loading: _loadingExtras,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // ── GUSTITOS ─────────────────────────────────────────────
                   const LabelDivider('GUSTITOS'),
                   const SizedBox(height: 8),
                   Container(
@@ -713,13 +789,13 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.primary.withOpacity(0.25)),
+                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
                     ),
                     child: Row(children: [
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.12),
+                          color: AppTheme.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.bolt, color: AppTheme.primary, size: 20),
@@ -730,10 +806,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                           totalGustitos > 0
                               ? '\$${totalGustitos.toStringAsFixed(2)} en Gustitos'
                               : 'Sin Gustitos este período',
-                          style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14),
+                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
                         ),
                         const Text('Compras espontáneas registradas',
                             style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
@@ -749,9 +822,9 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppTheme.primary.withOpacity(0.12),
+                              color: AppTheme.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
                             ),
                             child: const Icon(Icons.add, color: AppTheme.primary, size: 16),
                           ),
@@ -772,84 +845,68 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: AppTheme.border),
                             ),
-                            child: const Icon(Icons.arrow_forward_ios,
-                                color: AppTheme.textSecondary, size: 14),
+                            child: const Icon(Icons.arrow_forward_ios, color: AppTheme.textSecondary, size: 14),
                           ),
                         ),
                       ]),
                     ]),
                   ),
-                  const SizedBox(height: 20),
-
-                  // ── Métricas financieras (carga asíncrona) ───────────────
-                  if (_loadingExtras)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.border),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(width: 16, height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)),
-                          SizedBox(width: 10),
-                          Text('Cargando análisis financiero…',
-                              style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-                        ],
-                      ),
-                    )
-                  else ...[
-                  // ── P2: Capacidad real de pago ────────────────────────────
-                  CapacidadCard(
-                    capacidad: _capacidad,
-                    onConfigurar: _abrirIncomeForm,
-                  ),
-
-                  // ── P3: Fondo de seguridad ────────────────────────────────
-                  if (_fondo != null)
-                    FondoSeguridadCard(fondo: _fondo!),
-
-                  // ── P5: Patrones de gustitos ──────────────────────────────
-                  PatronesGustitosBanner(
-                    patrones: _patrones,
-                    onAgregarGasto: (_) => _modalNuevoGasto(),
-                  ),
-
-                  // ── #6: Alertas inteligentes ──────────────────────────────
-                  AlertasBanner(alertasData: _alertas),
-
-                  // ── #4: Distribución por clasificación ────────────────────
-                  ClasificacionCard(distribucion: _distribucionClasif),
-
-                  // ── #7: Recomendación 50/30/20 ────────────────────────────
-                  RecomendacionPorcentajesCard(
-                    recomendacion: _recomendacion,
-                    onConfigurarIngreso: _abrirIncomeForm,
-                  ),
-                  ], // fin métricas
-
-                  const LabelDivider('MOVIMIENTOS'),
-
-                  // ── LISTA DE MOVIMIENTOS ──────────────────────────────────
-                  if (movimientos.isEmpty)
-                    _emptyMovimientos()
-                  else
-                    ...movimientos.map((m) => _MovimientoTile(
-                      m: m,
-                      onPagar: () => _modalPago(m['id'], _d(m['monto'])),
-                    )),
 
                   const SizedBox(height: 30),
                 ]),
               ),
             ),
-          // ── TAB 2: Historial de períodos ──────────────────────────────────
+          // ── TAB 2: Proyección 12 meses ────────────────────────────────────
+          _buildProyeccionTab(),
+          // ── TAB 3: Historial de períodos ─────────────────────────────────
           _buildHistorialTab(),
         ],
+      ),
+      floatingActionButton: _tabController.index == 1
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => AhorroMetaScreen(firebaseUid: widget.firebaseUid),
+              )),
+              label: const Text('Agregar meta'),
+              icon: const Icon(Icons.flag_outlined),
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.black,
+            )
+          : null,
+    );
+  }
+
+  Widget _buildProyeccionTab() {
+    if (_loadingProyeccion) {
+      return Container(color: AppTheme.background,
+          child: const Center(child: CircularProgressIndicator()));
+    }
+    if (_proyeccion == null) {
+      return Container(
+        color: AppTheme.background,
+        child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.show_chart, size: 48, color: AppTheme.textMuted),
+          SizedBox(height: 12),
+          Text('Sin datos de proyección', style: TextStyle(color: AppTheme.textSecondary)),
+          SizedBox(height: 4),
+          Text('Toca "Proyección" para cargar',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        ])),
+      );
+    }
+    final meses = (_proyeccion!['meses'] as List? ?? [])
+        .map((e) => e as Map<String, dynamic>).toList();
+    return Container(
+      color: AppTheme.background,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: meses.length,
+        itemBuilder: (_, i) => ProyeccionMesCard(
+          mes: meses[i],
+          onTap: meses[i]['tipo'] != 'proyectado'
+              ? () {} // tap en períodos reales — se puede extender a detalle
+              : null,
+        ),
       ),
     );
   }

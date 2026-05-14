@@ -61,6 +61,7 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
   final _netoCtrl      = TextEditingController();
   final _notaCtrl      = TextEditingController();
   bool _guardando = false;
+  bool _calcularAutomatico = false;
 
   double get _netoCalculado {
     if (_tipo != 'salario') return 0;
@@ -72,12 +73,25 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
     return bruto - seguro - pension - impuesto - otros;
   }
 
+  // Panamá: CSS 9.75%, Educativo (IFARHU) 1.25%, ISR solo si bruto > 916.67
+  void _autoCalcular() {
+    if (!_calcularAutomatico || _tipo != 'salario') return;
+    final bruto = double.tryParse(_brutoCtrl.text.replaceAll(',', '.')) ?? 0;
+    final css       = bruto * 0.0975;
+    final educativo = bruto * 0.0125;
+    final isr       = bruto > 916.67 ? (bruto - 916.67) * 0.15 : 0.0;
+    _seguroCtrl.text   = css.toStringAsFixed(2);
+    _pensionCtrl.text  = educativo.toStringAsFixed(2);
+    _impuestoCtrl.text = isr.toStringAsFixed(2);
+  }
+
   @override
   void initState() {
     super.initState();
     final inc = widget.incomeActual;
     if (inc != null) {
       _tipo = inc['tipo_ingreso'] ?? 'salario';
+      _calcularAutomatico = (inc['calcular_automatico'] == 1 || inc['calcular_automatico'] == true);
       if (_tipo == 'salario') {
         _brutoCtrl.text    = _fmt(inc['ingreso_bruto']);
         _seguroCtrl.text   = _fmt(inc['desc_seguro']);
@@ -89,7 +103,11 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
       }
       _notaCtrl.text = inc['nota'] ?? '';
     }
-    for (final c in [_brutoCtrl, _seguroCtrl, _pensionCtrl, _impuestoCtrl, _otrosCtrl]) {
+    _brutoCtrl.addListener(() {
+      _autoCalcular();
+      setState(() {});
+    });
+    for (final c in [_seguroCtrl, _pensionCtrl, _impuestoCtrl, _otrosCtrl]) {
       c.addListener(() => setState(() {}));
     }
   }
@@ -122,11 +140,13 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
           const SnackBar(content: Text('Ingresa un ingreso bruto válido')));
         return;
       }
-      body['ingreso_bruto']  = bruto;
-      body['desc_seguro']    = double.tryParse(_seguroCtrl.text.replaceAll(',', '.'))   ?? 0;
-      body['desc_pension']   = double.tryParse(_pensionCtrl.text.replaceAll(',', '.'))  ?? 0;
-      body['desc_impuesto']  = double.tryParse(_impuestoCtrl.text.replaceAll(',', '.')) ?? 0;
-      body['desc_otros']     = double.tryParse(_otrosCtrl.text.replaceAll(',', '.'))    ?? 0;
+      body['ingreso_bruto']         = bruto;
+      body['desc_seguro']           = double.tryParse(_seguroCtrl.text.replaceAll(',', '.'))   ?? 0;
+      body['desc_pension']          = double.tryParse(_pensionCtrl.text.replaceAll(',', '.'))  ?? 0;
+      body['desc_impuesto']         = double.tryParse(_impuestoCtrl.text.replaceAll(',', '.')) ?? 0;
+      body['desc_otros']            = double.tryParse(_otrosCtrl.text.replaceAll(',', '.'))    ?? 0;
+      body['calcular_automatico']   = _calcularAutomatico ? 1 : 0;
+      body['ingreso_bruto_mensual'] = bruto;
     } else {
       final neto = double.tryParse(_netoCtrl.text.replaceAll(',', '.')) ?? 0;
       if (neto <= 0) {
@@ -224,14 +244,41 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
                     const SizedBox(height: 12),
                     const Divider(color: AppTheme.border),
                     const SizedBox(height: 8),
-                    const Text('Descuentos (opcionales)',
-                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                    // Toggle auto-cálculo Panamá
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Calcular deducciones (Panamá)',
+                                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13,
+                                      fontWeight: FontWeight.w500)),
+                              Text('CSS 9.75% · Educativo 1.25% · ISR automático',
+                                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _calcularAutomatico,
+                          activeColor: AppTheme.primary,
+                          onChanged: (v) {
+                            setState(() => _calcularAutomatico = v);
+                            if (v) _autoCalcular();
+                          },
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    _buildMontoField('Seguro social / CSS', _seguroCtrl),
+                    _buildMontoField('Seguro Social (CSS)', _seguroCtrl,
+                        readOnly: _calcularAutomatico),
                     const SizedBox(height: 10),
-                    _buildMontoField('Pensión / AFP', _pensionCtrl),
+                    _buildMontoField('Educativo (IFARHU)', _pensionCtrl,
+                        readOnly: _calcularAutomatico),
                     const SizedBox(height: 10),
-                    _buildMontoField('Impuesto sobre renta', _impuestoCtrl),
+                    _buildMontoField('Impuesto sobre renta', _impuestoCtrl,
+                        readOnly: _calcularAutomatico),
                     const SizedBox(height: 10),
                     _buildMontoField('Otros descuentos', _otrosCtrl),
                     const SizedBox(height: 16),
@@ -306,10 +353,13 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
     );
   }
 
-  Widget _buildMontoField(String label, TextEditingController ctrl) {
+  Widget _buildMontoField(String label, TextEditingController ctrl,
+      {bool readOnly = false}) {
     return TextField(
       controller: ctrl,
-      style: const TextStyle(color: AppTheme.textPrimary),
+      readOnly: readOnly,
+      style: TextStyle(
+          color: readOnly ? AppTheme.textMuted : AppTheme.textPrimary),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
       decoration: InputDecoration(
@@ -318,10 +368,16 @@ class _IncomeFormContentState extends State<_IncomeFormContent> {
         prefixText: '\$ ',
         prefixStyle: const TextStyle(color: AppTheme.textSecondary),
         filled: true,
-        fillColor: AppTheme.surfaceAlt,
+        fillColor: readOnly
+            ? AppTheme.surfaceAlt.withValues(alpha: 0.6)
+            : AppTheme.surfaceAlt,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none),
+        suffixIcon: readOnly
+            ? const Icon(Icons.calculate_outlined,
+                color: AppTheme.textMuted, size: 16)
+            : null,
       ),
     );
   }

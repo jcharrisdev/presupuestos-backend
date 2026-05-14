@@ -22,19 +22,26 @@ class GastoFormSheet {
       int diasAnticipacion,
       String? subcategoria,
       String? clasificacion,
+      bool tipoDeuda,
+      bool descuentoDirecto,
+      DateTime? fechaFin,
+      int? numCuotas,
     }) onGuardado,
   }) {
-    final descCtrl  = TextEditingController();
-    final montoCtrl = TextEditingController();
-    String tipo          = 'fijo';
-    String tipoFecha     = 'flexible';
-    int diaPago          = 1;
-    String frecuencia    = 'mensual';
+    final descCtrl    = TextEditingController();
+    final montoCtrl   = TextEditingController();
+    final cuotasCtrl  = TextEditingController();
+    String tipo             = 'fijo';
+    String tipoFecha        = 'flexible';
+    int diaPago             = 1;
+    String frecuencia       = 'mensual';
     DateTime? fechaExacta;
-    bool notif           = false;
-    int diasAnticipacion = 3;
+    bool notif              = false;
+    int diasAnticipacion    = 3;
     String? subcategoria;
     String? clasificacion;
+    bool descuentoDirecto   = false;
+    DateTime? fechaFin;
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
@@ -65,12 +72,12 @@ class GastoFormSheet {
             const SizedBox(height: 16),
             const Text('Tipo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(height: 8),
-            Wrap(spacing: 8, children: ['fijo', 'no fijo', 'ahorro'].map((t) => GestureDetector(
-              onTap: () => setS(() => tipo = t),
+            Wrap(spacing: 8, children: ['fijo', 'no fijo', 'ahorro', 'deuda'].map((t) => GestureDetector(
+              onTap: () => setS(() { tipo = t; if (t != 'deuda') descuentoDirecto = false; }),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: tipo == t ? AppTheme.gastoColor(t).withOpacity(0.15) : AppTheme.surfaceAlt,
+                  color: tipo == t ? AppTheme.gastoColor(t).withValues(alpha: 0.15) : AppTheme.surfaceAlt,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: tipo == t ? AppTheme.gastoColor(t) : AppTheme.border),
                 ),
@@ -80,6 +87,94 @@ class GastoFormSheet {
                 )),
               ),
             )).toList()),
+
+            // Campos específicos de deuda
+            if (tipo == 'deuda') ...[
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Descuento directo del salario',
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 13,
+                            fontWeight: FontWeight.w500)),
+                    Text('Se descuenta automáticamente de tu ingreso',
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  ]),
+                  Switch(
+                    value: descuentoDirecto,
+                    activeColor: AppTheme.colorDeuda,
+                    onChanged: (v) => setS(() => descuentoDirecto = v),
+                  ),
+                ],
+              ),
+            ],
+
+            // Fecha de fin (deuda y variable: opcional)
+            if (tipo == 'deuda' || tipo == 'no fijo') ...[
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: DateTime.now().add(const Duration(days: 30)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+                    builder: (ctx, child) => Theme(
+                      data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.dark(
+                        primary: AppTheme.primary, surface: AppTheme.surfaceAlt,
+                      )),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null) setS(() => fechaFin = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: fechaFin != null ? AppTheme.primary : AppTheme.border),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.event_available_outlined,
+                        color: fechaFin != null ? AppTheme.primary : AppTheme.textSecondary,
+                        size: 16),
+                    const SizedBox(width: 10),
+                    Text(
+                      fechaFin != null
+                          ? 'Vence: ${fechaFin!.year}-${fechaFin!.month.toString().padLeft(2,"0")}-${fechaFin!.day.toString().padLeft(2,"0")}'
+                          : tipo == 'deuda' ? 'Fecha de pago final (opcional)' : 'Fecha de fin (opcional)',
+                      style: TextStyle(
+                        color: fechaFin != null ? AppTheme.textPrimary : AppTheme.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (fechaFin != null) ...[
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setS(() => fechaFin = null),
+                        child: const Icon(Icons.close, color: AppTheme.textMuted, size: 16),
+                      ),
+                    ],
+                  ]),
+                ),
+              ),
+            ],
+
+            // Cuotas (variable: opcional)
+            if (tipo == 'no fijo') ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: cuotasCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'Número de cuotas (opcional)',
+                  prefixIcon: Icon(Icons.format_list_numbered, color: AppTheme.textSecondary, size: 18),
+                ),
+              ),
+            ],
 
             // ── CLASIFICACIÓN FINANCIERA ─────────────────────────────────────
             const SizedBox(height: 16),
@@ -236,10 +331,11 @@ class GastoFormSheet {
             SizedBox(width: double.infinity, child: ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
+                final tipoReal = tipo == 'deuda' ? 'fijo' : tipo;
                 await onGuardado(
                   descCtrl.text,
                   double.tryParse(montoCtrl.text) ?? 0,
-                  tipo,
+                  tipoReal,
                   tipoFecha: tipoFecha,
                   diaPago: tipoFecha == 'fija' && frecuencia != 'unico' ? diaPago : null,
                   frecuenciaPago: tipoFecha == 'fija' ? frecuencia : null,
@@ -250,6 +346,10 @@ class GastoFormSheet {
                   diasAnticipacion: diasAnticipacion,
                   subcategoria: subcategoria,
                   clasificacion: clasificacion,
+                  tipoDeuda: tipo == 'deuda',
+                  descuentoDirecto: descuentoDirecto,
+                  fechaFin: fechaFin,
+                  numCuotas: int.tryParse(cuotasCtrl.text.trim()),
                 );
               },
               child: const Text('Agregar gasto'),
