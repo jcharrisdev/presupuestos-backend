@@ -4519,18 +4519,19 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
       [id, firebase_uid]
     );
 
-    // 2. Gastos fijos del período activo
+    // 2. Gastos fijos y variables presupuestados del período activo
     const [[fijoRow]] = await db.execute(
-      `SELECT COALESCE(SUM(m.monto), 0) AS gastos_fijos
+      `SELECT
+         COALESCE(SUM(CASE WHEN m.tipo IN ('fijo','fijo_x_periodo') THEN m.monto ELSE 0 END), 0) AS gastos_fijos,
+         COALESCE(SUM(CASE WHEN m.tipo = 'no fijo' THEN m.monto ELSE 0 END), 0) AS gastos_variables_presupuestados
        FROM movimientos m
        JOIN periodos p ON p.id = m.periodo_id
        WHERE m.presupuesto_id = ? AND m.firebase_uid = ?
-         AND p.estado = 'activo'
-         AND m.tipo IN ('fijo', 'fijo_x_periodo')`,
+         AND p.estado = 'activo'`,
       [id, firebase_uid]
     );
 
-    // 3. Promedio de variables en últimos 3 períodos cerrados
+    // 3. Promedio de variables reales en últimos 3 períodos cerrados
     const [periodosCerrados] = await db.execute(
       `SELECT p.id,
               COALESCE(SUM(CASE WHEN m.tipo = 'no fijo' AND m.pagado = 1 THEN m.monto_pagado_real ELSE 0 END), 0) AS total_variable
@@ -4545,9 +4546,12 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
 
     const ingreso_neto = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
     const gastos_fijos = parseFloat(fijoRow.gastos_fijos);
+    const gastos_variables_presupuestados = parseFloat(fijoRow.gastos_variables_presupuestados);
+
+    // Si hay historial, usar promedio real. Si no, usar lo presupuestado como estimado.
     const promedio_variable = periodosCerrados.length > 0
       ? periodosCerrados.reduce((s, r) => s + parseFloat(r.total_variable), 0) / periodosCerrados.length
-      : 0;
+      : gastos_variables_presupuestados;
     const promedio_variable_r = Math.round(promedio_variable * 100) / 100;
 
     const capacidad_real = ingreso_neto !== null
@@ -4557,7 +4561,9 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
     res.json({
       ingreso_neto,
       gastos_fijos_totales: gastos_fijos,
+      gastos_variables_presupuestados,
       promedio_variable_historico: promedio_variable_r,
+      usa_historico: periodosCerrados.length > 0,
       capacidad_real,
       tiene_income: incomeRow != null,
       periodos_historico: periodosCerrados.length
@@ -4694,11 +4700,14 @@ app.get('/presupuestos/:id/periodo/:periodoId/resumen-cierre', async (req, res) 
       [id, firebase_uid]
     );
 
-    // Gastado real y ahorro del período
+    // Gastado real, ahorro y compromisos pendientes del período
     const [[gastadoRow]] = await db.execute(
       `SELECT
          COALESCE(SUM(CASE WHEN pagado = 1 THEN monto_pagado_real ELSE 0 END), 0) AS total_gastado_real,
-         COALESCE(SUM(CASE WHEN tipo = 'ahorro' AND pagado = 1 THEN monto_pagado_real ELSE 0 END), 0) AS total_ahorro
+         COALESCE(SUM(CASE WHEN tipo = 'ahorro' AND pagado = 1 THEN monto_pagado_real ELSE 0 END), 0) AS total_ahorro,
+         COALESCE(SUM(CASE WHEN pagado = 0 THEN monto ELSE 0 END), 0) AS total_comprometido_pendiente,
+         COUNT(*) AS total_movimientos,
+         SUM(CASE WHEN pagado = 0 THEN 1 ELSE 0 END) AS movimientos_pendientes
        FROM movimientos WHERE periodo_id = ? AND firebase_uid = ?`,
       [periodoId, firebase_uid]
     );
@@ -4725,45 +4734,61 @@ app.get('/presupuestos/:id/periodo/:periodoId/resumen-cierre', async (req, res) 
       [id, firebase_uid, fechaIni, fechaFin]
     );
 
-    const ingreso_neto    = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
-    const monto_total     = parseFloat(presupuesto.monto_total);
-    const total_gastado   = parseFloat(gastadoRow.total_gastado_real);
-    const total_ahorro    = parseFloat(gastadoRow.total_ahorro);
-    const total_gustitos  = parseFloat(gustitosRow.total_gustitos);
-    const disponible_real = ingreso_neto !== null
-      ? Math.round((ingreso_neto - total_gastado - total_gustitos) * 100) / 100
-      : Math.round((monto_total - total_gastado - total_gustitos) * 100) / 100;
+    const ingreso_neto               = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
+    const monto_total                = parseFloat(presupuesto.monto_total);
+    const total_gastado              = parseFloat(gastadoRow.total_gastado_real);
+    const total_ahorro               = parseFloat(gastadoRow.total_ahorro);
+    const total_comprometido_pendiente = parseFloat(gastadoRow.total_comprometido_pendiente);
+    const movimientos_pendientes     = parseInt(gastadoRow.movimientos_pendientes || 0);
+    const total_movimientos          = parseInt(gastadoRow.total_movimientos || 0);
+    const total_gustitos             = parseFloat(gustitosRow.total_gustitos);
+    const base_calculo               = ingreso_neto ?? monto_total;
+    const disponible_real            = Math.round((base_calculo - total_gastado - total_gustitos) * 100) / 100;
+    const hubo_actividad             = total_gastado > 0 || total_gustitos > 0;
 
-    // Calcular si puede cerrar manualmente
+    // Calcular si puede cerrar manualmente (hasta 2 días antes del fin)
     const hoy = new Date();
     const finDate = new Date(fechaFin + 'T23:59:59');
     const diffDias = Math.ceil((finDate - hoy) / (1000 * 60 * 60 * 24));
     const puede_cerrar_manualmente = periodo.estado === 'activo' && diffDias <= 2;
+    const razon_no_puede_cerrar = !puede_cerrar_manualmente
+      ? (periodo.estado !== 'activo' ? 'El período ya está cerrado.' : `Aún quedan ${diffDias} días para que termine el período.`)
+      : null;
 
-    // Aprendizajes automáticos
+    // Aprendizajes automáticos — honestos y accionables
     const aprendizajes = [];
+
+    // Sin actividad registrada: avisar sobre compromisos pendientes
+    if (!hubo_actividad && movimientos_pendientes > 0) {
+      aprendizajes.push(`Tienes ${movimientos_pendientes} compromiso${movimientos_pendientes > 1 ? 's' : ''} por un total de $${total_comprometido_pendiente.toFixed(2)} que no marcaste como pagados. Revísalos antes de cerrar.`);
+    }
+
     if (total_gustitos > 0) {
-      const pctGustitos = ingreso_neto ? total_gustitos / ingreso_neto : total_gustitos / monto_total;
+      const pctGustitos = total_gustitos / base_calculo;
       if (pctGustitos >= 0.10) {
-        aprendizajes.push(`Gastaste $${total_gustitos.toFixed(2)} en Gustitos (${Math.round(pctGustitos * 100)}% de tu ingreso). Considera agregar una categoría para gastos espontáneos.`);
+        aprendizajes.push(`Gastaste $${total_gustitos.toFixed(2)} en Gustitos (${Math.round(pctGustitos * 100)}% de tu ingreso). Si se repite, considera presupuestarlo.`);
       } else {
         aprendizajes.push(`Tuviste $${total_gustitos.toFixed(2)} en Gustitos este período. ¡Buen control!`);
       }
     }
+
     if (ingreso_neto && total_ahorro > 0) {
       const tasaAhorro = total_ahorro / ingreso_neto;
       if (tasaAhorro >= 0.20) {
-        aprendizajes.push(`Tu tasa de ahorro fue ${Math.round(tasaAhorro * 100)}%. ¡Excelente!`);
+        aprendizajes.push(`¡Ahorraste ${Math.round(tasaAhorro * 100)}% de tu ingreso! Eso es excelente.`);
       } else if (tasaAhorro >= 0.10) {
-        aprendizajes.push(`Ahorraste ${Math.round(tasaAhorro * 100)}% de tu ingreso. La meta recomendada es 20%.`);
+        aprendizajes.push(`Ahorraste ${Math.round(tasaAhorro * 100)}% de tu ingreso. La meta ideal es 20% — vas por buen camino.`);
       } else {
-        aprendizajes.push(`Tu ahorro fue bajo (${Math.round(tasaAhorro * 100)}%). Considera aumentarlo el próximo período.`);
+        aprendizajes.push(`Ahorraste ${Math.round(tasaAhorro * 100)}% de tu ingreso este período. Intenta incrementarlo poco a poco.`);
       }
     }
-    if (total_gastado > monto_total) {
-      aprendizajes.push(`Superaste tu presupuesto por $${(total_gastado - monto_total).toFixed(2)}. Revisa tus gastos variables.`);
-    } else if (disponible_real > 0) {
-      aprendizajes.push(`Cerraste con $${disponible_real.toFixed(2)} disponibles. ¡Bien manejado!`);
+
+    if (hubo_actividad) {
+      if (total_gastado > base_calculo) {
+        aprendizajes.push(`Te pasaste del presupuesto en $${(total_gastado - base_calculo).toFixed(2)}. El próximo período revisa tus gastos variables.`);
+      } else if (disponible_real > 0) {
+        aprendizajes.push(`Cerraste con $${disponible_real.toFixed(2)} disponibles. ¡Bien manejado!`);
+      }
     }
 
     res.json({
@@ -4779,9 +4804,12 @@ app.get('/presupuestos/:id/periodo/:periodoId/resumen-cierre', async (req, res) 
       total_gastado_real: total_gastado,
       total_ahorro,
       total_gustitos,
+      total_comprometido_pendiente,
+      movimientos_pendientes,
       disponible_real,
       tiene_income: incomeRow != null,
       puede_cerrar_manualmente,
+      razon_no_puede_cerrar,
       aprendizajes
     });
   } catch (error) {
@@ -4847,6 +4875,11 @@ app.get('/presupuestos/:id/distribucion-clasificacion', async (req, res) => {
       distribucion[r.clasificacion] = { total: t, cantidad: Number(r.cantidad), pct: montoTotal > 0 ? t / montoTotal : 0 };
       if (r.clasificacion !== 'sin_clasificar') totalClasificado += t;
     });
+
+    // Garantizar que sin_clasificar siempre esté presente en el objeto
+    if (!distribucion['sin_clasificar']) {
+      distribucion['sin_clasificar'] = { total: 0, cantidad: 0, pct: 0 };
+    }
 
     res.json({
       distribucion,
@@ -4914,23 +4947,42 @@ app.get('/presupuestos/:id/alertas', async (req, res) => {
       ? histVariables.reduce((s, r) => s + Number(r.var_periodo), 0) / histVariables.length
       : 0;
 
-    // Avance del período en días (0.0 – 1.0)
+    // Avance del período en días (0.0 – 1.0), nunca negativo
     const hoy = new Date();
     const inicio = new Date(periodo.fecha_inicio);
     const fin    = new Date(periodo.fecha_fin);
     const duracion = Math.max(1, (fin - inicio) / 86400000);
-    const avance   = Math.min(1, (hoy - inicio) / 86400000 / duracion);
+    const avance   = Math.max(0, Math.min(1, (hoy - inicio) / 86400000 / duracion));
+    const periodoNoIniciado = hoy < inicio;
 
     const totalGastado = Number(gastoRow.total_gastado);
     const totalVariable = Number(gastoRow.total_variable);
+    const totalFijo = Number(gastoRow.total_fijo);
     const totalGustitos = Number(gustitosRow.total);
     const totalConGustitos = totalGastado + totalGustitos;
     const pctGasto = montoTotal > 0 ? totalConGustitos / montoTotal : 0;
 
+    // Ingreso neto del período (para detectar cuando compromisos > ingreso)
+    const [[incomeAlertRow]] = await db.execute(
+      `SELECT ingreso_neto FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ? LIMIT 1`,
+      [id, firebase_uid]
+    );
+    const ingresoNetoAlert = incomeAlertRow ? parseFloat(incomeAlertRow.ingreso_neto) : null;
+
     const alertas = [];
 
-    // Alerta 1: ritmo alto de gasto
-    if (avance < 0.5 && pctGasto > 0.7) {
+    // Alerta 0 (NUEVA): compromisos fijos superan el ingreso neto del período
+    if (ingresoNetoAlert !== null && totalFijo > ingresoNetoAlert) {
+      alertas.push({
+        tipo: 'gastos_exceden_ingreso',
+        nivel: 'danger',
+        titulo: 'Tus compromisos superan tu ingreso',
+        mensaje: `Tienes $${totalFijo.toFixed(2)} comprometidos en gastos fijos pero tu ingreso es $${ingresoNetoAlert.toFixed(2)}. Hay un déficit de $${(totalFijo - ingresoNetoAlert).toFixed(2)}.`,
+      });
+    }
+
+    // Alerta 1: ritmo alto de gasto (solo si el período ya inició)
+    if (!periodoNoIniciado && avance > 0 && avance < 0.5 && pctGasto > 0.7) {
       alertas.push({
         tipo: 'ritmo_alto',
         nivel: 'danger',
@@ -5038,25 +5090,25 @@ app.get('/presupuestos/:id/recomendacion-porcentajes', async (req, res) => {
           clasificacion: 'esencial',
           label: 'Necesidades esenciales',
           pct_recomendado: 0.50,
-          monto_recomendado: base * 0.50,
+          monto_recomendado: parseFloat((base * 0.50).toFixed(2)),
           monto_real: realPorClasif['esencial'] || 0,
-          diferencia: (realPorClasif['esencial'] || 0) - base * 0.50,
+          diferencia: parseFloat(((realPorClasif['esencial'] || 0) - base * 0.50).toFixed(2)),
         },
         {
           clasificacion: 'importante',
           label: 'Gastos importantes',
           pct_recomendado: 0.30,
-          monto_recomendado: base * 0.30,
+          monto_recomendado: parseFloat((base * 0.30).toFixed(2)),
           monto_real: realPorClasif['importante'] || 0,
-          diferencia: (realPorClasif['importante'] || 0) - base * 0.30,
+          diferencia: parseFloat(((realPorClasif['importante'] || 0) - base * 0.30).toFixed(2)),
         },
         {
           clasificacion: 'flexible',
           label: 'Gastos flexibles / ahorro',
           pct_recomendado: 0.20,
-          monto_recomendado: base * 0.20,
+          monto_recomendado: parseFloat((base * 0.20).toFixed(2)),
           monto_real: realPorClasif['flexible'] || 0,
-          diferencia: (realPorClasif['flexible'] || 0) - base * 0.20,
+          diferencia: parseFloat(((realPorClasif['flexible'] || 0) - base * 0.20).toFixed(2)),
         },
       ],
       sin_clasificar: realPorClasif['sin_clasificar'] || 0,
@@ -5266,29 +5318,40 @@ app.get('/presupuestos/:id/proyeccion', async (req, res) => {
       return d.toISOString().slice(0, 10);
     };
 
+    // Helper: normaliza fecha de MySQL (Date object o ISO string) a 'YYYY-MM-DD'
+    const toDateStr = (v) => {
+      if (!v) return new Date().toISOString().slice(0, 10);
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      return String(v).slice(0, 10);
+    };
+
     // Construir meses reales
-    const meses = rows.map(r => ({
-      tipo:                r.estado === 'cerrado' ? 'real' : 'activo',
-      periodo_id:          r.id,
-      numero_periodo:      r.numero_periodo,
-      mes_label:           mesLabel(r.fecha_inicio),
-      fecha_inicio:        r.fecha_inicio,
-      fecha_fin:           r.fecha_fin,
-      ingreso_proyectado:  ingresoNeto,
-      gastos_proyectados:  parseFloat(r.total_fijo) + parseFloat(r.total_variable) + parseFloat(r.total_ahorro),
-      saldo_estimado:      ingresoNeto - parseFloat(r.total_fijo) - parseFloat(r.total_variable) - parseFloat(r.total_ahorro),
-      total_fijo:          parseFloat(r.total_fijo),
-      total_variable:      parseFloat(r.total_variable),
-      total_ahorro:        parseFloat(r.total_ahorro),
-      total_gastado:       parseFloat(r.total_gastado),
-      porcentaje_ejecutado: ingresoNeto > 0 ? parseFloat(r.total_gastado) / ingresoNeto : null,
-    }));
+    const meses = rows.map(r => {
+      const fi = toDateStr(r.fecha_inicio);
+      const ff = toDateStr(r.fecha_fin);
+      return {
+        tipo:                r.estado === 'cerrado' ? 'real' : 'activo',
+        periodo_id:          r.id,
+        numero_periodo:      r.numero_periodo,
+        mes_label:           mesLabel(fi),
+        fecha_inicio:        fi,
+        fecha_fin:           ff,
+        ingreso_proyectado:  ingresoNeto,
+        gastos_proyectados:  parseFloat(r.total_fijo) + parseFloat(r.total_variable) + parseFloat(r.total_ahorro),
+        saldo_estimado:      ingresoNeto - parseFloat(r.total_fijo) - parseFloat(r.total_variable) - parseFloat(r.total_ahorro),
+        total_fijo:          parseFloat(r.total_fijo),
+        total_variable:      parseFloat(r.total_variable),
+        total_ahorro:        parseFloat(r.total_ahorro),
+        total_gastado:       parseFloat(r.total_gastado),
+        porcentaje_ejecutado: ingresoNeto > 0 ? parseFloat(r.total_gastado) / ingresoNeto : null,
+      };
+    });
 
     // Rellenar con meses proyectados hasta llegar a 12
     const activo = rows.find(r => r.estado === 'activo');
     let ultimaFechaFin = activo
-      ? activo.fecha_fin
-      : (rows.length > 0 ? rows[rows.length - 1].fecha_fin : new Date().toISOString().slice(0, 10));
+      ? toDateStr(activo.fecha_fin)
+      : (rows.length > 0 ? toDateStr(rows[rows.length - 1].fecha_fin) : new Date().toISOString().slice(0, 10));
     let numeroPeriodo = rows.length > 0 ? rows[rows.length - 1].numero_periodo : 0;
 
     while (meses.length < 12) {

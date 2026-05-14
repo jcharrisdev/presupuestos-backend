@@ -96,14 +96,25 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
       return;
     }
 
-    // Calcular monto_total: ingreso neto si configurado, sino pide monto
-    double montoTotal = 0;
+    // Calcular monto_total: siempre basado en ingreso mensual ÷ períodos por mes
+    double montoMensual = 0;
     if (_tipoIngreso == 'salario' && _netoCalculado > 0) {
-      montoTotal = _netoCalculado;
-    } else if (_tipoIngreso != 'salario') {
-      montoTotal = _parseD(_netoCtrl.text);
+      montoMensual = _netoCalculado;
+    } else if (_tipoIngreso != 'salario' && _parseD(_netoCtrl.text) > 0) {
+      montoMensual = _parseD(_netoCtrl.text);
     }
-    if (montoTotal <= 0) montoTotal = 1000; // fallback si no hay income
+
+    // Dividir por tipo de período: quincenal = mitad del mes
+    double montoTotal = _tipoPeriodo == 'quincenal' ? montoMensual / 2 : montoMensual;
+
+    // Si no se configuró ingreso, mostrar error — no hay fallback silencioso
+    if (montoTotal <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa tu ingreso para calcular tu presupuesto.')),
+      );
+      _goTo(1);
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -120,19 +131,24 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
 
       // 2. Guardar income si fue configurado
       if (_incomeConfigurado) {
+        final divisor = _tipoPeriodo == 'quincenal' ? 2.0 : 1.0;
         final incBody = <String, dynamic>{
           'firebase_uid': widget.firebaseUid,
           'tipo_ingreso': _tipoIngreso,
           'calcular_automatico': _calcularAutomatico ? 1 : 0,
+          // Siempre guardamos el bruto MENSUAL como referencia histórica
+          'ingreso_bruto_mensual': montoMensual,
         };
         if (_tipoIngreso == 'salario') {
-          incBody['ingreso_bruto']  = _parseD(_brutoCtrl.text);
-          incBody['desc_seguro']    = _parseD(_seguroCtrl.text);
-          incBody['desc_pension']   = _parseD(_pensionCtrl.text);
-          incBody['desc_impuesto']  = _parseD(_impuestoCtrl.text);
-          incBody['desc_otros']     = _parseD(_otrosCtrl.text);
+          // Enviamos los valores del PERÍODO (no mensuales) para que el backend
+          // calcule el neto del período: bruto/2 - seguro/2 - ... = neto_mensual/2
+          incBody['ingreso_bruto']  = _parseD(_brutoCtrl.text) / divisor;
+          incBody['desc_seguro']    = _parseD(_seguroCtrl.text) / divisor;
+          incBody['desc_pension']   = _parseD(_pensionCtrl.text) / divisor;
+          incBody['desc_impuesto']  = _parseD(_impuestoCtrl.text) / divisor;
+          incBody['desc_otros']     = _parseD(_otrosCtrl.text) / divisor;
         } else {
-          incBody['ingreso_neto'] = _parseD(_netoCtrl.text);
+          incBody['ingreso_neto'] = montoTotal; // ya dividido si es quincenal
         }
         await IncomeService.upsertIncome(presupuestoId, incBody);
       }
@@ -307,7 +323,27 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
         const SizedBox(height: 20),
 
         if (_tipoIngreso == 'salario') ...[
-          _buildMontoField('Ingreso bruto', _brutoCtrl),
+          // Indicador de que siempre se ingresa el salario MENSUAL
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.info_outline, color: AppTheme.info, size: 14),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                _tipoPeriodo == 'quincenal'
+                    ? 'Ingresa tu salario mensual — dividiremos entre 2 para tu quincena.'
+                    : 'Ingresa tu salario mensual completo.',
+                style: const TextStyle(color: AppTheme.info, fontSize: 11),
+              )),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          _buildMontoField('Salario mensual bruto', _brutoCtrl),
           const SizedBox(height: 12),
           const Divider(color: AppTheme.border),
           const SizedBox(height: 8),
@@ -336,24 +372,82 @@ class _CrearPresupuestoState extends State<CrearPresupuesto> {
           _buildMontoField('Otros descuentos', _otrosCtrl),
           const SizedBox(height: 16),
 
-          // Preview neto
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4)),
+          // Preview neto — muestra mensual Y por período
+          if (_netoCalculado > 0) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4)),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Neto mensual',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  Text('\$${_netoCalculado.toStringAsFixed(2)}',
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
+                ]),
+                if (_tipoPeriodo == 'quincenal') ...[
+                  const SizedBox(height: 8),
+                  const Divider(color: AppTheme.border, height: 1),
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Tu presupuesto quincenal',
+                        style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('\$${(_netoCalculado / 2).toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.success)),
+                  ]),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  const Divider(color: AppTheme.border, height: 1),
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Tu presupuesto mensual',
+                        style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('\$${_netoCalculado.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.success)),
+                  ]),
+                ],
+              ]),
             ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Ingreso neto disponible',
-                  style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
-              Text('\$${_netoCalculado.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
-                      color: _netoCalculado >= 0 ? AppTheme.success : AppTheme.danger)),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Neto disponible',
+                    style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
+                Text('\$0.00',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textMuted)),
+              ]),
+            ),
+          ],
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.info_outline, color: AppTheme.info, size: 14),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                _tipoPeriodo == 'quincenal'
+                    ? 'Ingresa lo que recibes mensualmente — dividiremos entre 2 para tu quincena.'
+                    : 'Ingresa el total que recibes al mes.',
+                style: const TextStyle(color: AppTheme.info, fontSize: 11),
+              )),
             ]),
           ),
-        ] else ...[
-          _buildMontoField('Monto que recibes', _netoCtrl),
+          const SizedBox(height: 12),
+          _buildMontoField('Monto mensual que recibes', _netoCtrl),
         ],
 
         const SizedBox(height: 32),
