@@ -2076,5 +2076,22 @@ COMMIT:
   7a800a1 feat: #4 clasificacion gastos, #6 alertas, #7 regla 50/30/20, #8 simulador, #9 deudas
 
 ================================================================================
+SESION 4 (2026-05-13) — Dashboard fondo de seguridad mini card
+================================================================================
+
+OBJETIVO: Completar paso 16 del plan luminous-phoenix: mini card de fondo de
+seguridad en el dashboard, carga lazy con IncomeService.getFondoSeguridad().
+
+ARCHIVO MODIFICADO:
+  lib/dashboard_screen.dart
+    - import income_service.dart + detalles_presupuesto.dart
+    - State: _fondo, _loadingFondo
+    - _cargarFondo() — llama endpoint fondo-seguridad del presupuesto activo
+    - _buildFondoSeguridadMiniCard() — mini card con nivel, barra progreso
+      pct_nivel1, total ahorrado, ícono shield con color semáforo
+    - Insertado en build entre _buildAhorroCard y _buildCompartidoCard
+    - Al tap navega a DetallesPresupuesto
+
+================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING
 ================================================================================

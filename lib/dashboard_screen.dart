@@ -10,6 +10,8 @@ import 'ahorro_meta.dart';
 import 'cobros_home.dart';
 import 'shared_budgets_list_screen.dart';
 import 'deudas/deudas_screen.dart';
+import 'services/income_service.dart';
+import 'detalles_presupuesto.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String firebaseUid;
@@ -29,6 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _resumenVentas;
   double _totalDeudas = 0;
   bool _loadingDeudas = true;
+  Map<String, dynamic>? _fondo;
+  bool _loadingFondo = true;
 
   // Loading
   bool _loadingPresupuesto = true;
@@ -53,7 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _cargar() async {
     final now = DateTime.now();
     setState(() {
-      _loadingPresupuesto = _loadingShared = _loadingPagos = _loadingAhorro = _loadingVentas = _loadingDeudas = true;
+      _loadingPresupuesto = _loadingShared = _loadingPagos = _loadingAhorro = _loadingVentas = _loadingDeudas = _loadingFondo = true;
       _errorPresupuesto = _errorAhorro = _errorVentas = null;
     });
     await Future.wait([
@@ -63,6 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _cargarAhorro(),
       _cargarVentas(),
       _cargarDeudas(),
+      _cargarFondo(),
     ]);
   }
 
@@ -214,6 +219,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _cargarFondo() async {
+    try {
+      final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
+      if (res.statusCode != 200) {
+        if (mounted) setState(() => _loadingFondo = false);
+        return;
+      }
+      final list = json.decode(res.body) as List;
+      final activo = list.firstWhere(
+        (p) => p['estado'] == 'activo' || p['estado'] == null,
+        orElse: () => list.isNotEmpty ? list.first : null,
+      );
+      if (activo == null) {
+        if (mounted) setState(() => _loadingFondo = false);
+        return;
+      }
+      final data = await IncomeService.getFondoSeguridad(activo['id'] as int, widget.firebaseUid);
+      if (mounted) setState(() {
+        _fondo = data;
+        _loadingFondo = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingFondo = false);
+    }
+  }
+
   // ── Financial computations ─────────────────────────────────────────────────
 
   double get _gastado =>
@@ -311,6 +342,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildMiniRow(),
             const SizedBox(height: 12),
             _buildAhorroCard(),
+            const SizedBox(height: 12),
+            _buildFondoSeguridadMiniCard(),
             const SizedBox(height: 12),
             _buildCompartidoCard(),
             const SizedBox(height: 12),
@@ -763,7 +796,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ── 5. Deudas compartidas ─────────────────────────────────────────────────
+  // ── 5. Fondo de seguridad (mini card) ────────────────────────────────────
+
+  Widget _buildFondoSeguridadMiniCard() {
+    if (_loadingFondo) return _skeleton(height: 80);
+    if (_fondo == null) return const SizedBox.shrink();
+
+    final nivel = (_fondo!['nivel_actual'] as num?)?.toInt() ?? 0;
+    final pct   = ((_fondo!['pct_nivel1'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+    final total = (_fondo!['total_ahorrado_actual'] as num?)?.toDouble() ?? 0;
+    final obj1  = (_fondo!['objetivo_nivel1'] as num?)?.toDouble() ?? 0;
+
+    final nivelLabel = nivel == 0
+        ? 'Sin colchón'
+        : nivel == 1
+            ? '1 mes cubierto'
+            : nivel == 2
+                ? '2 meses cubiertos'
+                : '6 meses cubiertos';
+    final nivelColor = nivel == 0
+        ? AppTheme.danger
+        : nivel == 1
+            ? AppTheme.warning
+            : AppTheme.success;
+
+    return GestureDetector(
+      onTap: _presupuesto != null
+          ? () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => DetallesPresupuesto(
+                  presupuesto: _presupuesto!,
+                  firebaseUid: widget.firebaseUid,
+                ),
+              ))
+          : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: nivelColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.shield_outlined, color: nivelColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('FONDO DE SEGURIDAD',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+              Text(nivelLabel, style: TextStyle(color: nivelColor, fontSize: 11, fontWeight: FontWeight.w600)),
+            ]),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: pct, minHeight: 5,
+                backgroundColor: AppTheme.surfaceAlt,
+                valueColor: AlwaysStoppedAnimation(nivelColor),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              obj1 > 0
+                  ? '\$${_fmt.format(total)} / \$${_fmt.format(obj1)} (nivel 1)'
+                  : '\$${_fmt.format(total)} ahorrado',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+            ),
+          ])),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+        ]),
+      ),
+    );
+  }
+
+  // ── 6. Deudas compartidas ─────────────────────────────────────────────────
 
   Widget _buildCompartidoCard() {
     if (_loadingShared) return _skeleton(height: 90);
