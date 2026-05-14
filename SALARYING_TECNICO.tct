@@ -1,8 +1,8 @@
 ================================================================================
 SALARYING - DOCUMENTO TECNICO COMPLETO
 Generado:        2026-05-06
-Ultima actualizacion: 2026-05-13 (sesion - subcategorias + modulo Gustitos)
-Version App:     1.2.0+3
+Ultima actualizacion: 2026-05-13 (sesion 2 - P1-P5 mejoras módulo presupuestos)
+Version App:     1.2.0+4
 ================================================================================
 
 ================================================================================
@@ -1692,6 +1692,191 @@ RIESGOS FUTUROS IDENTIFICADOS:
     Considerar filtrar por fecha en el futuro (ej: solo Gustitos del periodo activo).
   - La subcategoria es un VARCHAR libre: si en el futuro se necesita validacion estricta
     o catalogo de categorias, requiere migracion a FK hacia tabla categorias.
+
+================================================================================
+22. SESION 2026-05-13 (sesion 2) - P1-P5 MEJORAS MODULO PRESUPUESTOS
+================================================================================
+
+OBJETIVO:
+  Convertir el modulo de presupuestos de un registro manual a un sistema de
+  decision financiera, implementando las 5 prioridades del Plan de Mejora.
+
+================================================================================
+10.10 INGRESO NETO REAL (P1)
+================================================================================
+
+Tabla nueva: budget_income
+  id              INT PK AUTO_INCREMENT
+  presupuesto_id  INT NOT NULL UNIQUE FK presupuestos(id) CASCADE
+  firebase_uid    VARCHAR(255) NOT NULL
+  tipo_ingreso    ENUM('salario','informal','ocasional','prestamo','otro')
+  ingreso_bruto   DECIMAL(10,2) NULL (solo para tipo='salario')
+  desc_seguro     DECIMAL(10,2) NULL DEFAULT 0
+  desc_pension    DECIMAL(10,2) NULL DEFAULT 0
+  desc_impuesto   DECIMAL(10,2) NULL DEFAULT 0
+  desc_otros      DECIMAL(10,2) NULL DEFAULT 0
+  ingreso_neto    DECIMAL(10,2) NOT NULL (calculado en backend para salario)
+  nota            VARCHAR(255) NULL
+  INDEX: idx_budget_income_uid(firebase_uid)
+
+REGLA FINANCIERA:
+  Tipo salario:  ingreso_neto = ingreso_bruto - (seguro + pension + impuesto + otros)
+  Otros tipos:   ingreso_neto = monto recibido directamente
+  income es INFORMATIVO: no modifica monto_total del presupuesto
+
+ENDPOINTS NUEVOS:
+  GET  /presupuestos/:id/income?firebase_uid=   → 200 con registro | 204 si no existe
+  POST /presupuestos/:id/income                 → upsert (INSERT ON DUPLICATE KEY UPDATE)
+    Body salario: { firebase_uid, tipo_ingreso, ingreso_bruto, desc_seguro,
+                    desc_pension, desc_impuesto, desc_otros, nota? }
+    Body otros:   { firebase_uid, tipo_ingreso, ingreso_neto, nota? }
+
+================================================================================
+10.11 CAPACIDAD REAL DE PAGO (P2)
+================================================================================
+
+ENDPOINT:
+  GET /presupuestos/:id/capacidad?firebase_uid=
+  Retorna:
+    {
+      ingreso_neto:               decimal | null,
+      gastos_fijos_totales:       decimal,
+      promedio_variable_historico: decimal (promedio ultimos 3 periodos cerrados),
+      capacidad_real:             decimal | null,
+      tiene_income:               bool,
+      periodos_historico:         int
+    }
+  Formula: capacidad_real = ingreso_neto - gastos_fijos_totales - promedio_variable
+  Si no hay income: tiene_income=false, capacidad_real=null
+
+================================================================================
+10.12 FONDO DE SEGURIDAD (P3)
+================================================================================
+
+ENDPOINT:
+  GET /presupuestos/:id/fondo-seguridad?firebase_uid=
+  Retorna:
+    {
+      total_ahorrado_actual:  decimal (suma de todos los gastos tipo='ahorro' del uid),
+      gastos_fijos_un_periodo: decimal,
+      objetivo_nivel1:        gastos_fijos * 1,
+      objetivo_nivel2:        gastos_fijos * 2,
+      objetivo_nivel3:        gastos_fijos * 6,
+      nivel_actual:           int (0/1/2/3),
+      pct_nivel1:             decimal (0.0-1.0)
+    }
+  No requiere tabla nueva. Calculo dinamico sobre datos existentes.
+  Nivel 1: colchon para 1 periodo de gastos fijos
+  Nivel 2: 1 mes completo (2 periodos quincenales)
+  Nivel 3: 3 meses (colchon fuerte, 6 periodos quincenales)
+
+================================================================================
+10.13 CIERRE DE PERIODO - UI MANUAL (P4)
+================================================================================
+
+HELPER en server.js:
+  cerrarPeriodoManual(periodoId, presupuestoId, firebaseUid)
+    - UPDATE periodos SET estado='cerrado', closed_at=NOW()
+    - Llama crearNuevoPeriodo() para generar el siguiente automaticamente
+
+ENDPOINTS:
+  GET /presupuestos/:id/periodo/:periodoId/resumen-cierre?firebase_uid=
+    Retorna resumen completo del periodo para mostrar antes del cierre:
+      { periodo, monto_total, ingreso_neto, total_gastado_real, total_ahorro,
+        total_gustitos, disponible_real, tiene_income,
+        puede_cerrar_manualmente (true si fecha_fin <= hoy+2 dias),
+        aprendizajes: string[] (generados con logica condicional, sin IA) }
+
+  POST /presupuestos/:id/periodo/:periodoId/cerrar
+    Body: { firebase_uid }
+    Verifica que periodo este 'activo' -> 409 si ya cerrado
+    Llama cerrarPeriodoManual() -> retorna nuevo periodo creado
+
+LOGICA CAN_CLOSE:
+  puede_cerrar_manualmente = periodo.estado='activo' AND
+    (fecha_fin - hoy) <= 2 dias
+
+================================================================================
+10.14 PATRONES DE GUSTITOS - APRENDIZAJE (P5)
+================================================================================
+
+ENDPOINT:
+  GET /presupuestos/:id/gustitos/patrones?firebase_uid=
+  Retorna:
+    {
+      tiene_patrones: bool,
+      patrones: [{
+        category:          string,
+        periodos_con_gasto: int,
+        total_registros:   int,
+        monto_total:       decimal,
+        monto_promedio:    decimal
+      }]
+    }
+  Condicion: category aparece en >= 2 periodos del presupuesto
+  JOIN: gustitos.spent_at BETWEEN p.fecha_inicio AND p.fecha_fin
+
+================================================================================
+10.15 ARCHIVOS FLUTTER NUEVOS (sesion 2026-05-13 sesion 2)
+================================================================================
+
+lib/services/income_service.dart (NUEVO)
+  - 7 metodos estaticos: getIncome, upsertIncome, getCapacidad, getFondoSeguridad,
+    getPatronesGustitos, getResumenCierre, cerrarPeriodo
+  - Todos los GET retornan null si hay excepcion (no crashean la UI)
+
+lib/widgets/presupuestos/income_form_sheet.dart (NUEVO)
+  - DraggableScrollableSheet, patron igual a GastoFormSheet
+  - Chips de tipo: Salario/Informal/Ocasional/Prestamo/Otro
+  - Para salario: bruto + 4 campos descuento + preview neto en tiempo real (local)
+  - Para otros tipos: un solo campo "monto recibido"
+
+lib/widgets/presupuestos/capacidad_card.dart (NUEVO)
+  - Stateless. Si tiene_income=false: banner CTA para configurar ingreso
+  - Si tiene income: numero grande con capacidad_real, desglose fijos/variables
+
+lib/widgets/presupuestos/fondo_seguridad_card.dart (NUEVO)
+  - 3 niveles de fondo con checkmark verde si alcanzado
+  - Barra de progreso hacia nivel 1
+
+lib/widgets/presupuestos/patrones_gustitos_banner.dart (NUEVO)
+  - Stateful: se puede ignorar localmente (_ignorado bool)
+  - Solo visible si tiene_patrones=true y no ignorado
+  - Muestra top 1 categoria recurrente + botones "Agregar" / "Ignorar"
+
+lib/cierre_periodo_screen.dart (NUEVO)
+  - StatefulWidget: carga getResumenCierre() en initState
+  - Grid 2x de StatCards: Ingresaste/Gastaste/Ahorraste/Gustitos/Te quedaron
+  - Lista de aprendizajes generados por el backend
+  - Boton "Confirmar cierre" -> on success: Navigator.pop(context, true)
+  - Si ya cerrado (409): SnackBar + Navigator.pop(context, true)
+
+lib/detalles_presupuesto.dart (ACTUALIZADO)
+  - Imports nuevos: income_service, cierre_periodo_screen, 4 nuevos widgets
+  - Estado nuevo: _income, _capacidad, _fondo, _patrones (todos Map?)
+  - _cargarExtras(): Future.wait de 4 endpoints, sin await en _cargar()
+  - _abrirIncomeForm(): abre IncomeFormSheet con estado actual
+  - _mostrarBotonCierre(): true si fecha_fin <= hoy+2 dias
+  - _navegarACierre(): push a CierrePeriodoScreen, on result=true -> _cargar()
+  - Boton "Cerrar periodo" condicional despues de botones Agregar/Reanudar
+  - CapacidadCard, FondoSeguridadCard, PatronesGustitosBanner entre GUSTITOS y MOVIMIENTOS
+
+================================================================================
+MIGRACION EJECUTADA (2026-05-13 sesion 2):
+  database/migrations/add_budget_income.sql -> ejecutado en Clever Cloud OK
+  CREATE TABLE budget_income con UNIQUE KEY en presupuesto_id (upsert seguro)
+
+APK GENERADO:
+  build/app/outputs/flutter-apk/app-release.apk  33.8 MB  (2026-05-13 sesion 2)
+  Version: 1.2.0+4
+
+REGLAS IMPORTANTES:
+  - income es INFORMATIVO: nunca modifica monto_total del presupuesto
+  - Presupuestos sin budget_income siguen funcionando: todos los endpoints
+    retornan tiene_income=false y datos seguros cuando no existe el registro
+  - _cargarExtras() sin await en _cargar() para no bloquear la UI de movimientos
+  - cerrarPeriodoManual() verifica estado='activo' antes de cerrar (anti-409)
+  - PatronesGustitosBanner es ignorable localmente (sin persistencia en BD)
 
 ================================================================================
 FIN DEL DOCUMENTO TECNICO - SALARYING
