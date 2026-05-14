@@ -37,8 +37,12 @@ import 'widgets/presupuestos/income_form_sheet.dart';
 import 'widgets/presupuestos/capacidad_card.dart';
 import 'widgets/presupuestos/fondo_seguridad_card.dart';
 import 'widgets/presupuestos/patrones_gustitos_banner.dart';
+import 'widgets/presupuestos/clasificacion_card.dart';
+import 'widgets/presupuestos/alertas_banner.dart';
+import 'widgets/presupuestos/recomendacion_porcentajes_card.dart';
 import 'gustitos/crear_gustito_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
+import 'simulador_decisiones_screen.dart';
 
 /// Pantalla de detalle de un presupuesto con movimientos del período activo.
 class DetallesPresupuesto extends StatefulWidget {
@@ -59,11 +63,14 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
   double porcentajePagados = 0;
   bool isLoading = true;
 
-  // Nuevas métricas financieras (P1-P5)
+  // Métricas financieras P1-P5 + nuevas #4/#6/#7
   Map<String, dynamic>? _income;
   Map<String, dynamic>? _capacidad;
   Map<String, dynamic>? _fondo;
   Map<String, dynamic>? _patrones;
+  Map<String, dynamic>? _distribucionClasif;
+  Map<String, dynamic>? _alertas;
+  Map<String, dynamic>? _recomendacion;
 
   // Historial de períodos (tab Historial)
   late TabController _tabController;
@@ -158,13 +165,19 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
         IncomeService.getCapacidad(id, uid),
         IncomeService.getFondoSeguridad(id, uid),
         IncomeService.getPatronesGustitos(id, uid),
+        IncomeService.getDistribucionClasificacion(id, uid),
+        IncomeService.getAlertas(id, uid),
+        IncomeService.getRecomendacionPorcentajes(id, uid),
       ]);
       if (!mounted) return;
       setState(() {
-        _income   = results[0];
-        _capacidad = results[1];
-        _fondo    = results[2];
-        _patrones = results[3];
+        _income             = results[0];
+        _capacidad          = results[1];
+        _fondo              = results[2];
+        _patrones           = results[3];
+        _distribucionClasif = results[4];
+        _alertas            = results[5];
+        _recomendacion      = results[6];
       });
     } catch (_) {}
   }
@@ -246,6 +259,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     bool generaNotificacion = false,
     int diasAnticipacion = 3,
     String? subcategoria,
+    String? clasificacion,
   }) async {
     if (desc.trim().isEmpty || monto <= 0) return;
     final body = {
@@ -261,6 +275,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
     if (frecuenciaPago != null) body['frecuencia_pago'] = frecuenciaPago;
     if (fechaPagoExacta != null) body['fecha_pago_exacta'] = fechaPagoExacta;
     if (subcategoria != null) body['subcategoria'] = subcategoria;
+    if (clasificacion != null) body['clasificacion'] = clasificacion;
 
     final res = await ApiClient.post('/gastos', body);
     if (res.statusCode != 201) return;
@@ -320,6 +335,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       generaNotificacion = false,
       diasAnticipacion = 3,
       subcategoria,
+      clasificacion,
     }) => _agregarGasto(
       desc, monto, tipo,
       tipoFecha: tipoFecha,
@@ -329,6 +345,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
       generaNotificacion: generaNotificacion,
       diasAnticipacion: diasAnticipacion,
       subcategoria: subcategoria,
+      clasificacion: clasificacion,
     ),
   );
 
@@ -640,6 +657,28 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                       ),
                     )),
                   ]),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => SimuladorDecisionesScreen(
+                          montoTotal: montoTotal,
+                          gastadoActual: totalConGustitos,
+                          ingresoNeto: _d(_income?['ingreso_neto']),
+                          totalAhorro: totalAhorro,
+                          nombrePresupuesto: widget.presupuesto['nombre'] as String? ?? '',
+                        ),
+                      )),
+                      icon: const Icon(Icons.calculate_outlined, size: 16),
+                      label: const Text('Simular decisión'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.info,
+                        side: const BorderSide(color: AppTheme.info),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
 
                   // Botón cierre de período (últimos 2 días o vencido)
                   if (_mostrarBotonCierre()) ...[
@@ -752,6 +791,19 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                     patrones: _patrones,
                     onAgregarGasto: (_) => _modalNuevoGasto(),
                   ),
+
+                  // ── #6: Alertas inteligentes ──────────────────────────────
+                  AlertasBanner(alertasData: _alertas),
+
+                  // ── #4: Distribución por clasificación ────────────────────
+                  ClasificacionCard(distribucion: _distribucionClasif),
+
+                  // ── #7: Recomendación 50/30/20 ────────────────────────────
+                  if (_recomendacion != null)
+                    RecomendacionPorcentajesCard(
+                      recomendacion: _recomendacion,
+                      onConfigurarIngreso: _abrirIncomeForm,
+                    ),
 
                   const LabelDivider('MOVIMIENTOS'),
 
@@ -1001,6 +1053,11 @@ class _MovimientoTile extends StatelessWidget {
           const SizedBox(height: 3),
           Row(children: [
             TipoChip(tipo),
+            // Clasificación financiera (si existe)
+            if ((m['clasificacion'] as String?) != null) ...[
+              const SizedBox(width: 5),
+              _ClasifChip(m['clasificacion'] as String),
+            ],
             // Subcategoría (si existe)
             if ((m['subcategoria'] as String?) != null) ...[
               const SizedBox(width: 5),
@@ -1074,5 +1131,36 @@ class _MovimientoTile extends StatelessWidget {
       case 'ahorro':          return Icons.savings_outlined;
       default:                return Icons.attach_money;
     }
+  }
+}
+
+/// Chip de clasificación financiera en movimientos.
+class _ClasifChip extends StatelessWidget {
+  final String clasificacion;
+  const _ClasifChip(this.clasificacion);
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    String label;
+    switch (clasificacion) {
+      case 'esencial':
+        color = const Color(0xFF1890FF); label = 'Esencial'; break;
+      case 'importante':
+        color = AppTheme.primary; label = 'Importante'; break;
+      case 'flexible':
+        color = AppTheme.success; label = 'Flexible'; break;
+      default:
+        return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+    );
   }
 }

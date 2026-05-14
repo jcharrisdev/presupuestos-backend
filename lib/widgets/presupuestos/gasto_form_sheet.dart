@@ -21,6 +21,7 @@ class GastoFormSheet {
       bool generaNotificacion,
       int diasAnticipacion,
       String? subcategoria,
+      String? clasificacion,
     }) onGuardado,
   }) {
     final descCtrl  = TextEditingController();
@@ -33,6 +34,7 @@ class GastoFormSheet {
     bool notif           = false;
     int diasAnticipacion = 3;
     String? subcategoria;
+    String? clasificacion;
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
@@ -78,6 +80,20 @@ class GastoFormSheet {
                 )),
               ),
             )).toList()),
+
+            // ── CLASIFICACIÓN FINANCIERA ─────────────────────────────────────
+            const SizedBox(height: 16),
+            const Text('Clasificación financiera (opcional)',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              _ClasifBtn('Esencial', 'esencial', const Color(0xFF1890FF), clasificacion,
+                  (v) => setS(() => clasificacion = clasificacion == v ? null : v)),
+              _ClasifBtn('Importante', 'importante', AppTheme.primary, clasificacion,
+                  (v) => setS(() => clasificacion = clasificacion == v ? null : v)),
+              _ClasifBtn('Flexible', 'flexible', AppTheme.success, clasificacion,
+                  (v) => setS(() => clasificacion = clasificacion == v ? null : v)),
+            ]),
 
             // ── SUBCATEGORÍA ────────────────────────────────────────────────
             const SizedBox(height: 16),
@@ -233,6 +249,7 @@ class GastoFormSheet {
                   generaNotificacion: notif,
                   diasAnticipacion: diasAnticipacion,
                   subcategoria: subcategoria,
+                  clasificacion: clasificacion,
                 );
               },
               child: const Text('Agregar gasto'),
@@ -251,6 +268,35 @@ String _labelFrecuencia(String f) {
     case 'quincenal': return 'Quincenal';
     case 'anual':     return 'Anual';
     default:          return f;
+  }
+}
+
+class _ClasifBtn extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final String? selected;
+  final void Function(String) onTap;
+  const _ClasifBtn(this.label, this.value, this.color, this.selected, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selected == value;
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.15) : AppTheme.surfaceAlt,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? color : AppTheme.border),
+        ),
+        child: Text(label, style: TextStyle(
+          color: isSelected ? color : AppTheme.textSecondary,
+          fontSize: 12, fontWeight: FontWeight.w600,
+        )),
+      ),
+    );
   }
 }
 

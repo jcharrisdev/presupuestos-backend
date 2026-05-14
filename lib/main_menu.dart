@@ -10,6 +10,7 @@ import 'services/auth_service.dart';
 import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
+import 'deudas/deudas_screen.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -140,6 +141,16 @@ class MainMenu extends StatelessWidget {
                 color: AppTheme.colorNoFijo,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CalendarioScreen(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
+              _NavCard(
+                icon: Icons.credit_card_outlined,
+                title: 'Mis Deudas',
+                subtitle: 'Tarjetas, préstamos y saldo pendiente',
+                color: AppTheme.danger,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => DeudasScreen(firebaseUid: firebaseUid),
                 )),
               ),
               const SizedBox(height: 12),

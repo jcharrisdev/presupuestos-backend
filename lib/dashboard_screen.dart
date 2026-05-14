@@ -4,10 +4,12 @@ import 'package:intl/intl.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/shared_budget_service.dart';
+import 'services/deudas_service.dart';
 import 'lista_presupuestos.dart';
 import 'ahorro_meta.dart';
 import 'cobros_home.dart';
 import 'shared_budgets_list_screen.dart';
+import 'deudas/deudas_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String firebaseUid;
@@ -25,6 +27,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _metaAhorro;
   List<dynamic> _todasMetas = [];
   Map<String, dynamic>? _resumenVentas;
+  double _totalDeudas = 0;
+  bool _loadingDeudas = true;
 
   // Loading
   bool _loadingPresupuesto = true;
@@ -49,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _cargar() async {
     final now = DateTime.now();
     setState(() {
-      _loadingPresupuesto = _loadingShared = _loadingPagos = _loadingAhorro = _loadingVentas = true;
+      _loadingPresupuesto = _loadingShared = _loadingPagos = _loadingAhorro = _loadingVentas = _loadingDeudas = true;
       _errorPresupuesto = _errorAhorro = _errorVentas = null;
     });
     await Future.wait([
@@ -58,6 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _cargarProximosPagos(now),
       _cargarAhorro(),
       _cargarVentas(),
+      _cargarDeudas(),
     ]);
   }
 
@@ -197,6 +202,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _cargarDeudas() async {
+    try {
+      final data = await DeudasService.getAll(widget.firebaseUid);
+      if (mounted) setState(() {
+        _totalDeudas = _d(data['total_pendiente']);
+        _loadingDeudas = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingDeudas = false);
+    }
+  }
+
   // ── Financial computations ─────────────────────────────────────────────────
 
   double get _gastado =>
@@ -300,6 +317,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildProximosPagosCard(),
             const SizedBox(height: 12),
             _buildVentasCard(),
+            const SizedBox(height: 12),
+            _buildDeudasCard(),
             const SizedBox(height: 24),
           ],
         ),
@@ -970,6 +989,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 20)),
       ]),
     );
+  }
+
+  // ── 8. Deudas ─────────────────────────────────────────────────────────────
+
+  Widget _buildDeudasCard() {
+    if (_loadingDeudas) return _skeleton(height: 70);
+    if (_totalDeudas <= 0) return const SizedBox.shrink();
+
+    return _cardWrapper(
+      title: 'DEUDAS PENDIENTES',
+      accentColor: AppTheme.danger,
+      onTap: () => Navigator.push(context, MaterialPageRoute(
+        builder: (_) => DeudasScreen(firebaseUid: widget.firebaseUid),
+      )),
+      child: Row(children: [
+        const Icon(Icons.credit_card_outlined, color: AppTheme.danger, size: 22),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Total deuda activa',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          const SizedBox(height: 3),
+          Text('\$${_fmt.format(_totalDeudas)}',
+              style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w800, fontSize: 20)),
+        ])),
+        Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+      ]),
+    );
+  }
+
+  double _d(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
   }
 }
 

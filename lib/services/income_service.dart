@@ -72,4 +72,40 @@ class IncomeService {
         {'firebase_uid': uid});
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
+
+  // #4 — Distribución por clasificación financiera
+  static Future<Map<String, dynamic>?> getDistribucionClasificacion(
+      int presupuestoId, String uid) async {
+    try {
+      final res = await ApiClient.get(
+          '/presupuestos/$presupuestoId/distribucion-clasificacion?firebase_uid=$uid');
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // #6 — Alertas inteligentes preventivas
+  static Future<Map<String, dynamic>?> getAlertas(
+      int presupuestoId, String uid) async {
+    try {
+      final res = await ApiClient.get(
+          '/presupuestos/$presupuestoId/alertas?firebase_uid=$uid');
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // #7 — Recomendación por porcentajes (regla 50/30/20)
+  static Future<Map<String, dynamic>?> getRecomendacionPorcentajes(
+      int presupuestoId, String uid) async {
+    try {
+      final res = await ApiClient.get(
+          '/presupuestos/$presupuestoId/recomendacion-porcentajes?firebase_uid=$uid');
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
 }
