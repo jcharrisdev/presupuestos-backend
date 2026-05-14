@@ -15,9 +15,7 @@ class CapacidadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (capacidad == null) return const SizedBox.shrink();
-
-    final tieneIncome = capacidad!['tiene_income'] == true;
+    final tieneIncome = capacidad != null && capacidad!['tiene_income'] == true;
 
     if (!tieneIncome) {
       return Container(

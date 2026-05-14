@@ -12,11 +12,9 @@ class RecomendacionPorcentajesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (recomendacion == null) return const SizedBox.shrink();
-
-    final tieneIncome = recomendacion!['tiene_income'] as bool? ?? false;
-    final categorias = recomendacion!['categorias'] as List? ?? [];
-    final sinClasif = _d(recomendacion!['sin_clasificar']);
+    final tieneIncome = recomendacion != null && (recomendacion!['tiene_income'] as bool? ?? false);
+    final categorias = recomendacion?['categorias'] as List? ?? [];
+    final sinClasif = _d(recomendacion?['sin_clasificar']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

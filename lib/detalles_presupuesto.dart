@@ -71,6 +71,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
   Map<String, dynamic>? _distribucionClasif;
   Map<String, dynamic>? _alertas;
   Map<String, dynamic>? _recomendacion;
+  bool _loadingExtras = true;
 
   // Historial de períodos (tab Historial)
   late TabController _tabController;
@@ -157,6 +158,7 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
 
   // Carga métricas financieras adicionales sin bloquear la UI principal
   Future<void> _cargarExtras() async {
+    if (mounted) setState(() => _loadingExtras = true);
     final id  = widget.presupuesto['id'] as int;
     final uid = widget.firebaseUid;
     try {
@@ -178,8 +180,11 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
         _distribucionClasif = results[4];
         _alertas            = results[5];
         _recomendacion      = results[6];
+        _loadingExtras      = false;
       });
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _loadingExtras = false);
+    }
   }
 
   void _abrirIncomeForm() {
@@ -776,6 +781,28 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                   ),
                   const SizedBox(height: 20),
 
+                  // ── Métricas financieras (carga asíncrona) ───────────────
+                  if (_loadingExtras)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.border),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)),
+                          SizedBox(width: 10),
+                          Text('Cargando análisis financiero…',
+                              style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                        ],
+                      ),
+                    )
+                  else ...[
                   // ── P2: Capacidad real de pago ────────────────────────────
                   CapacidadCard(
                     capacidad: _capacidad,
@@ -799,11 +826,11 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                   ClasificacionCard(distribucion: _distribucionClasif),
 
                   // ── #7: Recomendación 50/30/20 ────────────────────────────
-                  if (_recomendacion != null)
-                    RecomendacionPorcentajesCard(
-                      recomendacion: _recomendacion,
-                      onConfigurarIngreso: _abrirIncomeForm,
-                    ),
+                  RecomendacionPorcentajesCard(
+                    recomendacion: _recomendacion,
+                    onConfigurarIngreso: _abrirIncomeForm,
+                  ),
+                  ], // fin métricas
 
                   const LabelDivider('MOVIMIENTOS'),
 
