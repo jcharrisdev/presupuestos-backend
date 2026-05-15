@@ -67,6 +67,15 @@ class UserProfileService {
     } catch (_) { return null; }
   }
 
+  // ── Eliminar ingreso (para reconfigurar) ──────────────────────────────────
+
+  static Future<bool> deleteIncome(String uid) async {
+    try {
+      final res = await ApiClient.delete('/user/income', body: {'firebase_uid': uid});
+      return res.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
   // ── Borrar todos los datos ────────────────────────────────────────────────
 
   static Future<bool> borrarTodosLosDatos(String uid) async {

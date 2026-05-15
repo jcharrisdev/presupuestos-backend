@@ -520,6 +520,16 @@ app.post('/user/income', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// DELETE /user/income — elimina el ingreso global (para reconfigurar)
+app.delete('/user/income', async (req, res) => {
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(`DELETE FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /user/gastos-fijos?firebase_uid=
 app.get('/user/gastos-fijos', async (req, res) => {
   const { firebase_uid } = req.query;
@@ -534,20 +544,50 @@ app.get('/user/gastos-fijos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Helper: genera eventos de calendario para un gasto del perfil con recordatorio
+async function _generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, diaPago) {
+  const today = new Date();
+  let generados = 0;
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const diasEnMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const dia = Math.min(diaPago, diasEnMes);
+    const fecha = new Date(d.getFullYear(), d.getMonth(), dia);
+    if (fecha < today) continue; // ya pasó en el mes actual
+    const fechaStr = fecha.toISOString().split('T')[0];
+    await db.execute(
+      `INSERT INTO calendario_eventos
+         (firebase_uid, user_gasto_fijo_id, titulo, tipo, fecha_evento,
+          monto_esperado, estado, notificacion_activa, dias_anticipacion)
+       VALUES (?, ?, ?, 'pago', ?, ?, 'pendiente', 1, 2)`,
+      [firebase_uid, ugfId, titulo, fechaStr, monto]
+    );
+    generados++;
+  }
+  return generados;
+}
+
 // POST /user/gastos-fijos
 app.post('/user/gastos-fijos', async (req, res) => {
   const { firebase_uid, descripcion, monto_mensual, tipo = 'otro',
-    clasificacion = 'importante', es_deuda = 0, subcategoria, notas } = req.body;
+    clasificacion = 'importante', es_deuda = 0, subcategoria, notas,
+    frecuencia = 'fijo', dia_pago = null, recordatorio = 0 } = req.body;
   if (!firebase_uid || !descripcion || monto_mensual == null)
     return res.status(400).json({ error: 'firebase_uid, descripcion y monto_mensual requeridos' });
   try {
     const [result] = await db.execute(
       `INSERT INTO user_gastos_fijos
-         (firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda, subcategoria, notas)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda, subcategoria || null, notas || null]
+         (firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
+          subcategoria, notas, frecuencia, dia_pago, recordatorio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
+       subcategoria || null, notas || null, frecuencia, dia_pago || null, recordatorio]
     );
-    const [[created]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [result.insertId]);
+    const ugfId = result.insertId;
+    if (recordatorio && dia_pago) {
+      await _generarEventosPerfilGasto(firebase_uid, ugfId, descripcion, monto_mensual, dia_pago);
+    }
+    const [[created]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [ugfId]);
     res.status(201).json(created);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -555,27 +595,45 @@ app.post('/user/gastos-fijos', async (req, res) => {
 // PUT /user/gastos-fijos/:id
 app.put('/user/gastos-fijos/:id', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo, subcategoria, notas } = req.body;
+  const { firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
+    activo, subcategoria, notas, frecuencia, dia_pago, recordatorio } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[existing]] = await db.execute(
-      `SELECT id FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+      `SELECT * FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
     if (!existing) return res.status(404).json({ error: 'No encontrado' });
     await db.execute(
       `UPDATE user_gastos_fijos SET
-         descripcion = COALESCE(?, descripcion),
+         descripcion  = COALESCE(?, descripcion),
          monto_mensual = COALESCE(?, monto_mensual),
-         tipo = COALESCE(?, tipo),
+         tipo         = COALESCE(?, tipo),
          clasificacion = COALESCE(?, clasificacion),
-         es_deuda = COALESCE(?, es_deuda),
-         activo = COALESCE(?, activo),
+         es_deuda     = COALESCE(?, es_deuda),
+         activo       = COALESCE(?, activo),
          subcategoria = COALESCE(?, subcategoria),
-         notas = COALESCE(?, notas),
-         updated_at = NOW()
+         notas        = COALESCE(?, notas),
+         frecuencia   = COALESCE(?, frecuencia),
+         dia_pago     = ?,
+         recordatorio = COALESCE(?, recordatorio),
+         updated_at   = NOW()
        WHERE id = ?`,
-      [descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo, subcategoria, notas, id]
+      [descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo,
+       subcategoria, notas, frecuencia, dia_pago ?? existing.dia_pago,
+       recordatorio, id]
     );
+    // Regenerar eventos de calendario si cambió algo relevante
+    const nuevoRecordatorio = recordatorio ?? existing.recordatorio;
+    const nuevoDiaPago = dia_pago ?? existing.dia_pago;
+    const nuevoTitulo = descripcion ?? existing.descripcion;
+    const nuevoMonto = monto_mensual ?? existing.monto_mensual;
+    await db.execute(
+      `DELETE FROM calendario_eventos
+       WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
+    );
+    if (nuevoRecordatorio && nuevoDiaPago) {
+      await _generarEventosPerfilGasto(firebase_uid, id, nuevoTitulo, nuevoMonto, nuevoDiaPago);
+    }
     const [[updated]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [id]);
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -587,6 +645,9 @@ app.delete('/user/gastos-fijos/:id', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    await db.execute(
+      `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
+    );
     await db.execute(
       `DELETE FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
