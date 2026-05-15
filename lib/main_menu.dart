@@ -11,6 +11,7 @@ import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
 import 'deudas/deudas_screen.dart';
+import 'perfil_financiero_screen.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -116,6 +117,18 @@ class MainMenu extends StatelessWidget {
                 color: AppTheme.primary,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => DashboardScreen(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
+
+              // ── PERFIL FINANCIERO — punto de entrada obligatorio ──────────
+              _NavCard(
+                icon: Icons.account_circle_outlined,
+                title: 'Mi Perfil Financiero',
+                subtitle: 'Ingreso + compromisos fijos — la base de todo',
+                color: AppTheme.success,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => PerfilFinancieroScreen(firebaseUid: firebaseUid),
                 )),
               ),
               const SizedBox(height: 12),

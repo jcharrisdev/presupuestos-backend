@@ -93,7 +93,8 @@ class ApiClient {
       http.patch(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
           .timeout(_timeout);
 
-  /// DELETE con timeout.
-  static Future<http.Response> delete(String path) =>
-      http.delete(Uri.parse('$baseUrl$path'), headers: _headers).timeout(_timeout);
+  /// DELETE con timeout. Acepta body opcional para operaciones que requieren confirmación.
+  static Future<http.Response> delete(String path, {Map<String, dynamic>? body}) =>
+      http.delete(Uri.parse('$baseUrl$path'), headers: _headers,
+          body: body != null ? jsonEncode(body) : null).timeout(_timeout);
 }

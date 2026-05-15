@@ -49,11 +49,49 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-// Verifica la conexión al arrancar el servidor
-pool.getConnection((err, conn) => {
+// Verifica la conexión y ejecuta migraciones al arrancar
+pool.getConnection(async (err, conn) => {
   if (err) { console.error('❌ Error conectando a MySQL:', err); return; }
   console.log('✅ Conectado a MySQL');
-  conn.release(); // Libera la conexión de vuelta al pool
+  conn.release();
+
+  // Migración: tablas de perfil financiero global del usuario
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS user_income (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      tipo_ingreso ENUM('salario','informal','ocasional','otro') DEFAULT 'salario',
+      ingreso_bruto_mensual DECIMAL(10,2) DEFAULT 0,
+      desc_seguro DECIMAL(10,2) DEFAULT 0,
+      desc_pension DECIMAL(10,2) DEFAULT 0,
+      desc_impuesto DECIMAL(10,2) DEFAULT 0,
+      desc_otros DECIMAL(10,2) DEFAULT 0,
+      ingreso_neto_mensual DECIMAL(10,2) NOT NULL,
+      calcular_automatico TINYINT DEFAULT 0,
+      frecuencia_cobro ENUM('mensual','quincenal') DEFAULT 'quincenal',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_user_income (firebase_uid)
+    )`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS user_gastos_fijos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      descripcion VARCHAR(255) NOT NULL,
+      monto_mensual DECIMAL(10,2) NOT NULL,
+      tipo ENUM('vivienda','transporte','deuda','servicios','educacion','salud','alimentacion','otro') DEFAULT 'otro',
+      clasificacion ENUM('esencial','importante','flexible') DEFAULT 'importante',
+      es_deuda TINYINT DEFAULT 0,
+      activo TINYINT DEFAULT 1,
+      subcategoria VARCHAR(100),
+      notas TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY idx_ugf_user (firebase_uid)
+    )`);
+    console.log('✅ Migración user_income / user_gastos_fijos OK');
+  } catch (e) {
+    console.error('⚠️ Migración parcial:', e.message);
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -131,23 +169,38 @@ async function getPeriodoActivo(presupuestoId, firebaseUid) {
  * @param {string} firebaseUid
  */
 async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) {
-  // Solo traemos gastos que deben generar movimiento automático:
-  // - fijo: siempre (alquiler, servicios)
-  // - ahorro: si no tiene límite (numero_quincena IS NULL) o le quedan cuotas
-  // - fijo_x_periodo: si le quedan períodos (numero_quincena > 0)
-  const [gastos] = await db.execute(
+  // Obtener tipo_periodo del presupuesto para calcular el monto por período
+  const [[presupuesto]] = await db.execute(
+    `SELECT tipo_periodo FROM presupuestos WHERE id = ?`, [presupuestoId]
+  );
+  const divisor = presupuesto?.tipo_periodo === 'quincenal' ? 2 : 1;
+
+  // 1. Compromisos fijos GLOBALES del usuario (user_gastos_fijos)
+  //    Estos son la realidad de su vida: hipoteca, carro, préstamos, etc.
+  const [gastosFijos] = await db.execute(
+    `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
+    [firebaseUid]
+  );
+  for (const gf of gastosFijos) {
+    const montoPeriodo = parseFloat((Number(gf.monto_mensual) / divisor).toFixed(2));
+    await db.execute(
+      `INSERT INTO movimientos
+       (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado,
+        firebase_uid, clasificacion, created_at)
+       VALUES (?, ?, NULL, ?, ?, 'fijo', 0, ?, ?, NOW())`,
+      [presupuestoId, periodoId, gf.descripcion, montoPeriodo, firebaseUid, gf.clasificacion]
+    );
+  }
+
+  // 2. Metas de ahorro activas del presupuesto (gastos tipo 'ahorro' con cuotas)
+  const [gastosAhorro] = await db.execute(
     `SELECT * FROM gastos WHERE presupuesto_id = ? AND firebase_uid = ?
-     AND (
-       tipo = 'fijo'
-       OR (tipo = 'ahorro' AND (numero_quincena IS NULL OR numero_quincena > 0))
-       OR (tipo = 'fijo_x_periodo' AND numero_quincena > 0)
-     )`,
+     AND tipo = 'ahorro'
+     AND (numero_quincena IS NULL OR numero_quincena > 0)`,
     [presupuestoId, firebaseUid]
   );
-
-  for (const gasto of gastos) {
-    // Para metas de ahorro: verificar si ya se alcanzó la meta por aportaciones manuales
-    if (gasto.tipo === 'ahorro' && gasto.numero_quincena !== null) {
+  for (const gasto of gastosAhorro) {
+    if (gasto.numero_quincena !== null) {
       const [[{ ya_aportado }]] = await db.execute(
         `SELECT COALESCE(SUM(monto), 0) AS ya_aportado FROM aportaciones_ahorro WHERE gasto_id = ?`,
         [gasto.id]
@@ -156,26 +209,19 @@ async function generarMovimientosPeriodo(presupuestoId, periodoId, firebaseUid) 
         `SELECT COALESCE(SUM(monto_pagado_real), 0) AS ya_pagado FROM movimientos WHERE gasto_id = ? AND pagado = 1`,
         [gasto.id]
       );
-      // Si la meta ya fue cubierta por aportaciones, cerrar el ahorro sin generar más movimientos
       const metaTotal = gasto.monto * gasto.numero_quincena;
       if ((parseFloat(ya_aportado) + parseFloat(ya_pagado)) >= metaTotal) {
         await db.execute(`UPDATE gastos SET numero_quincena = 0 WHERE id = ?`, [gasto.id]);
         continue;
       }
     }
-
-    // Insertamos el movimiento con estado pagado=0 (pendiente de pago)
     await db.execute(
       `INSERT INTO movimientos
        (presupuesto_id, periodo_id, gasto_id, descripcion, monto, tipo, pagado, firebase_uid, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW())`,
-      [presupuestoId, periodoId, gasto.id, gasto.descripcion, gasto.monto, gasto.tipo, firebaseUid]
+       VALUES (?, ?, ?, ?, ?, 'ahorro', 0, ?, NOW())`,
+      [presupuestoId, periodoId, gasto.id, gasto.descripcion, gasto.monto, firebaseUid]
     );
-
-    // Para gastos con contador de períodos: decrementamos el contador
-    // Cuando llegue a 0, el gasto ya no generará más movimientos
-    if (gasto.tipo === 'fijo_x_periodo' ||
-        (gasto.tipo === 'ahorro' && gasto.numero_quincena !== null)) {
+    if (gasto.numero_quincena !== null) {
       await db.execute(
         `UPDATE gastos SET numero_quincena = numero_quincena - 1 WHERE id = ? AND numero_quincena > 0`,
         [gasto.id]
@@ -383,6 +429,196 @@ app.get('/', (req, res) => res.json({
 
 
 // =============================================================================
+// MÓDULO: PERFIL FINANCIERO DEL USUARIO
+// Ingreso global y compromisos fijos — existen una vez, persisten entre presupuestos.
+// El presupuesto se CALCULA a partir de estos datos, no se inventa.
+// =============================================================================
+
+// GET /user/income?firebase_uid=
+app.get('/user/income', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[row]] = await db.execute(
+      `SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
+    );
+    if (!row) return res.json({ tiene_income: false });
+    res.json({ tiene_income: true, ...row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/income — upsert del ingreso global
+app.post('/user/income', async (req, res) => {
+  const { firebase_uid, tipo_ingreso = 'salario', ingreso_bruto_mensual = 0,
+    desc_seguro = 0, desc_pension = 0, desc_impuesto = 0, desc_otros = 0,
+    ingreso_neto_mensual, calcular_automatico = 0, frecuencia_cobro = 'quincenal' } = req.body;
+  if (!firebase_uid || ingreso_neto_mensual == null)
+    return res.status(400).json({ error: 'firebase_uid e ingreso_neto_mensual requeridos' });
+  if (Number(ingreso_neto_mensual) <= 0)
+    return res.status(400).json({ error: 'ingreso_neto_mensual debe ser mayor a 0' });
+  try {
+    await db.execute(
+      `INSERT INTO user_income
+         (firebase_uid, tipo_ingreso, ingreso_bruto_mensual, desc_seguro, desc_pension,
+          desc_impuesto, desc_otros, ingreso_neto_mensual, calcular_automatico, frecuencia_cobro)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         tipo_ingreso = VALUES(tipo_ingreso),
+         ingreso_bruto_mensual = VALUES(ingreso_bruto_mensual),
+         desc_seguro = VALUES(desc_seguro),
+         desc_pension = VALUES(desc_pension),
+         desc_impuesto = VALUES(desc_impuesto),
+         desc_otros = VALUES(desc_otros),
+         ingreso_neto_mensual = VALUES(ingreso_neto_mensual),
+         calcular_automatico = VALUES(calcular_automatico),
+         frecuencia_cobro = VALUES(frecuencia_cobro),
+         updated_at = NOW()`,
+      [firebase_uid, tipo_ingreso, ingreso_bruto_mensual, desc_seguro, desc_pension,
+       desc_impuesto, desc_otros, ingreso_neto_mensual, calcular_automatico, frecuencia_cobro]
+    );
+    const [[saved]] = await db.execute(`SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    res.json({ tiene_income: true, ...saved });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/gastos-fijos?firebase_uid=
+app.get('/user/gastos-fijos', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? ORDER BY es_deuda DESC, monto_mensual DESC`,
+      [firebase_uid]
+    );
+    const total = rows.filter(r => r.activo).reduce((s, r) => s + Number(r.monto_mensual), 0);
+    res.json({ gastos: rows, total_mensual: parseFloat(total.toFixed(2)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/gastos-fijos
+app.post('/user/gastos-fijos', async (req, res) => {
+  const { firebase_uid, descripcion, monto_mensual, tipo = 'otro',
+    clasificacion = 'importante', es_deuda = 0, subcategoria, notas } = req.body;
+  if (!firebase_uid || !descripcion || monto_mensual == null)
+    return res.status(400).json({ error: 'firebase_uid, descripcion y monto_mensual requeridos' });
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO user_gastos_fijos
+         (firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda, subcategoria, notas)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda, subcategoria || null, notas || null]
+    );
+    const [[created]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [result.insertId]);
+    res.status(201).json(created);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /user/gastos-fijos/:id
+app.put('/user/gastos-fijos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo, subcategoria, notas } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[existing]] = await db.execute(
+      `SELECT id FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!existing) return res.status(404).json({ error: 'No encontrado' });
+    await db.execute(
+      `UPDATE user_gastos_fijos SET
+         descripcion = COALESCE(?, descripcion),
+         monto_mensual = COALESCE(?, monto_mensual),
+         tipo = COALESCE(?, tipo),
+         clasificacion = COALESCE(?, clasificacion),
+         es_deuda = COALESCE(?, es_deuda),
+         activo = COALESCE(?, activo),
+         subcategoria = COALESCE(?, subcategoria),
+         notas = COALESCE(?, notas),
+         updated_at = NOW()
+       WHERE id = ?`,
+      [descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo, subcategoria, notas, id]
+    );
+    const [[updated]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [id]);
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /user/gastos-fijos/:id
+app.delete('/user/gastos-fijos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `DELETE FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /user/data — elimina TODOS los datos del usuario (para empezar de cero)
+app.delete('/user/data', async (req, res) => {
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Obtener todos los presupuesto IDs del usuario
+    const [presupuestos] = await db.execute(
+      `SELECT id FROM presupuestos WHERE firebase_uid = ?`, [firebase_uid]
+    );
+    for (const p of presupuestos) {
+      await db.execute(`DELETE FROM movimientos WHERE presupuesto_id = ?`, [p.id]);
+      await db.execute(`DELETE FROM periodos WHERE presupuesto_id = ?`, [p.id]);
+      await db.execute(`DELETE FROM gastos WHERE presupuesto_id = ?`, [p.id]);
+      await db.execute(`DELETE FROM calendario_eventos WHERE firebase_uid = ? AND presupuesto_id = ?`, [firebase_uid, p.id]);
+    }
+    await db.execute(`DELETE FROM presupuestos WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM budget_income WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM user_gastos_fijos WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM deudas WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM aportaciones_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM gustitos WHERE user_id = ?`, [firebase_uid]);
+    res.json({ success: true, message: 'Todos los datos del usuario eliminados' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /user/perfil-financiero?firebase_uid= — resumen completo: income + gastos fijos + disponible calculado
+app.get('/user/perfil-financiero', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[income]] = await db.execute(
+      `SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
+    );
+    const [gastos] = await db.execute(
+      `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1
+       ORDER BY es_deuda DESC, monto_mensual DESC`, [firebase_uid]
+    );
+    const ingresoNeto = income ? Number(income.ingreso_neto_mensual) : 0;
+    const totalCompromisos = gastos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    const disponibleMensual = ingresoNeto - totalCompromisos;
+    const divisor = (income?.frecuencia_cobro === 'quincenal') ? 2 : 1;
+    res.json({
+      tiene_income: !!income,
+      income: income || null,
+      gastos_fijos: gastos,
+      resumen: {
+        ingreso_neto_mensual: ingresoNeto,
+        ingreso_neto_periodo: parseFloat((ingresoNeto / divisor).toFixed(2)),
+        total_compromisos_mensual: parseFloat(totalCompromisos.toFixed(2)),
+        total_compromisos_periodo: parseFloat((totalCompromisos / divisor).toFixed(2)),
+        disponible_mensual: parseFloat(disponibleMensual.toFixed(2)),
+        disponible_periodo: parseFloat((disponibleMensual / divisor).toFixed(2)),
+        frecuencia_cobro: income?.frecuencia_cobro || 'quincenal',
+        compromisos_son_sostenibles: disponibleMensual >= 0,
+      }
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =============================================================================
 // MÓDULO: PRESUPUESTOS
 // CRUD básico de presupuestos de usuario.
 // =============================================================================
@@ -393,18 +629,31 @@ app.get('/', (req, res) => res.json({
  * El primer período se calcula en base al dia_inicio_periodo configurado.
  */
 app.post('/presupuestos', async (req, res) => {
-  const { nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo } = req.body;
+  const { nombre, firebase_uid, tipo_periodo, dia_inicio_periodo,
+    monto_total: monto_manual } = req.body;
 
-  if (!nombre || monto_total == null || !firebase_uid || !tipo_periodo || !dia_inicio_periodo)
+  if (!nombre || !firebase_uid || !tipo_periodo || !dia_inicio_periodo)
     return res.status(400).json({ error: 'Datos incompletos' });
 
   try {
+    // Calcular monto_total desde user_income si existe (presupuesto = ingreso neto por período)
+    let monto_total = monto_manual;
+    const [[incomeRow]] = await db.execute(
+      `SELECT ingreso_neto_mensual, frecuencia_cobro FROM user_income WHERE firebase_uid = ?`,
+      [firebase_uid]
+    );
+    if (incomeRow) {
+      const divisor = tipo_periodo === 'quincenal' ? 2 : 1;
+      monto_total = parseFloat((Number(incomeRow.ingreso_neto_mensual) / divisor).toFixed(2));
+    } else if (!monto_total) {
+      return res.status(400).json({ error: 'Configura tu ingreso antes de crear un presupuesto' });
+    }
+
     const [result] = await db.execute(
       `INSERT INTO presupuestos (nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo)
        VALUES (?, ?, ?, ?, ?)`,
       [nombre, monto_total, firebase_uid, tipo_periodo, dia_inicio_periodo]
     );
-    // Crear primer período automáticamente al momento de crear el presupuesto
     await crearPrimerPeriodo(result.insertId, firebase_uid, tipo_periodo, dia_inicio_periodo);
     res.status(201).json({ id: result.insertId, nombre, monto_total, tipo_periodo, dia_inicio_periodo });
   } catch (error) {
@@ -4562,25 +4811,36 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    // 1. Ingreso neto configurado
+    // 1. Ingreso global del usuario (user_income — escala mensual)
     const [[incomeRow]] = await db.execute(
-      `SELECT ingreso_neto FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ? LIMIT 1`,
+      `SELECT ui.ingreso_neto_mensual, ui.frecuencia_cobro, p.tipo_periodo
+       FROM user_income ui
+       JOIN presupuestos p ON p.firebase_uid = ui.firebase_uid AND p.id = ?
+       WHERE ui.firebase_uid = ?`,
       [id, firebase_uid]
     );
+    // Fallback: leer income del presupuesto (retrocompatibilidad)
+    let ingreso_neto_periodo = null;
+    let tiene_income = false;
+    if (incomeRow) {
+      const divisorIncome = incomeRow.tipo_periodo === 'quincenal' ? 2 : 1;
+      ingreso_neto_periodo = parseFloat((Number(incomeRow.ingreso_neto_mensual) / divisorIncome).toFixed(2));
+      tiene_income = true;
+    }
 
-    // 2. Gastos fijos y variables presupuestados del período activo
-    const [[fijoRow]] = await db.execute(
-      `SELECT
-         COALESCE(SUM(CASE WHEN m.tipo IN ('fijo','fijo_x_periodo') THEN m.monto ELSE 0 END), 0) AS gastos_fijos,
-         COALESCE(SUM(CASE WHEN m.tipo = 'no fijo' THEN m.monto ELSE 0 END), 0) AS gastos_variables_presupuestados
-       FROM movimientos m
-       JOIN periodos p ON p.id = m.periodo_id
-       WHERE m.presupuesto_id = ? AND m.firebase_uid = ?
-         AND p.estado = 'activo'`,
-      [id, firebase_uid]
+    // 2. Compromisos fijos REALES del usuario (user_gastos_fijos — escala mensual)
+    const [[presupRow]] = await db.execute(
+      `SELECT tipo_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
+    const divisor = presupRow?.tipo_periodo === 'quincenal' ? 2 : 1;
+    const [[gfRow]] = await db.execute(
+      `SELECT COALESCE(SUM(monto_mensual), 0) AS total_mensual
+       FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+    );
+    const gastos_fijos_mensual = parseFloat(gfRow.total_mensual);
+    const gastos_fijos_periodo = parseFloat((gastos_fijos_mensual / divisor).toFixed(2));
 
-    // 3. Promedio de variables reales en últimos 3 períodos cerrados
+    // 3. Promedio de gastos variables en últimos 3 períodos cerrados
     const [periodosCerrados] = await db.execute(
       `SELECT p.id,
               COALESCE(SUM(CASE WHEN m.tipo = 'no fijo' AND m.pagado = 1 THEN m.monto_pagado_real ELSE 0 END), 0) AS total_variable
@@ -4588,54 +4848,27 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
        LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
        WHERE p.presupuesto_id = ? AND p.firebase_uid = ? AND p.estado = 'cerrado'
        GROUP BY p.id
-       ORDER BY p.numero_periodo DESC
-       LIMIT 3`,
+       ORDER BY p.numero_periodo DESC LIMIT 3`,
       [id, firebase_uid]
     );
-
-    // 4. Deudas activas del usuario para comparar con gastos fijos registrados
-    const [[presupuestoRow]] = await db.execute(
-      `SELECT tipo_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
-      [id, firebase_uid]
-    );
-    const [[deudasRow]] = await db.execute(
-      `SELECT COALESCE(SUM(pago_minimo), 0) AS total_cuotas_mensual, COUNT(*) AS num_deudas
-       FROM deudas WHERE firebase_uid = ? AND activa = 1`,
-      [firebase_uid]
-    );
-
-    const ingreso_neto = incomeRow ? parseFloat(incomeRow.ingreso_neto) : null;
-    const gastos_fijos = parseFloat(fijoRow.gastos_fijos);
-    const gastos_variables_presupuestados = parseFloat(fijoRow.gastos_variables_presupuestados);
-
-    // Si hay historial, usar promedio real. Si no, usar lo presupuestado como estimado.
     const promedio_variable = periodosCerrados.length > 0
-      ? periodosCerrados.reduce((s, r) => s + parseFloat(r.total_variable), 0) / periodosCerrados.length
-      : gastos_variables_presupuestados;
-    const promedio_variable_r = Math.round(promedio_variable * 100) / 100;
+      ? parseFloat((periodosCerrados.reduce((s, r) => s + parseFloat(r.total_variable), 0) / periodosCerrados.length).toFixed(2))
+      : 0;
 
-    const capacidad_real = ingreso_neto !== null
-      ? Math.round((ingreso_neto - gastos_fijos - promedio_variable_r) * 100) / 100
+    const capacidad_real = ingreso_neto_periodo !== null
+      ? parseFloat((ingreso_neto_periodo - gastos_fijos_periodo - promedio_variable).toFixed(2))
       : null;
 
-    // Cuotas de deuda por período (ajustado a quincenal si aplica)
-    const tipoPeriodo = presupuestoRow?.tipo_periodo ?? 'mensual';
-    const divisor = tipoPeriodo === 'quincenal' ? 2 : 1;
-    const cuotasDeudaMensual = parseFloat(deudasRow.total_cuotas_mensual);
-    const cuotasDeudaPeriodo = Math.round((cuotasDeudaMensual / divisor) * 100) / 100;
-    const numDeudas = parseInt(deudasRow.num_deudas);
-
     res.json({
-      ingreso_neto,
-      gastos_fijos_totales: gastos_fijos,
-      gastos_variables_presupuestados,
-      promedio_variable_historico: promedio_variable_r,
+      ingreso_neto: ingreso_neto_periodo,
+      gastos_fijos_totales: gastos_fijos_periodo,
+      gastos_fijos_mensual,
+      gastos_variables_presupuestados: promedio_variable,
+      promedio_variable_historico: promedio_variable,
       usa_historico: periodosCerrados.length > 0,
       capacidad_real,
-      tiene_income: incomeRow != null,
+      tiene_income,
       periodos_historico: periodosCerrados.length,
-      cuotas_deudas_periodo: cuotasDeudaPeriodo,
-      num_deudas_activas: numDeudas,
     });
   } catch (error) {
     console.error(error);
@@ -5032,16 +5265,22 @@ app.get('/presupuestos/:id/alertas', async (req, res) => {
     const totalConGustitos = totalGastado + totalGustitos;
     const pctGasto = montoTotal > 0 ? totalConGustitos / montoTotal : 0;
 
-    // Ingreso neto del período (para detectar cuando compromisos > ingreso)
+    // Ingreso neto por período desde user_income (escala correcta)
     const [[incomeAlertRow]] = await db.execute(
-      `SELECT ingreso_neto FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ? LIMIT 1`,
+      `SELECT ui.ingreso_neto_mensual, p.tipo_periodo
+       FROM user_income ui JOIN presupuestos p ON p.firebase_uid = ui.firebase_uid AND p.id = ?
+       WHERE ui.firebase_uid = ?`,
       [id, firebase_uid]
     );
-    const ingresoNetoAlert = incomeAlertRow ? parseFloat(incomeAlertRow.ingreso_neto) : null;
+    let ingresoNetoAlert = null;
+    if (incomeAlertRow) {
+      const div = incomeAlertRow.tipo_periodo === 'quincenal' ? 2 : 1;
+      ingresoNetoAlert = parseFloat((Number(incomeAlertRow.ingreso_neto_mensual) / div).toFixed(2));
+    }
 
     const alertas = [];
 
-    // Alerta 0 (NUEVA): compromisos fijos superan el ingreso neto del período
+    // Alerta 0: compromisos fijos superan el ingreso neto del período
     if (ingresoNetoAlert !== null && totalFijo > ingresoNetoAlert) {
       alertas.push({
         tipo: 'gastos_exceden_ingreso',
@@ -5124,18 +5363,23 @@ app.get('/presupuestos/:id/recomendacion-porcentajes', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
+    // Usar user_income (global, mensual) dividido por frecuencia del presupuesto
     const [[incomeRow]] = await db.execute(
-      `SELECT ingreso_neto FROM budget_income WHERE presupuesto_id = ? AND firebase_uid = ? LIMIT 1`,
+      `SELECT ui.ingreso_neto_mensual, p.tipo_periodo, p.monto_total
+       FROM presupuestos p
+       LEFT JOIN user_income ui ON ui.firebase_uid = p.firebase_uid
+       WHERE p.id = ? AND p.firebase_uid = ?`,
       [id, firebase_uid]
     );
-    const [[presupuesto]] = await db.execute(
-      `SELECT monto_total FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
-      [id, firebase_uid]
-    );
-    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+    if (!incomeRow) return res.status(404).json({ error: 'Presupuesto no encontrado' });
 
-    const ingresoNeto = incomeRow ? Number(incomeRow.ingreso_neto) : null;
-    const base = ingresoNeto ?? Number(presupuesto.monto_total);
+    const divisor = incomeRow.tipo_periodo === 'quincenal' ? 2 : 1;
+    const ingresoNetoPeriodo = incomeRow.ingreso_neto_mensual
+      ? parseFloat((Number(incomeRow.ingreso_neto_mensual) / divisor).toFixed(2))
+      : null;
+    // base = ingreso neto por período (correcto) o monto_total como fallback
+    const base = ingresoNetoPeriodo ?? Number(incomeRow.monto_total);
+    const tiene_income = !!incomeRow.ingreso_neto_mensual;
 
     const periodo = await getPeriodoActivo(id, firebase_uid);
     const [clasifRows] = await db.execute(
@@ -5156,7 +5400,7 @@ app.get('/presupuestos/:id/recomendacion-porcentajes', async (req, res) => {
     const margenPct = base > 0 ? margenDisponible / base : 0;
 
     const recomendacion = {
-      tiene_income: !!incomeRow,
+      tiene_income,
       base_calculo: base,
       regla: '50-30-20',
       margen_disponible: parseFloat(margenDisponible.toFixed(2)),
