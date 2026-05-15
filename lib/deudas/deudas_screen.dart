@@ -347,13 +347,44 @@ class _TabSituacion extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 16),
+          // Banner de deudas con información incompleta (creadas desde el perfil)
+          Builder(builder: (_) {
+            final incompletas = deudas.where((d) =>
+              (d['monto_pendiente'] == null || d['monto_pendiente'] == 0) ||
+              d['tasa_interes'] == null
+            ).toList();
+            if (incompletas.isEmpty) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.warning.withOpacity(0.4)),
+              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.info_outline, color: AppTheme.warning, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  '${incompletas.length} deuda${incompletas.length > 1 ? 's' : ''} '
+                  'creada${incompletas.length > 1 ? 's' : ''} desde el perfil '
+                  '${incompletas.length > 1 ? 'tienen' : 'tiene'} información incompleta. '
+                  'Agrega el saldo total y la tasa de interés para poder proyectarlas correctamente.',
+                  style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
+                )),
+              ]),
+            );
+          }),
           ...deudas.asMap().entries.map((e) {
             final d = e.value as Map<String, dynamic>;
+            final infoIncompleta = (d['monto_pendiente'] == null ||
+                d['monto_pendiente'] == 0) || d['tasa_interes'] == null;
             return _DeudaTile(
               deuda: d,
               esMayorTasa: e.key == 0 &&
                   deudas.length > 1 &&
                   _d(d['tasa_interes']) > 0,
+              infoIncompleta: infoIncompleta,
               onAbono: () => onAbono(d),
               onArchivar: () =>
                   onArchivar(d['id'] as int, d['nombre'] as String? ?? ''),
@@ -1159,11 +1190,13 @@ class _DeudaTile extends StatelessWidget {
   final VoidCallback onAbono;
   final VoidCallback onArchivar;
   final bool esMayorTasa;
+  final bool infoIncompleta;
   const _DeudaTile(
       {required this.deuda,
       required this.onAbono,
       required this.onArchivar,
-      this.esMayorTasa = false});
+      this.esMayorTasa = false,
+      this.infoIncompleta = false});
 
   double _d(dynamic v) {
     if (v is num) return v.toDouble();
@@ -1240,6 +1273,23 @@ class _DeudaTile extends StatelessWidget {
               ]),
               Row(children: [
                 _TipoChip(tipo),
+                if (infoIncompleta) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warning.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppTheme.warning.withOpacity(0.4)),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.edit_outlined, color: AppTheme.warning, size: 10),
+                      SizedBox(width: 3),
+                      Text('Completar info', style: TextStyle(
+                          color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ],
                 if (!activa) ...[
                   const SizedBox(width: 6),
                   Container(

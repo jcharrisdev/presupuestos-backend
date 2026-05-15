@@ -531,6 +531,8 @@ class _GastoTile extends StatelessWidget {
               _Chip('Día $diaPago', color: AppTheme.info, icon: Icons.calendar_today),
             if (recordatorio)
               _Chip('Recordatorio', color: AppTheme.primary, icon: Icons.notifications_outlined),
+            if (esDeuda && (gasto['deuda_info_completa'] as int? ?? 0) == 0)
+              _Chip('Completar info →', color: AppTheme.warning, icon: Icons.warning_amber_rounded),
           ]),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

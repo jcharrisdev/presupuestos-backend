@@ -530,13 +530,28 @@ app.delete('/user/income', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Helper: mapea tipo de gasto del perfil al tipo ENUM de deudas
+function _mapTipoGastoToDeuda(tipo) {
+  const map = { vivienda: 'hipoteca', transporte: 'auto', deuda: 'personal' };
+  return map[tipo] || 'otro';
+}
+
 // GET /user/gastos-fijos?firebase_uid=
+// Incluye info_completa para deudas (saben si les falta tasa/saldo en la tabla deudas)
 app.get('/user/gastos-fijos', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [rows] = await db.execute(
-      `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? ORDER BY es_deuda DESC, monto_mensual DESC`,
+      `SELECT ugf.*,
+              CASE WHEN ugf.deuda_id IS NOT NULL
+                        AND d.monto_pendiente IS NOT NULL
+                        AND d.tasa_interes IS NOT NULL
+                   THEN 1 ELSE 0 END AS deuda_info_completa
+       FROM user_gastos_fijos ugf
+       LEFT JOIN deudas d ON d.id = ugf.deuda_id
+       WHERE ugf.firebase_uid = ?
+       ORDER BY ugf.es_deuda DESC, ugf.monto_mensual DESC`,
       [firebase_uid]
     );
     const total = rows.filter(r => r.activo).reduce((s, r) => s + Number(r.monto_mensual), 0);
@@ -568,6 +583,7 @@ async function _generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, di
 }
 
 // POST /user/gastos-fijos
+// Si es_deuda=1, crea automáticamente un registro en tabla deudas con los datos disponibles
 app.post('/user/gastos-fijos', async (req, res) => {
   const { firebase_uid, descripcion, monto_mensual, tipo = 'otro',
     clasificacion = 'importante', es_deuda = 0, subcategoria, notas,
@@ -584,15 +600,37 @@ app.post('/user/gastos-fijos', async (req, res) => {
        subcategoria || null, notas || null, frecuencia, dia_pago || null, recordatorio]
     );
     const ugfId = result.insertId;
+
+    // Si es deuda, auto-crear en tabla deudas con datos disponibles
+    if (Number(es_deuda) === 1) {
+      const tipoDeuda = _mapTipoGastoToDeuda(tipo);
+      const [deudaResult] = await db.execute(
+        `INSERT INTO deudas (firebase_uid, nombre, tipo, monto_total, monto_pendiente,
+           tasa_interes, pago_minimo, activa)
+         VALUES (?, ?, ?, NULL, NULL, NULL, ?, 1)`,
+        [firebase_uid, descripcion, tipoDeuda, monto_mensual]
+      );
+      await db.execute(
+        `UPDATE user_gastos_fijos SET deuda_id = ? WHERE id = ?`,
+        [deudaResult.insertId, ugfId]
+      );
+    }
+
     if (recordatorio && dia_pago) {
       await _generarEventosPerfilGasto(firebase_uid, ugfId, descripcion, monto_mensual, dia_pago);
     }
-    const [[created]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [ugfId]);
+    const [[created]] = await db.execute(
+      `SELECT ugf.*, CASE WHEN ugf.deuda_id IS NOT NULL AND d.monto_pendiente IS NOT NULL
+                               AND d.tasa_interes IS NOT NULL THEN 1 ELSE 0 END AS deuda_info_completa
+       FROM user_gastos_fijos ugf LEFT JOIN deudas d ON d.id = ugf.deuda_id
+       WHERE ugf.id = ?`, [ugfId]
+    );
     res.status(201).json(created);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // PUT /user/gastos-fijos/:id
+// Sincroniza cambios con la tabla deudas si existe deuda_id
 app.put('/user/gastos-fijos/:id', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
@@ -603,48 +641,90 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
       `SELECT * FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
     if (!existing) return res.status(404).json({ error: 'No encontrado' });
+
+    const nuevoEsDeuda = es_deuda !== undefined ? Number(es_deuda) : Number(existing.es_deuda);
+    const anteriorEsDeuda = Number(existing.es_deuda);
+
     await db.execute(
       `UPDATE user_gastos_fijos SET
-         descripcion  = COALESCE(?, descripcion),
+         descripcion   = COALESCE(?, descripcion),
          monto_mensual = COALESCE(?, monto_mensual),
-         tipo         = COALESCE(?, tipo),
+         tipo          = COALESCE(?, tipo),
          clasificacion = COALESCE(?, clasificacion),
-         es_deuda     = COALESCE(?, es_deuda),
-         activo       = COALESCE(?, activo),
-         subcategoria = COALESCE(?, subcategoria),
-         notas        = COALESCE(?, notas),
-         frecuencia   = COALESCE(?, frecuencia),
-         dia_pago     = ?,
-         recordatorio = COALESCE(?, recordatorio),
-         updated_at   = NOW()
+         es_deuda      = COALESCE(?, es_deuda),
+         activo        = COALESCE(?, activo),
+         subcategoria  = COALESCE(?, subcategoria),
+         notas         = COALESCE(?, notas),
+         frecuencia    = COALESCE(?, frecuencia),
+         dia_pago      = ?,
+         recordatorio  = COALESCE(?, recordatorio),
+         updated_at    = NOW()
        WHERE id = ?`,
       [descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo,
        subcategoria, notas, frecuencia, dia_pago ?? existing.dia_pago,
        recordatorio, id]
     );
-    // Regenerar eventos de calendario si cambió algo relevante
+
+    const nuevoTitulo = descripcion ?? existing.descripcion;
+    const nuevoMonto  = monto_mensual ?? existing.monto_mensual;
+
+    // Sincronizar con tabla deudas
+    if (nuevoEsDeuda === 1 && anteriorEsDeuda === 0) {
+      // Recién marcada como deuda → crear en tabla deudas
+      const tipoDeuda = _mapTipoGastoToDeuda(tipo ?? existing.tipo);
+      const [dr] = await db.execute(
+        `INSERT INTO deudas (firebase_uid, nombre, tipo, monto_total, monto_pendiente,
+           tasa_interes, pago_minimo, activa)
+         VALUES (?, ?, ?, NULL, NULL, NULL, ?, 1)`,
+        [firebase_uid, nuevoTitulo, tipoDeuda, nuevoMonto]
+      );
+      await db.execute(`UPDATE user_gastos_fijos SET deuda_id = ? WHERE id = ?`, [dr.insertId, id]);
+    } else if (nuevoEsDeuda === 0 && anteriorEsDeuda === 1 && existing.deuda_id) {
+      // Dejó de ser deuda → archivar en tabla deudas
+      await db.execute(`UPDATE deudas SET activa = 0 WHERE id = ?`, [existing.deuda_id]);
+      await db.execute(`UPDATE user_gastos_fijos SET deuda_id = NULL WHERE id = ?`, [id]);
+    } else if (nuevoEsDeuda === 1 && existing.deuda_id) {
+      // Sigue siendo deuda → sincronizar nombre y pago_minimo
+      await db.execute(
+        `UPDATE deudas SET nombre = ?, pago_minimo = ? WHERE id = ?`,
+        [nuevoTitulo, nuevoMonto, existing.deuda_id]
+      );
+    }
+
+    // Regenerar eventos de calendario
     const nuevoRecordatorio = recordatorio ?? existing.recordatorio;
     const nuevoDiaPago = dia_pago ?? existing.dia_pago;
-    const nuevoTitulo = descripcion ?? existing.descripcion;
-    const nuevoMonto = monto_mensual ?? existing.monto_mensual;
     await db.execute(
-      `DELETE FROM calendario_eventos
-       WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
+      `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
     );
     if (nuevoRecordatorio && nuevoDiaPago) {
       await _generarEventosPerfilGasto(firebase_uid, id, nuevoTitulo, nuevoMonto, nuevoDiaPago);
     }
-    const [[updated]] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE id = ?`, [id]);
+
+    const [[updated]] = await db.execute(
+      `SELECT ugf.*, CASE WHEN ugf.deuda_id IS NOT NULL AND d.monto_pendiente IS NOT NULL
+                               AND d.tasa_interes IS NOT NULL THEN 1 ELSE 0 END AS deuda_info_completa
+       FROM user_gastos_fijos ugf LEFT JOIN deudas d ON d.id = ugf.deuda_id
+       WHERE ugf.id = ?`, [id]
+    );
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /user/gastos-fijos/:id
+// Archiva la deuda vinculada (si existe) y elimina eventos pendientes del calendario
 app.delete('/user/gastos-fijos/:id', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    const [[ugf]] = await db.execute(
+      `SELECT deuda_id FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (ugf?.deuda_id) {
+      await db.execute(`UPDATE deudas SET activa = 0 WHERE id = ?`, [ugf.deuda_id]);
+    }
     await db.execute(
       `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
     );
