@@ -40,6 +40,7 @@ import 'widgets/presupuestos/patrones_gustitos_banner.dart';
 import 'widgets/presupuestos/clasificacion_card.dart';
 import 'widgets/presupuestos/alertas_banner.dart';
 import 'widgets/presupuestos/recomendacion_porcentajes_card.dart';
+import 'sobres_screen.dart';
 import 'widgets/presupuestos/analisis_financiero_section.dart';
 import 'widgets/presupuestos/proyeccion_mes_card.dart';
 import 'gustitos/crear_gustito_sheet.dart';
@@ -644,6 +645,19 @@ class _DetallesPresupuestoState extends State<DetallesPresupuesto> with SingleTi
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al generar PDF: $e')));
               }
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.inbox_outlined, size: 20),
+            tooltip: 'Sobres',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => SobresScreen(
+                presupuestoId: widget.presupuesto['id'] as int,
+                firebaseUid: widget.firebaseUid,
+                nombrePresupuesto: widget.presupuesto['nombre'] as String? ?? '',
+                periodoId: periodo?['id'] as int?,
+                disponiblePeriodo: montoTotal - (totalFijo + totalNoFijo + totalAhorro),
+              ),
+            )),
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
         ],

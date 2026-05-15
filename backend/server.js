@@ -92,6 +92,45 @@ pool.getConnection(async (err, conn) => {
   } catch (e) {
     console.error('⚠️ Migración parcial:', e.message);
   }
+
+  // Migración: sobres de presupuesto y gastos rápidos
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS presupuesto_categorias (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      presupuesto_id INT NOT NULL,
+      firebase_uid VARCHAR(255) NOT NULL,
+      nombre VARCHAR(100) NOT NULL,
+      icono VARCHAR(50) DEFAULT 'category',
+      color VARCHAR(10) DEFAULT '#6B7280',
+      monto_asignado DECIMAL(10,2) NOT NULL DEFAULT 0,
+      orden INT DEFAULT 0,
+      activa TINYINT DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_pc_presupuesto (presupuesto_id),
+      KEY idx_pc_user (firebase_uid)
+    )`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS presupuesto_gastos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      presupuesto_id INT NOT NULL,
+      periodo_id INT,
+      categoria_id INT,
+      firebase_uid VARCHAR(255) NOT NULL,
+      descripcion VARCHAR(255),
+      monto DECIMAL(10,2) NOT NULL,
+      fecha DATE NOT NULL,
+      es_hormiga TINYINT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_pg_presupuesto (presupuesto_id),
+      KEY idx_pg_categoria (categoria_id),
+      KEY idx_pg_user (firebase_uid)
+    )`);
+    // Columna aporte_periodo en shared_budget_members (idempotente)
+    await db.execute(`ALTER TABLE shared_budget_members
+      ADD COLUMN IF NOT EXISTS aporte_periodo DECIMAL(10,2) DEFAULT 0`);
+    console.log('✅ Migración presupuesto_categorias / presupuesto_gastos OK');
+  } catch (e) {
+    console.error('⚠️ Migración sobres parcial:', e.message);
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -424,7 +463,7 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
 // Render y el app Flutter usan este endpoint para saber si el backend responde.
 app.get('/', (req, res) => res.json({
   status: 'Backend funcionando correctamente',
-  version: '2.6'  // Incrementar con cada cambio mayor
+  version: '3.0'  // Incrementar con cada cambio mayor
 }));
 
 
@@ -596,9 +635,18 @@ app.get('/user/perfil-financiero', async (req, res) => {
       `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1
        ORDER BY es_deuda DESC, monto_mensual DESC`, [firebase_uid]
     );
+    // Suma de aportes a shared budgets activos donde el usuario es miembro
+    const [[sharedRow]] = await db.execute(
+      `SELECT COALESCE(SUM(sbm.aporte_periodo), 0) AS total_aporte_shared
+       FROM shared_budget_members sbm
+       JOIN shared_budgets sb ON sb.id = sbm.shared_budget_id
+       WHERE sbm.firebase_uid = ? AND sb.estado = 'activo' AND sbm.estado = 'activo'`,
+      [firebase_uid]
+    );
     const ingresoNeto = income ? Number(income.ingreso_neto_mensual) : 0;
     const totalCompromisos = gastos.reduce((s, g) => s + Number(g.monto_mensual), 0);
-    const disponibleMensual = ingresoNeto - totalCompromisos;
+    const totalAporteShared = Number(sharedRow?.total_aporte_shared || 0);
+    const disponibleMensual = ingresoNeto - totalCompromisos - totalAporteShared;
     const divisor = (income?.frecuencia_cobro === 'quincenal') ? 2 : 1;
     res.json({
       tiene_income: !!income,
@@ -609,6 +657,7 @@ app.get('/user/perfil-financiero', async (req, res) => {
         ingreso_neto_periodo: parseFloat((ingresoNeto / divisor).toFixed(2)),
         total_compromisos_mensual: parseFloat(totalCompromisos.toFixed(2)),
         total_compromisos_periodo: parseFloat((totalCompromisos / divisor).toFixed(2)),
+        total_aporte_shared_mensual: parseFloat(totalAporteShared.toFixed(2)),
         disponible_mensual: parseFloat(disponibleMensual.toFixed(2)),
         disponible_periodo: parseFloat((disponibleMensual / divisor).toFixed(2)),
         frecuencia_cobro: income?.frecuencia_cobro || 'quincenal',
@@ -2932,7 +2981,7 @@ function calcularSplits(monto, regla, miembros) {
 
 // POST /shared-budgets
 app.post('/shared-budgets', async (req, res) => {
-  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, contribucion_owner, firebase_uid } = req.body;
+  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, contribucion_owner, aporte_periodo_owner = 0, firebase_uid } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   const conn = await db.getConnection();
   await conn.beginTransaction();
@@ -2947,9 +2996,9 @@ app.post('/shared-budgets', async (req, res) => {
     const ingreso = regla_reparto === 'proporcional' ? (ingreso_owner || null) : null;
     const contribucion = regla_reparto === 'pool_contribucion' ? (contribucion_owner || null) : null;
     await conn.execute(
-      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual)
-       VALUES (?, ?, 'owner', ?, ?, ?)`,
-      [budgetId, firebase_uid, pct, ingreso, contribucion]
+      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual, aporte_periodo)
+       VALUES (?, ?, 'owner', ?, ?, ?, ?)`,
+      [budgetId, firebase_uid, pct, ingreso, contribucion, Number(aporte_periodo_owner) || 0]
     );
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
@@ -5710,6 +5759,434 @@ app.get('/presupuestos/:id/proyeccion', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// =============================================================================
+// MÓDULO: SOBRES (categorías de gasto variable por presupuesto)
+// =============================================================================
+
+// GET /presupuestos/:id/categorias
+app.get('/presupuestos/:id/categorias', async (req, res) => {
+  const presupuestoId = parseInt(req.params.id);
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [cats] = await db.execute(
+      `SELECT * FROM presupuesto_categorias
+       WHERE presupuesto_id = ? AND firebase_uid = ? AND activa = 1
+       ORDER BY orden ASC, id ASC`,
+      [presupuestoId, firebase_uid]
+    );
+    res.json({ categorias: cats });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /presupuestos/:id/categorias
+app.post('/presupuestos/:id/categorias', async (req, res) => {
+  const presupuestoId = parseInt(req.params.id);
+  const { firebase_uid, nombre, icono = 'category', color = '#6B7280', monto_asignado = 0, orden = 0 } = req.body;
+  if (!firebase_uid || !nombre) return res.status(400).json({ error: 'firebase_uid y nombre son requeridos' });
+  try {
+    const [r] = await db.execute(
+      `INSERT INTO presupuesto_categorias (presupuesto_id, firebase_uid, nombre, icono, color, monto_asignado, orden)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [presupuestoId, firebase_uid, nombre, icono, color, monto_asignado, orden]
+    );
+    const [[cat]] = await db.execute(`SELECT * FROM presupuesto_categorias WHERE id = ?`, [r.insertId]);
+    res.status(201).json(cat);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /presupuestos/:id/categorias/:catId
+app.put('/presupuestos/:id/categorias/:catId', async (req, res) => {
+  const { catId } = req.params;
+  const { firebase_uid, nombre, icono, color, monto_asignado, orden } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const fields = [], vals = [];
+    if (nombre !== undefined)         { fields.push('nombre = ?');         vals.push(nombre); }
+    if (icono !== undefined)          { fields.push('icono = ?');          vals.push(icono); }
+    if (color !== undefined)          { fields.push('color = ?');          vals.push(color); }
+    if (monto_asignado !== undefined) { fields.push('monto_asignado = ?'); vals.push(monto_asignado); }
+    if (orden !== undefined)          { fields.push('orden = ?');          vals.push(orden); }
+    if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
+    vals.push(catId, firebase_uid);
+    const [result] = await db.execute(
+      `UPDATE presupuesto_categorias SET ${fields.join(', ')} WHERE id = ? AND firebase_uid = ?`, vals
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Categoría no encontrada' });
+    const [[cat]] = await db.execute(`SELECT * FROM presupuesto_categorias WHERE id = ?`, [catId]);
+    res.json(cat);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /presupuestos/:id/categorias/:catId
+app.delete('/presupuestos/:id/categorias/:catId', async (req, res) => {
+  const { catId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `UPDATE presupuesto_categorias SET activa = 0 WHERE id = ? AND firebase_uid = ?`,
+      [catId, firebase_uid]
+    );
+    res.json({ message: 'Categoría eliminada' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /presupuestos/:id/gastos-rapidos — registrar gasto en sobre
+app.post('/presupuestos/:id/gastos-rapidos', async (req, res) => {
+  const presupuestoId = parseInt(req.params.id);
+  const { firebase_uid, categoria_id = null, descripcion = '', monto, fecha, es_hormiga = 0, periodo_id = null } = req.body;
+  if (!firebase_uid || monto == null) return res.status(400).json({ error: 'firebase_uid y monto son requeridos' });
+  try {
+    const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+    const [r] = await db.execute(
+      `INSERT INTO presupuesto_gastos (presupuesto_id, periodo_id, categoria_id, firebase_uid, descripcion, monto, fecha, es_hormiga)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [presupuestoId, periodo_id, categoria_id, firebase_uid, descripcion, monto, fechaFinal, es_hormiga]
+    );
+    const [[gasto]] = await db.execute(`SELECT * FROM presupuesto_gastos WHERE id = ?`, [r.insertId]);
+    res.status(201).json(gasto);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /presupuestos/:id/gastos-rapidos/:gastoId
+app.delete('/presupuestos/:id/gastos-rapidos/:gastoId', async (req, res) => {
+  const { gastoId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [result] = await db.execute(
+      `DELETE FROM presupuesto_gastos WHERE id = ? AND firebase_uid = ?`, [gastoId, firebase_uid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Gasto no encontrado' });
+    res.json({ message: 'Eliminado' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /presupuestos/:id/resumen-sobres?periodo_id=X — resumen por categoría
+app.get('/presupuestos/:id/resumen-sobres', async (req, res) => {
+  const presupuestoId = parseInt(req.params.id);
+  const { firebase_uid, periodo_id } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [cats] = await db.execute(
+      `SELECT * FROM presupuesto_categorias
+       WHERE presupuesto_id = ? AND firebase_uid = ? AND activa = 1
+       ORDER BY orden ASC, id ASC`,
+      [presupuestoId, firebase_uid]
+    );
+
+    const periodoFilter = periodo_id ? 'AND pg.periodo_id = ?' : '';
+    const periodoParams = periodo_id ? [presupuestoId, firebase_uid, periodo_id] : [presupuestoId, firebase_uid];
+    const [gastos] = await db.execute(
+      `SELECT pg.categoria_id, COALESCE(SUM(pg.monto), 0) AS gastado
+       FROM presupuesto_gastos pg
+       WHERE pg.presupuesto_id = ? AND pg.firebase_uid = ? ${periodoFilter}
+       GROUP BY pg.categoria_id`,
+      periodoParams
+    );
+
+    const gastoMap = {};
+    gastos.forEach(g => { gastoMap[g.categoria_id ?? 'sin_categoria'] = Number(g.gastado); });
+
+    const totalAsignado = cats.reduce((s, c) => s + Number(c.monto_asignado), 0);
+    const totalGastado  = Object.values(gastoMap).reduce((s, v) => s + v, 0);
+
+    const categoriasConGasto = cats.map(c => {
+      const gastado = gastoMap[c.id] || 0;
+      return {
+        ...c,
+        monto_asignado: Number(c.monto_asignado),
+        monto_gastado: gastado,
+        restante: Number(c.monto_asignado) - gastado,
+        porcentaje: c.monto_asignado > 0 ? Math.round((gastado / Number(c.monto_asignado)) * 100) : 0,
+      };
+    });
+
+    // Gastos sin categoría asignada
+    const sinCategoria = gastoMap['sin_categoria'] || 0;
+
+    res.json({
+      total_asignado: parseFloat(totalAsignado.toFixed(2)),
+      total_gastado:  parseFloat(totalGastado.toFixed(2)),
+      sin_asignar:    parseFloat((totalAsignado - totalGastado).toFixed(2)),
+      gastos_sin_categoria: parseFloat(sinCategoria.toFixed(2)),
+      categorias: categoriasConGasto,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /presupuestos/:id/gastos-rapidos?periodo_id=X — lista de gastos del período
+app.get('/presupuestos/:id/gastos-rapidos', async (req, res) => {
+  const presupuestoId = parseInt(req.params.id);
+  const { firebase_uid, periodo_id } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const periodoFilter = periodo_id ? 'AND pg.periodo_id = ?' : '';
+    const params = periodo_id ? [presupuestoId, firebase_uid, periodo_id] : [presupuestoId, firebase_uid];
+    const [gastos] = await db.execute(
+      `SELECT pg.*, pc.nombre AS categoria_nombre, pc.icono AS categoria_icono, pc.color AS categoria_color
+       FROM presupuesto_gastos pg
+       LEFT JOIN presupuesto_categorias pc ON pc.id = pg.categoria_id
+       WHERE pg.presupuesto_id = ? AND pg.firebase_uid = ? ${periodoFilter}
+       ORDER BY pg.fecha DESC, pg.id DESC`,
+      params
+    );
+    const total = gastos.reduce((s, g) => s + Number(g.monto), 0);
+    res.json({ gastos, total: parseFloat(total.toFixed(2)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =============================================================================
+// MÓDULO: ESTRATEGIA DE DEUDAS — proyección y simulador
+// =============================================================================
+
+function _simularDeudas(deudas, extraMensual, estrategia) {
+  // Clona y filtra deudas activas con saldo pendiente
+  let pendientes = deudas
+    .filter(d => d.activa && Number(d.monto_pendiente) > 0)
+    .map(d => ({
+      id: d.id,
+      nombre: d.nombre,
+      tipo: d.tipo,
+      pendiente: Number(d.monto_pendiente),
+      tasa_mensual: Number(d.tasa_interes || 0) / 100 / 12,
+      pago_minimo: Number(d.pago_minimo || 0),
+      total_intereses: 0,
+      mes_saldado: null,
+    }));
+
+  if (!pendientes.length) return { meses_totales: 0, total_intereses: 0, orden: [] };
+
+  // Orden según estrategia
+  if (estrategia === 'avalanche') {
+    pendientes.sort((a, b) => b.tasa_mensual - a.tasa_mensual);
+  } else {
+    pendientes.sort((a, b) => a.pendiente - b.pendiente);
+  }
+
+  let mes = 0;
+  const MAX_MESES = 600;
+
+  while (pendientes.some(d => d.pendiente > 0) && mes < MAX_MESES) {
+    mes++;
+    let extraDisp = Number(extraMensual) || 0;
+
+    for (const d of pendientes) {
+      if (d.pendiente <= 0) continue;
+      // Aplica interés
+      const interes = d.pendiente * d.tasa_mensual;
+      d.total_intereses += interes;
+      d.pendiente += interes;
+      // Pago mínimo
+      const pago = Math.min(d.pago_minimo, d.pendiente);
+      d.pendiente = Math.max(0, d.pendiente - pago);
+      if (d.pendiente === 0 && !d.mes_saldado) d.mes_saldado = mes;
+    }
+
+    // Aplica monto extra a la primera deuda con saldo (orden estratégico)
+    for (const d of pendientes) {
+      if (d.pendiente <= 0 || extraDisp <= 0) continue;
+      const aplicar = Math.min(extraDisp, d.pendiente);
+      d.pendiente = Math.max(0, d.pendiente - aplicar);
+      extraDisp -= aplicar;
+      if (d.pendiente === 0 && !d.mes_saldado) d.mes_saldado = mes;
+      break;
+    }
+  }
+
+  const hoy = new Date();
+  const fechaFin = new Date(hoy.getFullYear(), hoy.getMonth() + mes, hoy.getDate());
+
+  return {
+    meses_totales: mes,
+    fecha_fin: fechaFin.toISOString().slice(0, 10),
+    total_intereses: parseFloat(pendientes.reduce((s, d) => s + d.total_intereses, 0).toFixed(2)),
+    orden: pendientes.map(d => ({
+      id: d.id, nombre: d.nombre, tipo: d.tipo,
+      mes_saldado: d.mes_saldado,
+      intereses_pagados: parseFloat(d.total_intereses.toFixed(2)),
+    })),
+  };
+}
+
+// GET /deudas/proyeccion?firebase_uid=X — situación actual sin extra
+app.get('/deudas/proyeccion', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [deudas] = await db.execute(
+      `SELECT * FROM deudas WHERE firebase_uid = ? AND activa = 1 AND monto_pendiente > 0`,
+      [firebase_uid]
+    );
+    if (!deudas.length) return res.json({ sin_deudas: true });
+
+    const totalPendiente  = deudas.reduce((s, d) => s + Number(d.monto_pendiente), 0);
+    const totalPagoMinimo = deudas.reduce((s, d) => s + Number(d.pago_minimo || 0), 0);
+
+    const avalanche = _simularDeudas(deudas, 0, 'avalanche');
+    const snowball  = _simularDeudas(deudas, 0, 'snowball');
+
+    res.json({
+      sin_deudas: false,
+      total_pendiente:   parseFloat(totalPendiente.toFixed(2)),
+      total_pago_minimo: parseFloat(totalPagoMinimo.toFixed(2)),
+      trayectoria_actual: {
+        meses: avalanche.meses_totales,
+        fecha_fin: avalanche.fecha_fin,
+        total_intereses: avalanche.total_intereses,
+      },
+      avalanche,
+      snowball,
+      ahorro_avalanche_vs_snowball: parseFloat((snowball.total_intereses - avalanche.total_intereses).toFixed(2)),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /deudas/simulador?firebase_uid=X&extra_mensual=150&estrategia=avalanche
+app.get('/deudas/simulador', async (req, res) => {
+  const { firebase_uid, extra_mensual = 0, estrategia = 'avalanche' } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [deudas] = await db.execute(
+      `SELECT * FROM deudas WHERE firebase_uid = ? AND activa = 1 AND monto_pendiente > 0`,
+      [firebase_uid]
+    );
+    if (!deudas.length) return res.json({ sin_deudas: true });
+
+    const sinExtra  = _simularDeudas(deudas, 0, estrategia);
+    const conExtra  = _simularDeudas(deudas, Number(extra_mensual), estrategia);
+    const mesesAhorrados = sinExtra.meses_totales - conExtra.meses_totales;
+    const interesesAhorrados = parseFloat((sinExtra.total_intereses - conExtra.total_intereses).toFixed(2));
+
+    // Cuál deuda se ataca primero con el extra
+    const deudaObjetivo = conExtra.orden.find(d => d.mes_saldado != null);
+
+    res.json({
+      extra_mensual: Number(extra_mensual),
+      estrategia,
+      sin_extra: sinExtra,
+      con_extra:  conExtra,
+      meses_ahorrados: mesesAhorrados,
+      intereses_ahorrados: interesesAhorrados,
+      deuda_objetivo: deudaObjetivo || null,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /deudas/plan?firebase_uid=X&estrategia=avalanche&extra_mensual=0
+app.get('/deudas/plan', async (req, res) => {
+  const { firebase_uid, estrategia = 'avalanche', extra_mensual = 0 } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [deudas] = await db.execute(
+      `SELECT * FROM deudas WHERE firebase_uid = ? AND activa = 1 AND monto_pendiente > 0`,
+      [firebase_uid]
+    );
+    if (!deudas.length) return res.json({ sin_deudas: true });
+
+    const simulacion = _simularDeudas(deudas, Number(extra_mensual), estrategia);
+    const hoy = new Date();
+
+    const pasos = simulacion.orden.map((d, i) => {
+      const fechaSaldada = d.mes_saldado
+        ? new Date(hoy.getFullYear(), hoy.getMonth() + d.mes_saldado, hoy.getDate()).toISOString().slice(0, 10)
+        : null;
+      return {
+        paso: i + 1,
+        id: d.id,
+        nombre: d.nombre,
+        tipo: d.tipo,
+        mes_saldado: d.mes_saldado,
+        fecha_saldada: fechaSaldada,
+        intereses_pagados: d.intereses_pagados,
+        recomendacion: i === 0
+          ? `Ataca esta primero. Cuando la saldas, mueve su cuota a la siguiente.`
+          : `Cuando saldas la anterior, dirige los pagos liberados aquí.`,
+      };
+    });
+
+    res.json({
+      estrategia,
+      extra_mensual: Number(extra_mensual),
+      meses_totales: simulacion.meses_totales,
+      fecha_libertad: simulacion.fecha_fin,
+      total_intereses: simulacion.total_intereses,
+      pasos,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /shared-budgets/:id/balance-detalle?firebase_uid=X
+app.get('/shared-budgets/:id/balance-detalle', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[budget]] = await db.execute(
+      `SELECT sb.*, sbm.aporte_periodo AS mi_aporte
+       FROM shared_budgets sb
+       JOIN shared_budget_members sbm ON sbm.shared_budget_id = sb.id AND sbm.firebase_uid = ?
+       WHERE sb.id = ?`,
+      [firebase_uid, id]
+    );
+    if (!budget) return res.status(404).json({ error: 'Presupuesto compartido no encontrado' });
+
+    const [miembros] = await db.execute(
+      `SELECT sbm.firebase_uid, sbm.rol, sbm.aporte_periodo,
+              COALESCE(SUM(se.monto), 0) AS total_gastado
+       FROM shared_budget_members sbm
+       LEFT JOIN shared_expenses se ON se.shared_budget_id = sbm.shared_budget_id
+                                    AND se.paid_by = sbm.firebase_uid
+       WHERE sbm.shared_budget_id = ? AND sbm.estado = 'activo'
+       GROUP BY sbm.firebase_uid, sbm.rol, sbm.aporte_periodo`,
+      [id]
+    );
+
+    const totalPool = miembros.reduce((s, m) => s + Number(m.aporte_periodo || 0), 0);
+    const totalGastado = miembros.reduce((s, m) => s + Number(m.total_gastado || 0), 0);
+
+    const miembrosDetalle = miembros.map(m => {
+      const aporte = Number(m.aporte_periodo || 0);
+      const gastado = Number(m.total_gastado || 0);
+      const diferencia = aporte - gastado;
+      return {
+        firebase_uid: m.firebase_uid,
+        rol: m.rol,
+        aporte_periodo: aporte,
+        total_gastado: gastado,
+        diferencia,
+        estado: diferencia > 0 ? 'a_favor' : diferencia < 0 ? 'debe' : 'equilibrado',
+      };
+    });
+
+    res.json({
+      budget_id: Number(id),
+      nombre: budget.nombre,
+      total_pool: parseFloat(totalPool.toFixed(2)),
+      total_gastado: parseFloat(totalGastado.toFixed(2)),
+      saldo_pool: parseFloat((totalPool - totalGastado).toFixed(2)),
+      miembros: miembrosDetalle,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /shared-budgets/:id/mi-aporte — actualizar el aporte mensual del usuario al shared
+app.patch('/shared-budgets/:id/mi-aporte', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, aporte_periodo } = req.body;
+  if (!firebase_uid || aporte_periodo == null) return res.status(400).json({ error: 'firebase_uid y aporte_periodo son requeridos' });
+  try {
+    const [result] = await db.execute(
+      `UPDATE shared_budget_members SET aporte_periodo = ?
+       WHERE shared_budget_id = ? AND firebase_uid = ?`,
+      [aporte_periodo, id, firebase_uid]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Membresía no encontrada' });
+    res.json({ message: 'Aporte actualizado', aporte_periodo: Number(aporte_periodo) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // =============================================================================

@@ -29,4 +29,23 @@ class DeudasService {
   static Future<void> archivar(int id, String uid) async {
     await ApiClient.delete('/deudas/$id?firebase_uid=$uid');
   }
+
+  static Future<Map<String, dynamic>> getProyeccion(String uid) async {
+    final res = await ApiClient.get('/deudas/proyeccion?firebase_uid=$uid');
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> getSimulador(
+      String uid, double extraMensual, String estrategia) async {
+    final res = await ApiClient.get(
+        '/deudas/simulador?firebase_uid=$uid&extra_mensual=$extraMensual&estrategia=$estrategia');
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> getPlan(
+      String uid, String estrategia, double extraMensual) async {
+    final res = await ApiClient.get(
+        '/deudas/plan?firebase_uid=$uid&estrategia=$estrategia&extra_mensual=$extraMensual');
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
 }

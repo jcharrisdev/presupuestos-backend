@@ -15,6 +15,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
   final _emailCtrl         = TextEditingController();
   final _ingresoCtrl       = TextEditingController();
   final _contribucionCtrl  = TextEditingController();
+  final _aporteCtrl        = TextEditingController();
 
   String _tipoPeriodo = 'mensual';
   String _regla = 'equitativo';
@@ -27,6 +28,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
     _emailCtrl.dispose();
     _ingresoCtrl.dispose();
     _contribucionCtrl.dispose();
+    _aporteCtrl.dispose();
     super.dispose();
   }
 
@@ -53,6 +55,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
       if (_regla == 'porcentual') 'porcentaje_owner': _pctOwner,
       if (_regla == 'proporcional') 'ingreso_owner': double.tryParse(_ingresoCtrl.text) ?? 0,
       if (_regla == 'pool_contribucion') 'contribucion_owner': double.tryParse(_contribucionCtrl.text) ?? 0,
+      'aporte_periodo_owner': double.tryParse(_aporteCtrl.text) ?? 0,
     };
     final result = await SharedBudgetService.create(body);
     if (!mounted) return;
@@ -127,6 +130,15 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
             ),
           ],
+          const SizedBox(height: 20),
+          _label('Mi aporte mensual al presupuesto compartido'),
+          const SizedBox(height: 6),
+          _input(_aporteCtrl, '0.00', numeric: true),
+          const SizedBox(height: 6),
+          const Text(
+            'Este monto se descuenta de tu disponible personal en el Perfil Financiero.',
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+          ),
           const SizedBox(height: 20),
           _label('Email del co-dueño'),
           const SizedBox(height: 6),
