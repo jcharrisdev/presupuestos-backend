@@ -124,9 +124,11 @@ pool.getConnection(async (err, conn) => {
       KEY idx_pg_categoria (categoria_id),
       KEY idx_pg_user (firebase_uid)
     )`);
-    // Columna aporte_periodo en shared_budget_members (idempotente)
-    await db.execute(`ALTER TABLE shared_budget_members
-      ADD COLUMN IF NOT EXISTS aporte_periodo DECIMAL(10,2) DEFAULT 0`);
+    // Columna aporte_periodo en shared_budget_members (ya existe en prod — skip silencioso)
+    try {
+      await db.execute(`ALTER TABLE shared_budget_members
+        ADD COLUMN aporte_periodo DECIMAL(10,2) DEFAULT 0`);
+    } catch (_) { /* ya existe, ignorar */ }
     console.log('✅ Migración presupuesto_categorias / presupuesto_gastos OK');
   } catch (e) {
     console.error('⚠️ Migración sobres parcial:', e.message);
@@ -833,12 +835,12 @@ app.get('/user/perfil-financiero', async (req, res) => {
     }));
     const totalCuotaAhorroMensual = ahorros.reduce((s, a) => s + a.cuota_mensual, 0);
 
-    // Aportes a presupuestos compartidos
+    // Aportes a presupuestos compartidos activos donde el usuario es miembro
     const [[sharedRow]] = await db.execute(
       `SELECT COALESCE(SUM(sbm.aporte_periodo), 0) AS total_aporte_shared
        FROM shared_budget_members sbm
        JOIN shared_budgets sb ON sb.id = sbm.shared_budget_id
-       WHERE sbm.firebase_uid = ? AND sb.estado = 'activo' AND sbm.estado = 'activo'`,
+       WHERE sbm.firebase_uid = ? AND sb.estado = 'active'`,
       [firebase_uid]
     );
 
@@ -6344,7 +6346,7 @@ app.get('/shared-budgets/:id/balance-detalle', async (req, res) => {
        FROM shared_budget_members sbm
        LEFT JOIN shared_expenses se ON se.shared_budget_id = sbm.shared_budget_id
                                     AND se.paid_by = sbm.firebase_uid
-       WHERE sbm.shared_budget_id = ? AND sbm.estado = 'activo'
+       WHERE sbm.shared_budget_id = ?
        GROUP BY sbm.firebase_uid, sbm.rol, sbm.aporte_periodo`,
       [id]
     );
