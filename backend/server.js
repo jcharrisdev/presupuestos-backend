@@ -4599,8 +4599,8 @@ app.get('/presupuestos/:id/capacidad', async (req, res) => {
       [id, firebase_uid]
     );
     const [[deudasRow]] = await db.execute(
-      `SELECT COALESCE(SUM(cuota_mensual), 0) AS total_cuotas_mensual, COUNT(*) AS num_deudas
-       FROM deudas WHERE firebase_uid = ? AND estado = 'activa'`,
+      `SELECT COALESCE(SUM(pago_minimo), 0) AS total_cuotas_mensual, COUNT(*) AS num_deudas
+       FROM deudas WHERE firebase_uid = ? AND activa = 1`,
       [firebase_uid]
     );
 
