@@ -20,7 +20,9 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   late TabController _tabs;
   Map<String, dynamic>? _income;
   List<dynamic> _gastos = [];
+  List<dynamic> _ahorros = [];
   double _totalMensual = 0;
+  double _totalAhorrosMensual = 0;
   bool _loading = true;
 
   @override
@@ -35,19 +37,27 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
 
   Future<void> _cargar() async {
     setState(() => _loading = true);
-    final income = await UserProfileService.getIncome(widget.firebaseUid);
-    final gfData = await UserProfileService.getGastosFijos(widget.firebaseUid);
+    final results = await Future.wait([
+      UserProfileService.getIncome(widget.firebaseUid),
+      UserProfileService.getGastosFijos(widget.firebaseUid),
+      UserProfileService.getAhorrosActivos(widget.firebaseUid),
+    ]);
     if (!mounted) return;
+    final income = results[0] as Map<String, dynamic>?;
+    final gfData = results[1] as Map<String, dynamic>;
+    final ahData = results[2] as Map<String, dynamic>;
     setState(() {
       _income = income;
       _gastos = gfData['gastos'] as List? ?? [];
-      _totalMensual = double.tryParse(gfData['total_mensual']?.toString() ?? '0') ?? 0;
+      _totalMensual = _d(gfData['total_mensual']);
+      _ahorros = ahData['ahorros'] as List? ?? [];
+      _totalAhorrosMensual = _d(ahData['total_cuota_mensual']);
       _loading = false;
     });
   }
 
   double get _ingreso => _d(_income?['ingreso_neto_mensual']);
-  double get _disponible => _ingreso - _totalMensual;
+  double get _disponible => _ingreso - _totalMensual - _totalAhorrosMensual;
   bool get _esSostenible => _disponible >= 0;
 
   List<dynamic> get _gastosFijos =>
@@ -108,17 +118,23 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
         color: AppTheme.surface,
         border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
-      child: Row(children: [
-        Expanded(child: _ResumenItem('Ingreso neto', '\$${_ingreso.toStringAsFixed(2)}/mes', AppTheme.success)),
-        Container(width: 1, height: 36, color: AppTheme.border),
-        Expanded(child: _ResumenItem('Gastos', '\$${_totalMensual.toStringAsFixed(2)}/mes', AppTheme.danger)),
-        Container(width: 1, height: 36, color: AppTheme.border),
-        Expanded(child: _ResumenItem(
-          'Disponible',
-          '\$${_disponible.abs().toStringAsFixed(2)}/mes',
-          _esSostenible ? AppTheme.success : AppTheme.danger,
-          prefix: _esSostenible ? '' : '-',
-        )),
+      child: Column(children: [
+        Row(children: [
+          Expanded(child: _ResumenItem('Ingreso neto', '\$${_ingreso.toStringAsFixed(2)}/mes', AppTheme.success)),
+          Container(width: 1, height: 36, color: AppTheme.border),
+          Expanded(child: _ResumenItem('Gastos', '\$${_totalMensual.toStringAsFixed(2)}/mes', AppTheme.danger)),
+          if (_totalAhorrosMensual > 0) ...[
+            Container(width: 1, height: 36, color: AppTheme.border),
+            Expanded(child: _ResumenItem('Ahorros', '\$${_totalAhorrosMensual.toStringAsFixed(2)}/mes', AppTheme.colorAhorro)),
+          ],
+          Container(width: 1, height: 36, color: AppTheme.border),
+          Expanded(child: _ResumenItem(
+            'Disponible',
+            '\$${_disponible.abs().toStringAsFixed(2)}/mes',
+            _esSostenible ? AppTheme.success : AppTheme.danger,
+            prefix: _esSostenible ? '' : '-',
+          )),
+        ]),
       ]),
     );
   }
@@ -278,6 +294,14 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                       onDelete: () => _eliminarGasto((g)['id'] as int),
                     ),
                   )),
+                  const SizedBox(height: 8),
+                ],
+                if (_ahorros.isNotEmpty) ...[
+                  _SeccionHeader('METAS DE AHORRO ACTIVAS', _ahorros.length,
+                      '\$${_totalAhorrosMensual.toStringAsFixed(2)}/mes',
+                      AppTheme.colorAhorro),
+                  const SizedBox(height: 6),
+                  ..._ahorros.map((a) => _AhorroTile(ahorro: a as Map<String, dynamic>)),
                 ],
               ],
             ),
@@ -588,6 +612,61 @@ class _Chip extends StatelessWidget {
           color: color ?? AppTheme.textSecondary, fontSize: 10, fontWeight: FontWeight.w600)),
     ]),
   );
+}
+
+// ── Tile de ahorro activo (solo lectura — se gestiona desde Ahorro y Metas) ──
+class _AhorroTile extends StatelessWidget {
+  final Map<String, dynamic> ahorro;
+  const _AhorroTile({required this.ahorro});
+
+  double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final nombre = ahorro['nombre'] as String? ?? '';
+    final cuotaMensual = _d(ahorro['cuota_mensual']);
+    final cuotaPeriodo = _d(ahorro['cuota_periodo']);
+    final tipoPeriodo = ahorro['tipo_periodo'] as String? ?? 'mensual';
+    final periodosRestantes = ahorro['periodos_restantes'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(children: [
+        Container(width: 4, height: 44, decoration: BoxDecoration(
+            color: AppTheme.colorAhorro, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(nombre, style: const TextStyle(
+              color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+          const SizedBox(height: 4),
+          Wrap(spacing: 6, children: [
+            _Chip('Ahorro', color: AppTheme.colorAhorro),
+            if (periodosRestantes != null)
+              _Chip('$periodosRestantes períodos restantes', color: AppTheme.textSecondary),
+            _Chip('\$${cuotaPeriodo.toStringAsFixed(2)}/${tipoPeriodo == 'quincenal' ? 'quincena' : 'mes'}',
+                color: AppTheme.textMuted),
+          ]),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('\$${cuotaMensual.toStringAsFixed(2)}',
+              style: const TextStyle(
+                  color: AppTheme.colorAhorro, fontWeight: FontWeight.bold, fontSize: 15)),
+          const Text('/mes', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+        ]),
+        const SizedBox(width: 6),
+        const Tooltip(
+          message: 'Gestiona tus ahorros desde\n"Ahorro y Metas" en el menú',
+          child: Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
+        ),
+      ]),
+    );
+  }
 }
 
 // ── Bottom Sheet: Formulario de ingreso ──────────────────────────────────────

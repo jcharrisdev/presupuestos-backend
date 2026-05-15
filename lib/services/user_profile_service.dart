@@ -67,6 +67,15 @@ class UserProfileService {
     } catch (_) { return null; }
   }
 
+  // ── Ahorros activos del usuario (cuota mensual para el perfil) ──────────
+  static Future<Map<String, dynamic>> getAhorrosActivos(String uid) async {
+    try {
+      final res = await ApiClient.get('/user/ahorros-activos?firebase_uid=$uid');
+      if (res.statusCode == 200) return jsonDecode(res.body) as Map<String, dynamic>;
+      return {'ahorros': [], 'total_cuota_mensual': 0};
+    } catch (_) { return {'ahorros': [], 'total_cuota_mensual': 0}; }
+  }
+
   // ── Eliminar ingreso (para reconfigurar) ──────────────────────────────────
 
   static Future<bool> deleteIncome(String uid) async {

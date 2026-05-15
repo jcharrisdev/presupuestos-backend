@@ -764,7 +764,42 @@ app.delete('/user/data', async (req, res) => {
   }
 });
 
-// GET /user/perfil-financiero?firebase_uid= — resumen completo: income + gastos fijos + disponible calculado
+// GET /user/ahorros-activos?firebase_uid=
+// Devuelve metas de ahorro activas del usuario con su cuota y progreso.
+// Usadas por el perfil financiero para incluirlas en el cálculo del disponible.
+app.get('/user/ahorros-activos', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [ahorros] = await db.execute(
+      `SELECT g.id, g.descripcion AS nombre, g.monto AS cuota_periodo,
+              p.tipo_periodo,
+              g.numero_quincena AS periodos_restantes,
+              COALESCE(SUM(m.monto_pagado_real), 0) AS monto_ahorrado,
+              COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total_aportaciones
+       FROM gastos g
+       JOIN presupuestos p ON p.id = g.presupuesto_id
+       LEFT JOIN movimientos m ON m.gasto_id = g.id AND m.pagado = 1
+       WHERE g.firebase_uid = ? AND g.tipo = 'ahorro'
+         AND (g.numero_quincena IS NULL OR g.numero_quincena > 0)
+       GROUP BY g.id, g.descripcion, g.monto, p.tipo_periodo, g.numero_quincena`,
+      [firebase_uid]
+    );
+    const result = ahorros.map(a => {
+      // Normalizar cuota a mensual: si el presupuesto es quincenal, multiplicar ×2
+      const cuotaMensual = a.tipo_periodo === 'quincenal'
+        ? parseFloat((Number(a.cuota_periodo) * 2).toFixed(2))
+        : parseFloat(Number(a.cuota_periodo).toFixed(2));
+      const totalAhorrado = parseFloat((Number(a.monto_ahorrado) + Number(a.total_aportaciones)).toFixed(2));
+      return { ...a, cuota_mensual: cuotaMensual, total_ahorrado: totalAhorrado };
+    });
+    const totalCuotaMensual = result.reduce((s, a) => s + a.cuota_mensual, 0);
+    res.json({ ahorros: result, total_cuota_mensual: parseFloat(totalCuotaMensual.toFixed(2)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/perfil-financiero?firebase_uid= — resumen completo del perfil financiero
+// Incluye: income, gastos_fijos, ahorros activos, aporte shared → disponible real
 app.get('/user/perfil-financiero', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
@@ -773,10 +808,32 @@ app.get('/user/perfil-financiero', async (req, res) => {
       `SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
     );
     const [gastos] = await db.execute(
-      `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1
-       ORDER BY es_deuda DESC, monto_mensual DESC`, [firebase_uid]
+      `SELECT ugf.*, CASE WHEN ugf.deuda_id IS NOT NULL AND d.monto_pendiente IS NOT NULL
+                               AND d.tasa_interes IS NOT NULL THEN 1 ELSE 0 END AS deuda_info_completa
+       FROM user_gastos_fijos ugf
+       LEFT JOIN deudas d ON d.id = ugf.deuda_id
+       WHERE ugf.firebase_uid = ? AND ugf.activo = 1
+       ORDER BY ugf.es_deuda DESC, ugf.monto_mensual DESC`, [firebase_uid]
     );
-    // Suma de aportes a shared budgets activos donde el usuario es miembro
+    // Ahorros activos con cuota mensual normalizada
+    const [ahorrosRows] = await db.execute(
+      `SELECT g.id, g.descripcion AS nombre, g.monto AS cuota_periodo,
+              p.tipo_periodo, g.numero_quincena AS periodos_restantes
+       FROM gastos g
+       JOIN presupuestos p ON p.id = g.presupuesto_id
+       WHERE g.firebase_uid = ? AND g.tipo = 'ahorro'
+         AND (g.numero_quincena IS NULL OR g.numero_quincena > 0)`,
+      [firebase_uid]
+    );
+    const ahorros = ahorrosRows.map(a => ({
+      ...a,
+      cuota_mensual: a.tipo_periodo === 'quincenal'
+        ? parseFloat((Number(a.cuota_periodo) * 2).toFixed(2))
+        : parseFloat(Number(a.cuota_periodo).toFixed(2)),
+    }));
+    const totalCuotaAhorroMensual = ahorros.reduce((s, a) => s + a.cuota_mensual, 0);
+
+    // Aportes a presupuestos compartidos
     const [[sharedRow]] = await db.execute(
       `SELECT COALESCE(SUM(sbm.aporte_periodo), 0) AS total_aporte_shared
        FROM shared_budget_members sbm
@@ -784,25 +841,31 @@ app.get('/user/perfil-financiero', async (req, res) => {
        WHERE sbm.firebase_uid = ? AND sb.estado = 'activo' AND sbm.estado = 'activo'`,
       [firebase_uid]
     );
-    const ingresoNeto = income ? Number(income.ingreso_neto_mensual) : 0;
-    const totalCompromisos = gastos.reduce((s, g) => s + Number(g.monto_mensual), 0);
-    const totalAporteShared = Number(sharedRow?.total_aporte_shared || 0);
-    const disponibleMensual = ingresoNeto - totalCompromisos - totalAporteShared;
-    const divisor = (income?.frecuencia_cobro === 'quincenal') ? 2 : 1;
+
+    const ingresoNeto        = income ? Number(income.ingreso_neto_mensual) : 0;
+    const totalGastos        = gastos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    const totalAporteShared  = Number(sharedRow?.total_aporte_shared || 0);
+    const totalAhorros       = parseFloat(totalCuotaAhorroMensual.toFixed(2));
+    const disponibleMensual  = ingresoNeto - totalGastos - totalAporteShared - totalAhorros;
+    const divisor            = (income?.frecuencia_cobro === 'quincenal') ? 2 : 1;
+
     res.json({
       tiene_income: !!income,
       income: income || null,
       gastos_fijos: gastos,
+      ahorros_activos: ahorros,
       resumen: {
-        ingreso_neto_mensual: ingresoNeto,
-        ingreso_neto_periodo: parseFloat((ingresoNeto / divisor).toFixed(2)),
-        total_compromisos_mensual: parseFloat(totalCompromisos.toFixed(2)),
-        total_compromisos_periodo: parseFloat((totalCompromisos / divisor).toFixed(2)),
-        total_aporte_shared_mensual: parseFloat(totalAporteShared.toFixed(2)),
-        disponible_mensual: parseFloat(disponibleMensual.toFixed(2)),
-        disponible_periodo: parseFloat((disponibleMensual / divisor).toFixed(2)),
-        frecuencia_cobro: income?.frecuencia_cobro || 'quincenal',
-        compromisos_son_sostenibles: disponibleMensual >= 0,
+        ingreso_neto_mensual:          parseFloat(ingresoNeto.toFixed(2)),
+        ingreso_neto_periodo:          parseFloat((ingresoNeto / divisor).toFixed(2)),
+        total_gastos_mensual:          parseFloat(totalGastos.toFixed(2)),
+        total_gastos_periodo:          parseFloat((totalGastos / divisor).toFixed(2)),
+        total_ahorros_mensual:         totalAhorros,
+        total_ahorros_periodo:         parseFloat((totalAhorros / divisor).toFixed(2)),
+        total_aporte_shared_mensual:   parseFloat(totalAporteShared.toFixed(2)),
+        disponible_mensual:            parseFloat(disponibleMensual.toFixed(2)),
+        disponible_periodo:            parseFloat((disponibleMensual / divisor).toFixed(2)),
+        frecuencia_cobro:              income?.frecuencia_cobro || 'quincenal',
+        compromisos_son_sostenibles:   disponibleMensual >= 0,
       }
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
