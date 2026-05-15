@@ -559,57 +559,83 @@ class _GastoTile extends StatelessWidget {
             ? AppTheme.warning
             : const Color(0xFF1890FF);
 
-    return GestureDetector(
-      onTap: esDeuda && onTapDeuda != null ? onTapDeuda : null,
-      child: Container(
+    final infoIncompleta = esDeuda && (gasto['deuda_info_completa'] as int? ?? 0) == 0;
+
+    return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: esDeuda ? AppTheme.danger.withValues(alpha: 0.4) : AppTheme.border),
-      ),
-      child: Row(children: [
-        Container(width: 4, height: 44, decoration: BoxDecoration(
-            color: accentColor, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(gasto['descripcion'] as String? ?? '',
-              style: const TextStyle(
-                  color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
-          const SizedBox(height: 4),
-          Wrap(spacing: 6, children: [
-            _Chip(_labelTipo(gasto['tipo'] as String? ?? 'otro'), color: AppTheme.textSecondary),
-            if (esDeuda) _Chip('Deuda', color: AppTheme.danger),
-            if (frecuencia == 'variable') _Chip('Variable', color: AppTheme.warning),
-            if (diaPago != null)
-              _Chip('Día $diaPago', color: AppTheme.info, icon: Icons.calendar_today),
-            if (recordatorio)
-              _Chip('Recordatorio', color: AppTheme.primary, icon: Icons.notifications_outlined),
-            if (esDeuda && (gasto['deuda_info_completa'] as int? ?? 0) == 0)
-              _Chip('Completar info →', color: AppTheme.warning, icon: Icons.warning_amber_rounded),
-          ]),
-        ])),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${monto.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
-          Text(frecuencia == 'variable' ? '~estimado/mes' : '/mes',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-        ]),
-        const SizedBox(width: 6),
-        PopupMenuButton<String>(
-          color: AppTheme.surfaceAlt,
-          icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
-          onSelected: (v) { if (v == 'edit') onEdit(); else onDelete(); },
-          itemBuilder: (_) => [
-            const PopupMenuItem(value: 'edit',
-                child: Text('Editar', style: TextStyle(color: AppTheme.textPrimary))),
-            const PopupMenuItem(value: 'delete',
-                child: Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
-          ],
+        border: Border.all(
+          color: infoIncompleta
+              ? AppTheme.warning.withValues(alpha: 0.5)
+              : esDeuda ? AppTheme.danger.withValues(alpha: 0.3) : AppTheme.border,
         ),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 4, height: 44, decoration: BoxDecoration(
+              color: accentColor, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(gasto['descripcion'] as String? ?? '',
+                style: const TextStyle(
+                    color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 4),
+            Wrap(spacing: 6, children: [
+              _Chip(_labelTipo(gasto['tipo'] as String? ?? 'otro'), color: AppTheme.textSecondary),
+              if (esDeuda) _Chip('Deuda', color: AppTheme.danger),
+              if (frecuencia == 'variable') _Chip('Variable', color: AppTheme.warning),
+              if (diaPago != null)
+                _Chip('Día $diaPago', color: AppTheme.info, icon: Icons.calendar_today),
+              if (recordatorio)
+                _Chip('Recordatorio', color: AppTheme.primary, icon: Icons.notifications_outlined),
+            ]),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('\$${monto.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+            Text(frecuencia == 'variable' ? '~estimado/mes' : '/mes',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+          ]),
+          const SizedBox(width: 6),
+          PopupMenuButton<String>(
+            color: AppTheme.surfaceAlt,
+            icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
+            onSelected: (v) { if (v == 'edit') onEdit(); else onDelete(); },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'edit',
+                  child: Text('Editar', style: TextStyle(color: AppTheme.textPrimary))),
+              const PopupMenuItem(value: 'delete',
+                  child: Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
+            ],
+          ),
+        ]),
+        // Botón "Completar info" separado — toque directo y visible
+        if (infoIncompleta && onTapDeuda != null) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onTapDeuda,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.warning.withValues(alpha: 0.4)),
+              ),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.edit_outlined, color: AppTheme.warning, size: 14),
+                SizedBox(width: 6),
+                Text('Completar información de la deuda →',
+                    style: TextStyle(color: AppTheme.warning, fontSize: 12, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ),
+        ],
       ]),
-    ));
+    );
   }
 
   static String _labelTipo(String t) {
