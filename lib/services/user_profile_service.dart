@@ -76,6 +76,13 @@ class UserProfileService {
     } catch (_) { return {'ahorros': [], 'total_cuota_mensual': 0}; }
   }
 
+  // ── Sync deudas del perfil (crea deuda_id faltantes) ─────────────────────
+  static Future<void> syncDeudas(String uid) async {
+    try {
+      await ApiClient.post('/user/sync-deudas', {'firebase_uid': uid});
+    } catch (_) {}
+  }
+
   // ── Eliminar ingreso (para reconfigurar) ──────────────────────────────────
 
   static Future<bool> deleteIncome(String uid) async {

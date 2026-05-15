@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'services/user_profile_service.dart';
+import 'deudas/deudas_screen.dart';
 
 /// Pantalla central del perfil financiero global del usuario.
 /// Fuente de verdad de: ingreso, gastos fijos, deudas y gastos variables.
@@ -37,6 +38,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
 
   Future<void> _cargar() async {
     setState(() => _loading = true);
+    // Sincronizar deudas del perfil sin deuda_id antes de cargar
+    await UserProfileService.syncDeudas(widget.firebaseUid);
     final results = await Future.wait([
       UserProfileService.getIncome(widget.firebaseUid),
       UserProfileService.getGastosFijos(widget.firebaseUid),
@@ -54,6 +57,12 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       _totalAhorrosMensual = _d(ahData['total_cuota_mensual']);
       _loading = false;
     });
+  }
+
+  void _irADeudas() {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => DeudasScreen(firebaseUid: widget.firebaseUid),
+    )).then((_) => _cargar());
   }
 
   double get _ingreso => _d(_income?['ingreso_neto_mensual']);
@@ -270,13 +279,31 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                   _SeccionHeader('DEUDAS', _deudas.length,
                       '\$${_deudas.fold(0.0, (s, g) => s + _d(g['monto_mensual'])).toStringAsFixed(2)}/mes',
                       AppTheme.danger),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.info.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.touch_app_outlined, color: AppTheme.info, size: 14),
+                      const SizedBox(width: 8),
+                      const Expanded(child: Text(
+                        'Toca una deuda para ir a Mis Deudas y completar su información.',
+                        style: TextStyle(color: AppTheme.info, fontSize: 11),
+                      )),
+                    ]),
+                  ),
                   ..._deudas.map((g) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _GastoTile(
                       gasto: g as Map<String, dynamic>,
                       onEdit: () => _mostrarFormGasto(gasto: g),
                       onDelete: () => _eliminarGasto((g)['id'] as int),
+                      onTapDeuda: _irADeudas,
                     ),
                   )),
                   const SizedBox(height: 8),
@@ -516,7 +543,8 @@ class _GastoTile extends StatelessWidget {
   final Map<String, dynamic> gasto;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  const _GastoTile({required this.gasto, required this.onEdit, required this.onDelete});
+  final VoidCallback? onTapDeuda;
+  const _GastoTile({required this.gasto, required this.onEdit, required this.onDelete, this.onTapDeuda});
 
   @override
   Widget build(BuildContext context) {
@@ -531,12 +559,14 @@ class _GastoTile extends StatelessWidget {
             ? AppTheme.warning
             : const Color(0xFF1890FF);
 
-    return Container(
+    return GestureDetector(
+      onTap: esDeuda && onTapDeuda != null ? onTapDeuda : null,
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: esDeuda ? AppTheme.danger.withValues(alpha: 0.4) : AppTheme.border),
       ),
       child: Row(children: [
         Container(width: 4, height: 44, decoration: BoxDecoration(
@@ -579,7 +609,7 @@ class _GastoTile extends StatelessWidget {
           ],
         ),
       ]),
-    );
+    ));
   }
 
   static String _labelTipo(String t) {

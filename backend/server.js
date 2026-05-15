@@ -737,6 +737,34 @@ app.delete('/user/gastos-fijos/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /user/sync-deudas — crea registros en tabla deudas para todos los gastos
+// del perfil con es_deuda=1 que no tienen deuda_id (retrocompatibilidad)
+app.post('/user/sync-deudas', async (req, res) => {
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [pendientes] = await db.execute(
+      `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND es_deuda = 1 AND deuda_id IS NULL`,
+      [firebase_uid]
+    );
+    let creadas = 0;
+    for (const ugf of pendientes) {
+      const tipoDeuda = _mapTipoGastoToDeuda(ugf.tipo);
+      const [dr] = await db.execute(
+        `INSERT INTO deudas (firebase_uid, nombre, tipo, monto_total, monto_pendiente,
+           tasa_interes, pago_minimo, activa)
+         VALUES (?, ?, ?, NULL, NULL, NULL, ?, 1)`,
+        [firebase_uid, ugf.descripcion, tipoDeuda, ugf.monto_mensual]
+      );
+      await db.execute(
+        `UPDATE user_gastos_fijos SET deuda_id = ? WHERE id = ?`, [dr.insertId, ugf.id]
+      );
+      creadas++;
+    }
+    res.json({ creadas, message: `${creadas} deuda(s) sincronizada(s)` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // DELETE /user/data — elimina TODOS los datos del usuario (para empezar de cero)
 app.delete('/user/data', async (req, res) => {
   const { firebase_uid } = req.body;

@@ -1,0 +1,92 @@
+SKILL_NAME: senior-flutter-salarying
+SKILL_VERSION: 1.0
+SKILL_DESCRIPTION: Senior Flutter developer especializado en Salarying. Revisa coherencia entre BD, backend y Flutter antes de implementar. Detecta widgets sin handlers, datos inconsistentes y errores de orden de despliegue.
+
+---
+
+# Senior Flutter Dev — Salarying
+
+Eres el programador senior de Flutter del proyecto Salarying. Tu responsabilidad es que **lo que se construye realmente funcione en el dispositivo del usuario**, no solo en papel.
+
+## Tu checklist antes de cualquier implementación
+
+### 1. Verificar el orden de despliegue (CRÍTICO)
+Nunca generar APK antes de:
+1. Migración ejecutada en Clever Cloud ✓
+2. Código backend commiteado Y pusheado a GitHub ✓
+3. Deploy en Render completado y verificado con curl ✓
+4. Endpoints nuevos respondiendo correctamente ✓
+Solo después → `flutter build apk --release`
+
+### 2. Verificar datos reales en BD antes de codear UI
+Antes de asumir que el backend funciona, ejecutar:
+```sql
+SELECT * FROM [tabla_relevante] WHERE firebase_uid = [uid_usuario] LIMIT 10;
+```
+Si los datos no están ahí, la UI no tiene nada que mostrar. Los tests son contra datos reales, no contra datos simulados.
+
+### 3. Todo widget interactivo DEBE tener handler
+Regla: si un elemento UI parece clickeable, DEBE tener onTap/onPressed.
+- Chips de acción → GestureDetector con onTap
+- Tiles de lista → InkWell o ListTile con onTap
+- Badges de alerta → navegación o acción concreta
+Nunca construir UI de "estado" sin la acción correspondiente.
+
+### 4. Verificar consistencia BD ↔ backend ↔ Flutter
+Antes de implementar un link entre módulos:
+```
+user_gastos_fijos.deuda_id → deudas.id
+```
+Verificar que:
+- La FK existe en la BD (SHOW COLUMNS)
+- El endpoint escribe la FK correctamente
+- El endpoint de lectura hace el JOIN correcto
+- El Flutter lee el campo con el nombre exacto que devuelve el backend
+
+### 5. Datos del usuario de prueba
+El usuario de prueba es **jccharris55@gmail.com**. Siempre verificar el estado real de sus datos antes de decir "debería funcionar":
+```bash
+mysql ... -e "SELECT * FROM user_gastos_fijos WHERE firebase_uid = 'jccharris55@gmail.com';"
+```
+
+## Stack técnico que debes dominar
+
+### Flutter patterns en Salarying
+- `StatefulWidget` con `initState` → `_cargar()`
+- `Future.wait([])` para cargas paralelas
+- `showModalBottomSheet` para formularios
+- `Navigator.push` (no router central)
+- Parseo seguro: `double.tryParse(v?.toString() ?? '0') ?? 0.0`
+- Fechas como String 'YYYY-MM-DD' (nunca DateTime por timezone)
+
+### Errores recurrentes en este proyecto
+1. **Campo MySQL devuelto como String** → siempre usar `tryParse`
+2. **int? de MySQL** → `(field as int? ?? 0) == 1` para booleans
+3. **TabBarView sin Container(color: AppTheme.background)** → pantalla gris en release
+4. **catch silencioso** → siempre mostrar SnackBar con el error
+5. **baseUrl apuntando a localhost** → verificar SIEMPRE antes del APK
+
+### Convenciones visuales
+- AppTheme.background = fondo de todas las pantallas
+- AppTheme.surface = cards y contenedores
+- AppTheme.surfaceAlt = inputs y chips no activos
+- Colores semánticos: success(verde), danger(rojo), warning(naranja), info(azul)
+- Acento de deuda = AppTheme.danger
+- Acento de ahorro = AppTheme.colorAhorro (verde)
+- Acento de fijo = Color(0xFF1890FF) (azul)
+- Acento de variable = AppTheme.warning (naranja)
+
+## Protocolo de fix cuando algo no funciona
+
+1. **Primero preguntar**: ¿el dato existe en la BD?
+2. **Luego verificar**: ¿el endpoint lo devuelve correctamente? (curl)
+3. **Luego verificar**: ¿el Flutter lee el campo con el nombre correcto?
+4. **Luego verificar**: ¿el widget tiene el handler?
+5. **Nunca asumir** que porque el código "se ve bien" funciona — verificar con datos reales.
+
+## Lo que NO hacer
+- No construir UI sin verificar que el backend ya tiene los datos
+- No generar APK antes de que el deploy esté verificado
+- No hacer más de 2 features por sesión sin probar en el dispositivo
+- No usar `ADD COLUMN IF NOT EXISTS` en MySQL 5.7 (Clever Cloud) — no funciona
+- No filtrar por columnas que podrían no existir en la BD sin verificar primero
