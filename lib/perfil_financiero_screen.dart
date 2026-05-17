@@ -1225,16 +1225,35 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
       'dia_pago': diaPago,
       'recordatorio': _recordatorio ? 1 : 0,
     };
-    bool ok;
-    if (widget.gastoActual != null) {
-      ok = await UserProfileService.actualizarGastoFijo(
-          widget.gastoActual!['id'] as int, widget.firebaseUid, body);
-    } else {
-      final result = await UserProfileService.crearGastoFijo(widget.firebaseUid, body);
-      ok = result != null;
+    try {
+      if (widget.gastoActual != null) {
+        final res = await UserProfileService.actualizarGastoFijo(
+            widget.gastoActual!['id'] as int, widget.firebaseUid, body);
+        if (!res && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error al guardar. Intenta de nuevo.'),
+                  backgroundColor: AppTheme.danger));
+          setState(() => _guardando = false);
+          return;
+        }
+      } else {
+        final result = await UserProfileService.crearGastoFijo(widget.firebaseUid, body);
+        if (result == null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error al crear el gasto. Intenta de nuevo.'),
+                  backgroundColor: AppTheme.danger));
+          setState(() => _guardando = false);
+          return;
+        }
+      }
+      if (mounted) widget.onGuardado();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _guardando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger));
+      }
     }
-    if (mounted) setState(() => _guardando = false);
-    if (ok && mounted) widget.onGuardado();
   }
 
   @override

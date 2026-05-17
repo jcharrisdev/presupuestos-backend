@@ -299,6 +299,31 @@ pool.getConnection(async (err, conn) => {
     console.error('⚠️ Migración modelo anual:', e.message);
   }
 
+  // Migración: tabla de eventos del calendario (pagos, recordatorios)
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS calendario_eventos (
+      id                  INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid        VARCHAR(255) NOT NULL,
+      gasto_id            INT DEFAULT NULL,
+      user_gasto_fijo_id  INT DEFAULT NULL,
+      presupuesto_id      INT DEFAULT NULL,
+      titulo              VARCHAR(255) NOT NULL,
+      tipo                ENUM('pago','ingreso','recordatorio') DEFAULT 'pago',
+      fecha_evento        DATE NOT NULL,
+      monto_esperado      DECIMAL(12,2) DEFAULT NULL,
+      estado              ENUM('pendiente','pagado','vencido') DEFAULT 'pendiente',
+      notificacion_activa TINYINT DEFAULT 1,
+      dias_anticipacion   INT DEFAULT 3,
+      created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_ce_user      (firebase_uid),
+      KEY idx_ce_fecha     (firebase_uid, fecha_evento),
+      KEY idx_ce_ugf       (user_gasto_fijo_id)
+    )`);
+    console.log('✅ Migración calendario_eventos OK');
+  } catch (e) {
+    console.error('⚠️ Migración calendario_eventos:', e.message);
+  }
+
   // Migración: gastos globales reutilizables (independientes de presupuesto)
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS gastos_globales (
@@ -878,6 +903,7 @@ app.post('/user/gastos-fijos', async (req, res) => {
        WHERE ugf.id = ?`, [ugfId]
     );
     res.status(201).json(created);
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -959,6 +985,7 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
        WHERE ugf.id = ?`, [id]
     );
     res.json(updated);
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -983,6 +1010,7 @@ app.delete('/user/gastos-fijos/:id', async (req, res) => {
       `DELETE FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
     res.json({ success: true });
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8008,6 +8036,7 @@ app.post('/user/gastos-variables-base', async (req, res) => {
     );
     const [[created]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [r.insertId]);
     res.status(201).json(created);
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8056,6 +8085,7 @@ app.put('/user/gastos-variables-base/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
     const [[updated]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [id]);
     res.json(updated);
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8068,6 +8098,7 @@ app.delete('/user/gastos-variables-base/:id', async (req, res) => {
     const [r] = await db.execute(`UPDATE gastos_variables_base SET activo = 0 WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
     if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
     res.json({ success: true });
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8432,6 +8463,83 @@ app.patch('/user/estado-anual/:anio/recalcular', async (req, res) => {
 //   no_presupuestado → gasto no planificado
 // Cada registro actualiza automáticamente los totales del mes y del año.
 // =============================================================================
+
+// Helper: recalcula los estimados en meses_financieros y estado_financiero_anual
+// cuando el perfil del usuario cambia (gastos fijos, variables base, deudas).
+// Fire-and-forget: llámalo con .catch() para no bloquear la respuesta principal.
+async function _recalcularEstimadosAnio(firebase_uid, anio) {
+  const year = anio || new Date().getFullYear();
+  const [[efa]] = await db.execute(
+    `SELECT id FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`,
+    [firebase_uid, year]
+  );
+  if (!efa) return; // aún no se generó el estado anual — nada que actualizar
+
+  const [[income]] = await db.execute(
+    `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
+  );
+  if (!income) return;
+
+  const [gastosFijos] = await db.execute(
+    `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+  );
+  const [deudasIndep] = await db.execute(
+    `SELECT d.* FROM deudas d
+     LEFT JOIN user_gastos_fijos ugf ON ugf.deuda_id = d.id
+     WHERE d.firebase_uid = ? AND d.activa = 1 AND ugf.id IS NULL`, [firebase_uid]
+  );
+  const [variablesBase] = await db.execute(
+    `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+  );
+
+  const ingresoMensual    = Number(income.ingreso_neto_mensual);
+  const totalFijosMensual = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0)
+                          + deudasIndep.reduce((s, d) => s + Number(d.pago_minimo || d.cuota_fija || 0), 0);
+  const totalVarAnual     = variablesBase.reduce((s, g) => s + _montoMensual(g), 0) * 12;
+
+  // Actualizar estado_financiero_anual
+  await db.execute(
+    `UPDATE estado_financiero_anual SET
+       ingreso_anual_estimado   = ?,
+       gastos_fijos_anuales     = ?,
+       gastos_variables_anuales = ?,
+       remanente_anual_estimado = ?,
+       updated_at               = NOW()
+     WHERE firebase_uid = ? AND anio = ?`,
+    [parseFloat((ingresoMensual * 12).toFixed(2)),
+     parseFloat((totalFijosMensual * 12).toFixed(2)),
+     parseFloat(totalVarAnual.toFixed(2)),
+     parseFloat(((ingresoMensual - totalFijosMensual) * 12 - totalVarAnual).toFixed(2)),
+     firebase_uid, year]
+  );
+
+  // Actualizar meses_financieros — estimados por mes (respeta aplica_meses)
+  const [meses] = await db.execute(
+    `SELECT id, mes FROM meses_financieros WHERE firebase_uid = ? AND anio = ?`,
+    [firebase_uid, year]
+  );
+  for (const mesRow of meses) {
+    const m = mesRow.mes;
+    const varMes = variablesBase.reduce((s, g) => {
+      if (g.aplica_meses) {
+        const arr = typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses;
+        if (!arr.includes(Number(m))) return s;
+      }
+      return s + _montoMensual(g);
+    }, 0);
+    await db.execute(
+      `UPDATE meses_financieros SET
+         fijos_estimados     = ?,
+         variables_estimados = ?,
+         remanente_estimado  = ?
+       WHERE id = ?`,
+      [parseFloat(totalFijosMensual.toFixed(2)),
+       parseFloat(varMes.toFixed(2)),
+       parseFloat((ingresoMensual - totalFijosMensual - varMes).toFixed(2)),
+       mesRow.id]
+    );
+  }
+}
 
 // Helper: actualizar totales del mes_financiero después de cualquier cambio en registros
 async function _actualizarTotalesMes(mesId, firebaseUid) {
