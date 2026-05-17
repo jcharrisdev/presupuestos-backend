@@ -726,6 +726,7 @@ class _GastoTile extends StatelessWidget {
     final frecuencia = gasto['frecuencia'] as String? ?? 'fijo';
     final monto = double.tryParse(gasto['monto_mensual']?.toString() ?? '0') ?? 0;
     final diaPago = gasto['dia_pago'] as int?;
+    final diaPago2 = gasto['dia_pago_2'] as int?;
     final recordatorio = (gasto['recordatorio'] as int? ?? 0) == 1;
     final Color accentColor = esDeuda
         ? AppTheme.danger
@@ -760,7 +761,9 @@ class _GastoTile extends StatelessWidget {
               _Chip(_labelTipo(gasto['tipo'] as String? ?? 'otro'), color: AppTheme.textSecondary),
               if (esDeuda) _Chip('Deuda', color: AppTheme.danger),
               if (frecuencia == 'variable') _Chip('Variable', color: AppTheme.warning),
-              if (diaPago != null)
+              if (diaPago != null && diaPago2 != null)
+                _Chip('Días $diaPago y $diaPago2', color: AppTheme.info, icon: Icons.calendar_today)
+              else if (diaPago != null)
                 _Chip('Día $diaPago', color: AppTheme.info, icon: Icons.calendar_today),
               if (recordatorio)
                 _Chip('Recordatorio', color: AppTheme.primary, icon: Icons.notifications_outlined),
@@ -1163,6 +1166,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
   final _descCtrl = TextEditingController();
   final _montoCtrl = TextEditingController();
   final _diaPagoCtrl = TextEditingController();
+  final _diaPago2Ctrl = TextEditingController();
   String _tipo = 'otro';
   String _clasificacion = 'importante';
   String _frecuencia = 'fijo';
@@ -1191,12 +1195,15 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
       _recordatorio = (g['recordatorio'] as int? ?? 0) == 1;
       final dp = g['dia_pago'];
       if (dp != null) _diaPagoCtrl.text = dp.toString();
+      final dp2 = g['dia_pago_2'];
+      if (dp2 != null) _diaPago2Ctrl.text = dp2.toString();
     }
   }
 
   @override
   void dispose() {
-    _descCtrl.dispose(); _montoCtrl.dispose(); _diaPagoCtrl.dispose();
+    _descCtrl.dispose(); _montoCtrl.dispose();
+    _diaPagoCtrl.dispose(); _diaPago2Ctrl.dispose();
     super.dispose();
   }
 
@@ -1209,6 +1216,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
       return;
     }
     final diaPago = int.tryParse(_diaPagoCtrl.text.trim());
+    final diaPago2 = int.tryParse(_diaPago2Ctrl.text.trim());
     if (_recordatorio && diaPago == null) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Indica el día de pago para activar el recordatorio')));
@@ -1223,6 +1231,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
       'es_deuda': _esDeuda ? 1 : 0,
       'frecuencia': _frecuencia,
       'dia_pago': diaPago,
+      'dia_pago_2': diaPago2,
       'recordatorio': _recordatorio ? 1 : 0,
     };
     try {
@@ -1388,6 +1397,24 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
             onChanged: (v) {
               final n = int.tryParse(v);
               if (n != null && (n < 1 || n > 31)) _diaPagoCtrl.text = '';
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _diaPago2Ctrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(
+              labelText: 'Segundo día de pago (opcional — para quincenas)',
+              helperText: 'Ej: 30 si pagas los días 15 y 30',
+              helperStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+              prefixIcon: Icon(Icons.calendar_month, size: 16, color: AppTheme.textMuted),
+            ),
+            onChanged: (v) {
+              final n = int.tryParse(v);
+              if (n != null && (n < 1 || n > 31)) _diaPago2Ctrl.text = '';
               setState(() {});
             },
           ),
