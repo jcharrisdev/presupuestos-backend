@@ -166,12 +166,12 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                   ))
                 : _logs.isEmpty
                     ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.check_circle_outline, color: AppTheme.success, size: 48),
+                        Icon(Icons.checklist_outlined, color: AppTheme.textMuted, size: 48),
                         SizedBox(height: 12),
-                        Text('Sin errores registrados',
+                        Text('Sin actividad reciente',
                             style: TextStyle(color: AppTheme.textSecondary, fontSize: 16)),
                         SizedBox(height: 4),
-                        Text('El servidor está funcionando sin problemas.',
+                        Text('Los logs se borran automáticamente cada hora.',
                             style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
                       ]))
                     : ListView.separated(
@@ -208,7 +208,8 @@ class _LogTileState extends State<_LogTile> {
 
     final color = nivel == 'error' ? AppTheme.danger
         : nivel == 'warn' ? AppTheme.warning
-        : AppTheme.info;
+        : nivel == 'info' ? AppTheme.success
+        : AppTheme.primary;
 
     String fechaStr = '';
     try {

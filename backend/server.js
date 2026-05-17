@@ -440,8 +440,24 @@ async function _logError(ruta, error, uid = '-', reqBody = null) {
       [ruta, uid, error?.message || String(error),
        error?.stack?.substring(0, 2000) || null, bodyStr]
     );
-  } catch (_) {} // silencioso — no recursión si la DB falla
+  } catch (_) {}
 }
+
+async function _logInfo(ruta, mensaje, uid = '-') {
+  try {
+    await db.execute(
+      `INSERT INTO server_logs (nivel, ruta, firebase_uid, mensaje) VALUES ('info', ?, ?, ?)`,
+      [ruta, uid, mensaje]
+    );
+  } catch (_) {}
+}
+
+// Auto-limpieza cada hora — borra todos los logs de más de 60 minutos
+setInterval(async () => {
+  try {
+    await db.execute(`DELETE FROM server_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE)`);
+  } catch (_) {}
+}, 60 * 60 * 1000);
 
 // Middleware que intercepta automáticamente todas las respuestas 5xx
 // y las guarda en server_logs sin modificar ningún endpoint existente.
@@ -877,6 +893,7 @@ app.post('/user/income', async (req, res) => {
     );
     const [[saved]] = await db.execute(`SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
     res.json({ tiene_income: true, ...saved });
+    _logInfo('/user/income', `Ingreso configurado: $${Number(ingreso_neto_mensual).toFixed(2)}/mes (${tipo_ingreso})`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -988,6 +1005,7 @@ app.post('/user/gastos-fijos', async (req, res) => {
     );
     res.status(201).json(created);
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _logInfo('/user/gastos-fijos', `Gasto fijo creado: "${descripcion}" $${Number(monto_mensual).toFixed(2)}/mes`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1022,9 +1040,10 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
          recordatorio  = COALESCE(?, recordatorio),
          updated_at    = NOW()
        WHERE id = ?`,
-      [descripcion, monto_mensual, tipo, clasificacion, es_deuda, activo,
-       subcategoria, notas, frecuencia, dia_pago ?? existing.dia_pago,
-       recordatorio, id]
+      [descripcion ?? null, monto_mensual ?? null, tipo ?? null, clasificacion ?? null,
+       es_deuda ?? null, activo ?? null, subcategoria ?? null, notas ?? null,
+       frecuencia ?? null, dia_pago ?? existing.dia_pago ?? null,
+       recordatorio ?? null, id]
     );
 
     const nuevoTitulo = descripcion ?? existing.descripcion;
@@ -1070,6 +1089,7 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
     );
     res.json(updated);
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _logInfo(`/user/gastos-fijos/${id}`, `Gasto fijo editado: "${updated.descripcion}" $${Number(updated.monto_mensual).toFixed(2)}/mes`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1095,6 +1115,7 @@ app.delete('/user/gastos-fijos/:id', async (req, res) => {
     );
     res.json({ success: true });
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _logInfo(`/user/gastos-fijos/${id}`, `Gasto fijo eliminado (id=${id})`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6943,6 +6964,7 @@ app.post('/deudas', async (req, res) => {
     );
     const [[created]] = await db.execute(`SELECT * FROM deudas WHERE id = ?`, [result.insertId]);
     res.status(201).json(_enriquecerDeuda(created));
+    _logInfo('/deudas', `Deuda creada: "${nombre}" ${es_letra ? 'letra' : tipo} - pendiente $${Number(monto_pendiente).toFixed(2)}`, firebase_uid);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -6982,6 +7004,7 @@ app.put('/deudas/:id', async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Deuda no encontrada' });
     const [[updated]] = await db.execute(`SELECT * FROM deudas WHERE id = ?`, [id]);
     res.json(_enriquecerDeuda(updated));
+    _logInfo(`/deudas/${id}`, `Deuda editada: "${updated.nombre}" - pendiente $${Number(updated.monto_pendiente).toFixed(2)}`, firebase_uid);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -7025,6 +7048,7 @@ app.delete('/deudas/:id', async (req, res) => {
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Deuda no encontrada' });
     res.json({ message: 'Deuda archivada' });
+    _logInfo(`/deudas/${id}`, `Deuda archivada (id=${id})`, firebase_uid);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -8121,6 +8145,7 @@ app.post('/user/gastos-variables-base', async (req, res) => {
     const [[created]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [r.insertId]);
     res.status(201).json(created);
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _logInfo('/user/gastos-variables-base', `Variable base creada: "${nombre}" $${Number(monto_estimado).toFixed(2)} - meses ${mes_inicio}-${mes_fin}`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8170,6 +8195,7 @@ app.put('/user/gastos-variables-base/:id', async (req, res) => {
     const [[updated]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [id]);
     res.json(updated);
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _logInfo(`/user/gastos-variables-base/${id}`, `Variable base editada: "${updated.nombre}" $${Number(updated.monto_estimado).toFixed(2)}`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8183,6 +8209,7 @@ app.delete('/user/gastos-variables-base/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
     res.json({ success: true });
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _logInfo(`/user/gastos-variables-base/${id}`, `Variable base eliminada (id=${id})`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8318,6 +8345,7 @@ app.post('/user/estado-anual/generar', async (req, res) => {
     }
 
     res.status(201).json({ estado_anual: efa, meses_generados: 12 });
+    _logInfo('/user/estado-anual/generar', `Estado financiero ${year} generado/recalculado - ingreso $${Number(ingresoMensual).toFixed(2)}/mes`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8701,6 +8729,7 @@ app.post('/registros', async (req, res) => {
 
     const [[created]] = await db.execute(`SELECT * FROM registros_gasto WHERE id = ?`, [r.insertId]);
     res.status(201).json(created);
+    _logInfo('/registros', `Gasto registrado: "${nombre}" $${Number(monto).toFixed(2)} (${tipo} · ${categoria}) en ${anio}/${mes}`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
