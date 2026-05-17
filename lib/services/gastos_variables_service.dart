@@ -16,7 +16,9 @@ class GastosVariablesService {
     String frecuencia = 'mensual',
     String? notas,
     int? subcategoriaId,
-    List<int>? aplicaMeses,
+    int mesInicio = 1,
+    int mesFin = 12,
+    String? categoriaCustom,
   }) async {
     final res = await ApiClient.post('/user/gastos-variables-base', {
       'firebase_uid': uid,
@@ -24,9 +26,11 @@ class GastosVariablesService {
       'categoria': categoria,
       'monto_estimado': montoEstimado,
       'frecuencia': frecuencia,
+      'mes_inicio': mesInicio,
+      'mes_fin': mesFin,
       if (notas != null) 'notas': notas,
       if (subcategoriaId != null) 'subcategoria_id': subcategoriaId,
-      if (aplicaMeses != null) 'aplica_meses': aplicaMeses,
+      if (categoriaCustom != null) 'categoria_custom': categoriaCustom,
     });
     if (res.statusCode != 201) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
     return jsonDecode(res.body);

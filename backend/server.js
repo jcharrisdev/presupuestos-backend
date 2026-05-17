@@ -329,6 +329,29 @@ pool.getConnection(async (err, conn) => {
     await db.execute(`ALTER TABLE gastos ADD COLUMN gasto_global_id INT DEFAULT NULL`);
   } catch (_) { /* columna ya existe */ }
 
+  // Migración: período de vigencia en gastos_variables_base (qué meses aplica)
+  const alterGVB = [
+    `ALTER TABLE gastos_variables_base ADD COLUMN mes_inicio TINYINT DEFAULT 1`,
+    `ALTER TABLE gastos_variables_base ADD COLUMN mes_fin TINYINT DEFAULT 12`,
+  ];
+  for (const sql of alterGVB) {
+    try { await db.execute(sql); } catch (_) {}
+  }
+
+  // Migración: segundo día de pago para gastos quincenales
+  try {
+    await db.execute(`ALTER TABLE user_gastos_fijos ADD COLUMN dia_pago_2 INT DEFAULT NULL`);
+  } catch (_) {}
+
+  // Migración: campos de período y acreedor para deudas
+  const alterDeudasPeriodo = [
+    `ALTER TABLE deudas ADD COLUMN mes_inicio_pago TINYINT DEFAULT 1`,
+    `ALTER TABLE deudas ADD COLUMN num_pagos_realizados INT DEFAULT 0`,
+  ];
+  for (const sql of alterDeudasPeriodo) {
+    try { await db.execute(sql); } catch (_) {}
+  }
+
   // Migración: campos de letras/cuotas en tabla deudas (silent si ya existen)
   const alterDeudas = [
     `ALTER TABLE deudas ADD COLUMN es_letra TINYINT DEFAULT 0`,
@@ -7939,19 +7962,49 @@ app.get('/user/gastos-variables-base', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Helper: genera el array aplica_meses desde mes_inicio y mes_fin
+function _generarAplicaMeses(mesInicio, mesFin) {
+  const inicio = Math.max(1, Math.min(12, Number(mesInicio) || 1));
+  const fin    = Math.max(inicio, Math.min(12, Number(mesFin) || 12));
+  const meses  = [];
+  for (let m = inicio; m <= fin; m++) meses.push(m);
+  return meses;
+}
+
 // POST /user/gastos-variables-base
+// mes_inicio (1-12): mes desde el cual aplica. Default 1 (enero)
+// mes_fin    (1-12): mes hasta el cual aplica. Default 12 (diciembre)
 app.post('/user/gastos-variables-base', async (req, res) => {
-  const { firebase_uid, nombre, categoria = 'otro', subcategoria_id, monto_estimado,
-    frecuencia = 'mensual', aplica_meses, en_calendario = 0, notas } = req.body;
+  const { firebase_uid, nombre, categoria = 'otro', categoria_custom,
+    subcategoria_id, monto_estimado, frecuencia = 'mensual',
+    mes_inicio = 1, mes_fin = 12, en_calendario = 0, notas } = req.body;
   if (!firebase_uid || !nombre || monto_estimado == null)
     return res.status(400).json({ error: 'firebase_uid, nombre y monto_estimado requeridos' });
   try {
+    // Si la categoría es "otro" y hay una personalizada, crearla/buscarla primero
+    let categoriaFinal = categoria;
+    if (categoria === 'otro' && categoria_custom) {
+      const nombreCat = categoria_custom.trim().toLowerCase();
+      const [[existeCat]] = await db.execute(
+        `SELECT id FROM subcategorias WHERE firebase_uid = ? AND categoria = 'custom' AND nombre = ?`,
+        [firebase_uid, nombreCat]
+      );
+      if (!existeCat) {
+        await db.execute(
+          `INSERT INTO subcategorias (firebase_uid, categoria, nombre) VALUES (?, 'custom', ?)`,
+          [firebase_uid, nombreCat]
+        );
+      }
+      categoriaFinal = nombreCat;
+    }
+    const aplicaMeses = _generarAplicaMeses(mes_inicio, mes_fin);
     const [r] = await db.execute(
       `INSERT INTO gastos_variables_base
-         (firebase_uid, nombre, categoria, subcategoria_id, monto_estimado, frecuencia, aplica_meses, en_calendario, notas)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [firebase_uid, nombre, categoria, subcategoria_id || null, monto_estimado, frecuencia,
-       aplica_meses ? JSON.stringify(aplica_meses) : null, en_calendario ? 1 : 0, notas || null]
+         (firebase_uid, nombre, categoria, subcategoria_id, monto_estimado, frecuencia,
+          aplica_meses, mes_inicio, mes_fin, en_calendario, notas)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, nombre, categoriaFinal, subcategoria_id || null, monto_estimado, frecuencia,
+       JSON.stringify(aplicaMeses), Number(mes_inicio), Number(mes_fin), en_calendario ? 1 : 0, notas || null]
     );
     const [[created]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [r.insertId]);
     res.status(201).json(created);
@@ -7961,19 +8014,42 @@ app.post('/user/gastos-variables-base', async (req, res) => {
 // PUT /user/gastos-variables-base/:id
 app.put('/user/gastos-variables-base/:id', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid, nombre, categoria, subcategoria_id, monto_estimado, frecuencia, aplica_meses, en_calendario, notas, activo } = req.body;
+  const { firebase_uid, nombre, categoria, categoria_custom, subcategoria_id,
+    monto_estimado, frecuencia, mes_inicio, mes_fin, en_calendario, notas, activo } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const fields = [], vals = [];
+    let categoriaFinal = categoria;
+    if (categoria === 'otro' && categoria_custom) {
+      categoriaFinal = categoria_custom.trim().toLowerCase();
+      const [[existeCat]] = await db.execute(
+        `SELECT id FROM subcategorias WHERE firebase_uid = ? AND categoria = 'custom' AND nombre = ?`,
+        [firebase_uid, categoriaFinal]
+      );
+      if (!existeCat) {
+        await db.execute(
+          `INSERT INTO subcategorias (firebase_uid, categoria, nombre) VALUES (?, 'custom', ?)`,
+          [firebase_uid, categoriaFinal]
+        );
+      }
+    }
     if (nombre !== undefined)          { fields.push('nombre = ?');          vals.push(nombre); }
-    if (categoria !== undefined)       { fields.push('categoria = ?');       vals.push(categoria); }
+    if (categoriaFinal !== undefined)  { fields.push('categoria = ?');       vals.push(categoriaFinal); }
     if (subcategoria_id !== undefined) { fields.push('subcategoria_id = ?'); vals.push(subcategoria_id); }
     if (monto_estimado !== undefined)  { fields.push('monto_estimado = ?');  vals.push(monto_estimado); }
     if (frecuencia !== undefined)      { fields.push('frecuencia = ?');      vals.push(frecuencia); }
-    if (aplica_meses !== undefined)    { fields.push('aplica_meses = ?');    vals.push(JSON.stringify(aplica_meses)); }
     if (en_calendario !== undefined)   { fields.push('en_calendario = ?');   vals.push(en_calendario ? 1 : 0); }
     if (notas !== undefined)           { fields.push('notas = ?');           vals.push(notas); }
     if (activo !== undefined)          { fields.push('activo = ?');          vals.push(activo); }
+    // Recalcular aplica_meses si cambia el rango
+    if (mes_inicio !== undefined || mes_fin !== undefined) {
+      const [[existing]] = await db.execute(`SELECT mes_inicio, mes_fin FROM gastos_variables_base WHERE id = ?`, [id]);
+      const nuevoInicio = mes_inicio ?? existing?.mes_inicio ?? 1;
+      const nuevoFin    = mes_fin    ?? existing?.mes_fin    ?? 12;
+      const nuevosM = _generarAplicaMeses(nuevoInicio, nuevoFin);
+      fields.push('mes_inicio = ?', 'mes_fin = ?', 'aplica_meses = ?');
+      vals.push(Number(nuevoInicio), Number(nuevoFin), JSON.stringify(nuevosM));
+    }
     if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
     vals.push(id, firebase_uid);
     const [r] = await db.execute(`UPDATE gastos_variables_base SET ${fields.join(', ')} WHERE id = ? AND firebase_uid = ?`, vals);
@@ -8225,6 +8301,20 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       porCategoria[r.categoria].total += Number(r.monto);
     }
 
+    // Deudas activas del usuario para este mes — su pago mínimo es un compromiso fijo
+    const [deudasActivas] = await db.execute(
+      `SELECT d.id, d.nombre, d.tipo, d.es_letra, d.cuota_fija, d.pago_minimo,
+              d.fecha_proximo_pago, d.num_cuotas_total, d.num_cuotas_pagadas, d.mes_inicio_pago
+       FROM deudas d
+       WHERE d.firebase_uid = ? AND d.activa = 1 AND d.monto_pendiente > 0`,
+      [firebase_uid]
+    );
+    // Solo contar deudas que aplican en este mes según mes_inicio_pago
+    const deudasDelMes = deudasActivas.filter(d => Number(d.mes_inicio_pago || 1) <= Number(mes));
+    const totalCuotasDeudas = deudasDelMes.reduce((s, d) => {
+      return s + (d.es_letra ? Number(d.cuota_fija || 0) : Number(d.pago_minimo || 0));
+    }, 0);
+
     // Variables base presupuestadas para este mes (para calcular desviación)
     const [varBase] = await db.execute(
       `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
@@ -8252,13 +8342,37 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       };
     });
 
+    // Gastos fijos del perfil para este mes (para mostrar compromisos)
+    const [gastosFijosPerfil] = await db.execute(
+      `SELECT id, descripcion, monto_mensual, tipo, dia_pago, dia_pago_2, frecuencia
+       FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
+      [firebase_uid]
+    );
+    const totalFijosEstimado = gastosFijosPerfil.reduce((s, g) => s + Number(g.monto_mensual), 0)
+                             + totalCuotasDeudas;
+
     res.json({
       mes: mesRow,
+      compromisos_fijos: {
+        gastos_fijos: gastosFijosPerfil.map(g => ({
+          id: g.id, nombre: g.descripcion, monto: Number(g.monto_mensual),
+          tipo: g.tipo, dia_pago: g.dia_pago, dia_pago_2: g.dia_pago_2, frecuencia: g.frecuencia,
+        })),
+        deudas: deudasDelMes.map(d => ({
+          id: d.id, nombre: d.nombre, tipo: d.tipo,
+          cuota: d.es_letra ? Number(d.cuota_fija) : Number(d.pago_minimo),
+          es_letra: Boolean(d.es_letra),
+          proxima_fecha: d.fecha_proximo_pago,
+          cuotas_restantes: d.num_cuotas_total
+            ? Math.max(0, Number(d.num_cuotas_total) - Number(d.num_cuotas_pagadas || 0)) : null,
+        })),
+        total_estimado: parseFloat(totalFijosEstimado.toFixed(2)),
+      },
       resumen: {
         ingreso_estimado:    Number(mesRow.ingreso_estimado),
-        fijos_estimados:     Number(mesRow.fijos_estimados),
+        fijos_estimados:     parseFloat(totalFijosEstimado.toFixed(2)),
         variables_estimados: Number(mesRow.variables_estimados),
-        remanente_estimado:  Number(mesRow.remanente_estimado),
+        remanente_estimado:  parseFloat((Number(mesRow.ingreso_estimado) - totalFijosEstimado - Number(mesRow.variables_estimados)).toFixed(2)),
         ingreso_real:        parseFloat(ingresoReal.toFixed(2)),
         fijos_reales:        parseFloat(fijosReales.toFixed(2)),
         variables_reales:    parseFloat(variablesReales.toFixed(2)),

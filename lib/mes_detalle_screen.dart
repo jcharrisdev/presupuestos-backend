@@ -173,6 +173,10 @@ class _TabResumen extends StatelessWidget {
         const SizedBox(height: 8),
         _BarraUso(ingreso: ingReal > 0 ? ingReal : ingEst,
             fijos: fijosReal, variables: varReal, noPres: noPres),
+        const SizedBox(height: 24),
+
+        // Compromisos fijos del mes
+        _CompromisosSection(data: data),
       ],
     );
   }
@@ -372,6 +376,135 @@ class _RegistroTile extends StatelessWidget {
       case 'familia':      return Icons.family_restroom;
       default:             return Icons.receipt;
     }
+  }
+}
+
+// ── Compromisos fijos del mes ────────────────────────────────────────────
+
+class _CompromisosSection extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _CompromisosSection({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final compromisos = data['compromisos_fijos'] as Map<String, dynamic>?;
+    if (compromisos == null) return const SizedBox.shrink();
+
+    final gastosFijos = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
+    final deudas      = (compromisos['deudas']       as List? ?? []).cast<Map<String, dynamic>>();
+
+    if (gastosFijos.isEmpty && deudas.isEmpty) return const SizedBox.shrink();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('COMPROMISOS DEL MES',
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+      const SizedBox(height: 4),
+      const Text('Gastos fijos y deudas activos este mes',
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+      const SizedBox(height: 10),
+
+      if (gastosFijos.isNotEmpty) ...[
+        const _SubSeccionLabel('GASTOS FIJOS', Color(0xFF1890FF)),
+        const SizedBox(height: 6),
+        ...gastosFijos.map((g) => _CompromisoTile(
+          nombre: g['nombre'] as String? ?? '',
+          monto: _d(g['monto_mensual']),
+          subtitulo: _diasPago(g),
+          color: const Color(0xFF1890FF),
+          icon: Icons.lock_clock,
+        )),
+        const SizedBox(height: 10),
+      ],
+
+      if (deudas.isNotEmpty) ...[
+        const _SubSeccionLabel('DEUDAS ACTIVAS', AppTheme.danger),
+        const SizedBox(height: 6),
+        ...deudas.map((d) => _CompromisoTile(
+          nombre: d['nombre'] as String? ?? '',
+          monto: _d(d['pago_mensual'] ?? d['pago_minimo'] ?? d['cuota_fija']),
+          subtitulo: _deudaSubtitulo(d),
+          color: AppTheme.danger,
+          icon: Icons.account_balance,
+        )),
+      ],
+    ]);
+  }
+
+  String _diasPago(Map<String, dynamic> g) {
+    final d1 = g['dia_pago'] as int?;
+    final d2 = g['dia_pago_2'] as int?;
+    if (d1 != null && d2 != null) return 'Pago día $d1 y día $d2';
+    if (d1 != null) return 'Pago día $d1';
+    return '';
+  }
+
+  String _deudaSubtitulo(Map<String, dynamic> d) {
+    final esLetra = (d['es_letra'] as int? ?? 0) == 1;
+    final cuotas  = d['num_cuotas_total'] as int?;
+    if (esLetra && cuotas != null) return 'Letra · $cuotas cuotas';
+    final tipo = d['tipo'] as String? ?? '';
+    return tipo.isNotEmpty ? tipo[0].toUpperCase() + tipo.substring(1).replaceAll('_', ' ') : '';
+  }
+
+  static double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
+}
+
+class _SubSeccionLabel extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SubSeccionLabel(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    Container(width: 3, height: 12,
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+    const SizedBox(width: 6),
+    Text(label, style: TextStyle(color: color, fontSize: 10,
+        fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+  ]);
+}
+
+class _CompromisoTile extends StatelessWidget {
+  final String nombre;
+  final double monto;
+  final String subtitulo;
+  final Color color;
+  final IconData icon;
+  const _CompromisoTile({
+    required this.nombre,
+    required this.monto,
+    required this.subtitulo,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 14,
+          backgroundColor: color.withValues(alpha: 0.1),
+          child: Icon(icon, color: color, size: 14),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(nombre, style: const TextStyle(color: AppTheme.textPrimary,
+              fontSize: 13, fontWeight: FontWeight.w600)),
+          if (subtitulo.isNotEmpty)
+            Text(subtitulo, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+        ])),
+        Text('\$${monto.toStringAsFixed(2)}',
+            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+      ]),
+    );
   }
 }
 

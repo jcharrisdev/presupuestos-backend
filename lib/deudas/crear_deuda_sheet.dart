@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../services/deudas_service.dart';
 
@@ -8,104 +9,338 @@ class CrearDeudaSheet {
     required String firebaseUid,
     required VoidCallback onCreada,
   }) {
-    final nombreCtrl    = TextEditingController();
-    final totalCtrl     = TextEditingController();
-    final pendienteCtrl = TextEditingController();
-    final tasaCtrl      = TextEditingController();
-    final pagoMinCtrl   = TextEditingController();
-    String tipo = 'personal';
-    DateTime? fechaProximoPago;
-    bool _guardando = false;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => StatefulBuilder(builder: (ctx, setS) => DraggableScrollableSheet(
-        initialChildSize: 0.8, maxChildSize: 0.95, minChildSize: 0.5,
-        expand: false,
-        builder: (_, sc) => SingleChildScrollView(
-          controller: sc,
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => _CrearDeudaForm(
+        firebaseUid: firebaseUid,
+        onCreada: onCreada,
+      ),
+    );
+  }
+}
+
+class _CrearDeudaForm extends StatefulWidget {
+  final String firebaseUid;
+  final VoidCallback onCreada;
+  const _CrearDeudaForm({required this.firebaseUid, required this.onCreada});
+
+  @override
+  State<_CrearDeudaForm> createState() => _CrearDeudaFormState();
+}
+
+class _CrearDeudaFormState extends State<_CrearDeudaForm> {
+  final _nombreCtrl      = TextEditingController();
+  final _totalCtrl       = TextEditingController();
+  final _pendienteCtrl   = TextEditingController();
+  final _tasaCtrl        = TextEditingController();
+  final _pagoMinCtrl     = TextEditingController();
+  final _cuotaFijaCtrl   = TextEditingController();
+  final _numCuotasCtrl   = TextEditingController();
+  final _acreedorCtrl    = TextEditingController();
+
+  String _tipo           = 'personal';
+  bool _esLetra          = false;
+  int? _diaPago;
+  int? _diaPago2;
+  int _mesInicioPago     = DateTime.now().month;
+  DateTime? _fechaProximoPago;
+  bool _guardando        = false;
+
+  static const _tipos = [
+    {'value': 'tarjeta_credito', 'label': 'Tarjeta'},
+    {'value': 'prestamo',        'label': 'Préstamo'},
+    {'value': 'hipoteca',        'label': 'Hipoteca'},
+    {'value': 'auto',            'label': 'Auto'},
+    {'value': 'personal',        'label': 'Personal'},
+    {'value': 'otro',            'label': 'Otro'},
+  ];
+
+  static const _meses = [
+    'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
+  ];
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _totalCtrl.dispose();
+    _pendienteCtrl.dispose();
+    _tasaCtrl.dispose();
+    _pagoMinCtrl.dispose();
+    _cuotaFijaCtrl.dispose();
+    _numCuotasCtrl.dispose();
+    _acreedorCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      expand: false,
+      builder: (_, sc) => SingleChildScrollView(
+        controller: sc,
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Center(child: Container(width: 36, height: 4,
-                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+                decoration: BoxDecoration(color: AppTheme.border,
+                    borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
             const Text('Nueva deuda',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: AppTheme.textPrimary,
+                    fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
 
-            TextField(controller: nombreCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(hintText: 'Nombre (ej: Tarjeta Visa, Préstamo banco)')),
+            // ── Nombre ──────────────────────────────────────────────────────
+            TextField(
+              controller: _nombreCtrl,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                  labelText: 'Nombre (ej: Tarjeta Visa, Préstamo banco)'),
+            ),
             const SizedBox(height: 16),
 
-            // Tipo
-            const Text('Tipo de deuda', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            // ── Tipo ────────────────────────────────────────────────────────
+            const Text('TIPO DE DEUDA',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
             const SizedBox(height: 8),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              _TipoBtn('Tarjeta',  'tarjeta_credito', tipo, (v) => setS(() => tipo = v)),
-              _TipoBtn('Préstamo', 'prestamo',        tipo, (v) => setS(() => tipo = v)),
-              _TipoBtn('Hipoteca', 'hipoteca',        tipo, (v) => setS(() => tipo = v)),
-              _TipoBtn('Auto',     'auto',            tipo, (v) => setS(() => tipo = v)),
-              _TipoBtn('Personal', 'personal',        tipo, (v) => setS(() => tipo = v)),
-              _TipoBtn('Otro',     'otro',            tipo, (v) => setS(() => tipo = v)),
-            ]),
-            const SizedBox(height: 16),
-
-            TextField(controller: totalCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(prefixText: '\$ ', hintText: 'Monto total original')),
-            const SizedBox(height: 12),
-            TextField(controller: pendienteCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(prefixText: '\$ ', hintText: 'Saldo pendiente actual')),
-            const SizedBox(height: 12),
-            TextField(controller: tasaCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(suffixText: '%/mes', hintText: 'Tasa de interés (opcional)')),
-            const SizedBox(height: 12),
-            TextField(controller: pagoMinCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(prefixText: '\$ ', hintText: 'Pago mínimo mensual (opcional)')),
-            const SizedBox(height: 12),
-
-            // Fecha próximo pago
-            GestureDetector(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: ctx,
-                  initialDate: DateTime.now().add(const Duration(days: 7)),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                  builder: (ctx, child) => Theme(
-                    data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.dark(
-                      primary: AppTheme.primary, surface: AppTheme.surfaceAlt)),
-                    child: child!,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _tipos.map((t) {
+                final sel = _tipo == t['value'];
+                return GestureDetector(
+                  onTap: () => setState(() => _tipo = t['value']!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: sel ? AppTheme.danger.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: sel ? AppTheme.danger : AppTheme.border),
+                    ),
+                    child: Text(t['label']!, style: TextStyle(
+                      color: sel ? AppTheme.danger : AppTheme.textSecondary,
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                    )),
                   ),
                 );
-                if (picked != null) setS(() => fechaProximoPago = picked);
-              },
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // ── ¿Es compra a letra / plazo fijo? ────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Switch(
+                    value: _esLetra,
+                    onChanged: (v) => setState(() => _esLetra = v),
+                    activeColor: AppTheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Compra a plazo / cuotas fijas',
+                          style: TextStyle(color: AppTheme.textPrimary, fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                      Text('Préstamos con cuota mensual fija (carro, electrodoméstico, etc.)',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    ]),
+                  ),
+                ]),
+                if (_esLetra) ...[
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _cuotaFijaCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: AppTheme.textPrimary),
+                        decoration: const InputDecoration(
+                            labelText: 'Cuota mensual fija (\$)', prefixText: '\$ '),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _numCuotasCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        style: const TextStyle(color: AppTheme.textPrimary),
+                        decoration: const InputDecoration(
+                            labelText: 'Número de cuotas'),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _acreedorCtrl,
+                    style: const TextStyle(color: AppTheme.textPrimary),
+                    decoration: const InputDecoration(
+                        labelText: 'Nombre del acreedor (opcional)',
+                        hintText: 'Banco, tienda, persona…'),
+                  ),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Montos ──────────────────────────────────────────────────────
+            TextField(
+              controller: _totalCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                  prefixText: '\$ ', labelText: 'Monto total original'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _pendienteCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                  prefixText: '\$ ', labelText: 'Saldo pendiente actual'),
+            ),
+            const SizedBox(height: 12),
+
+            if (!_esLetra) ...[
+              TextField(
+                controller: _tasaCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(
+                    suffixText: '%/mes', labelText: 'Tasa de interés (opcional)'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _pagoMinCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(
+                    prefixText: '\$ ', labelText: 'Pago mínimo mensual (opcional)'),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── Días de pago (quincena) ──────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('DÍAS DE PAGO',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+                const SizedBox(height: 4),
+                const Text('Si pagas por quincena, ingresa ambos días.',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(child: _DiaPagoSelector(
+                    label: 'Día (1–15)',
+                    value: _diaPago,
+                    minDay: 1,
+                    maxDay: 15,
+                    onChanged: (v) => setState(() => _diaPago = v),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: _DiaPagoSelector(
+                    label: 'Día (16–31)',
+                    value: _diaPago2,
+                    minDay: 16,
+                    maxDay: 31,
+                    onChanged: (v) => setState(() => _diaPago2 = v),
+                  )),
+                ]),
+                const SizedBox(height: 6),
+                if (_diaPago != null && _diaPago2 != null)
+                  Text('Pago quincenal: día $_diaPago y día $_diaPago2 de cada mes',
+                      style: const TextStyle(color: AppTheme.primary, fontSize: 11,
+                          fontWeight: FontWeight.w600))
+                else if (_diaPago != null)
+                  Text('Pago mensual: día $_diaPago de cada mes',
+                      style: const TextStyle(color: AppTheme.primary, fontSize: 11,
+                          fontWeight: FontWeight.w600))
+                else
+                  const Text('Sin día de pago configurado',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              ]),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Mes de inicio de pago ───────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('DESDE CUÁNDO AFECTA TU PRESUPUESTO',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  value: _mesInicioPago,
+                  decoration: const InputDecoration(labelText: 'Mes de inicio'),
+                  dropdownColor: AppTheme.surfaceAlt,
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                  items: List.generate(12, (i) => DropdownMenuItem(
+                    value: i + 1,
+                    child: Text(_meses[i]),
+                  )),
+                  onChanged: (v) => setState(() => _mesInicioPago = v ?? _mesInicioPago),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Esta deuda aparecerá en tu estado financiero desde ${_meses[_mesInicioPago - 1]}.',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Fecha próximo pago ──────────────────────────────────────────
+            GestureDetector(
+              onTap: _seleccionarFecha,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6),
+                  color: AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: AppTheme.border),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                  const Icon(Icons.calendar_today_outlined,
+                      color: AppTheme.textSecondary, size: 16),
                   const SizedBox(width: 10),
                   Text(
-                    fechaProximoPago != null
-                        ? 'Próximo pago: ${fechaProximoPago!.toIso8601String().substring(0, 10)}'
+                    _fechaProximoPago != null
+                        ? 'Próximo pago: ${_fechaProximoPago!.toIso8601String().substring(0, 10)}'
                         : 'Fecha del próximo pago (opcional)',
                     style: TextStyle(
-                      color: fechaProximoPago != null ? AppTheme.textPrimary : AppTheme.textMuted,
+                      color: _fechaProximoPago != null
+                          ? AppTheme.textPrimary
+                          : AppTheme.textMuted,
+                      fontSize: 14,
                     ),
                   ),
                 ]),
@@ -113,74 +348,140 @@ class CrearDeudaSheet {
             ),
 
             const SizedBox(height: 24),
-            SizedBox(width: double.infinity, child: ElevatedButton(
-              onPressed: _guardando ? null : () async {
-                final nombre    = nombreCtrl.text.trim();
-                final total     = double.tryParse(totalCtrl.text) ?? 0;
-                final pendiente = double.tryParse(pendienteCtrl.text) ?? 0;
-                if (nombre.isEmpty || total <= 0 || pendiente <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Completa nombre, monto total y saldo pendiente')));
-                  return;
-                }
-                setS(() => _guardando = true);
-                try {
-                  final body = <String, dynamic>{
-                    'firebase_uid': firebaseUid,
-                    'nombre': nombre,
-                    'tipo': tipo,
-                    'monto_total': total,
-                    'monto_pendiente': pendiente,
-                  };
-                  final tasa = double.tryParse(tasaCtrl.text);
-                  if (tasa != null && tasa > 0) body['tasa_interes'] = tasa;
-                  final pagoMin = double.tryParse(pagoMinCtrl.text);
-                  if (pagoMin != null && pagoMin > 0) body['pago_minimo'] = pagoMin;
-                  if (fechaProximoPago != null)
-                    body['fecha_proximo_pago'] = fechaProximoPago!.toIso8601String().substring(0, 10);
-                  await DeudasService.crear(body);
-                  Navigator.pop(ctx);
-                  onCreada();
-                } catch (e) {
-                  setS(() => _guardando = false);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
-              child: _guardando
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Guardar deuda'),
-            )),
-          ]),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _guardando ? null : _guardar,
+                child: _guardando
+                    ? const SizedBox(height: 18, width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2,
+                            color: AppTheme.background))
+                    : const Text('Guardar deuda'),
+              ),
+            ),
+          ],
         ),
-      )),
+      ),
     );
+  }
+
+  Future<void> _seleccionarFecha() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.dark(
+                primary: AppTheme.primary, surface: AppTheme.surfaceAlt)),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _fechaProximoPago = picked);
+  }
+
+  Future<void> _guardar() async {
+    final nombre    = _nombreCtrl.text.trim();
+    final total     = double.tryParse(_totalCtrl.text) ?? 0;
+    final pendiente = double.tryParse(_pendienteCtrl.text) ?? 0;
+
+    if (nombre.isEmpty || total <= 0 || pendiente <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Completa nombre, monto total y saldo pendiente')));
+      return;
+    }
+
+    if (_esLetra) {
+      final cuota = double.tryParse(_cuotaFijaCtrl.text) ?? 0;
+      if (cuota <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ingresa la cuota mensual fija')));
+        return;
+      }
+    }
+
+    setState(() => _guardando = true);
+    try {
+      final body = <String, dynamic>{
+        'firebase_uid': widget.firebaseUid,
+        'nombre': nombre,
+        'tipo': _tipo,
+        'monto_total': total,
+        'monto_pendiente': pendiente,
+        'es_letra': _esLetra ? 1 : 0,
+        'mes_inicio_pago': _mesInicioPago,
+      };
+
+      if (_esLetra) {
+        final cuota = double.tryParse(_cuotaFijaCtrl.text);
+        if (cuota != null && cuota > 0) body['cuota_fija'] = cuota;
+        final numCuotas = int.tryParse(_numCuotasCtrl.text);
+        if (numCuotas != null && numCuotas > 0) body['num_cuotas_total'] = numCuotas;
+        final acreedor = _acreedorCtrl.text.trim();
+        if (acreedor.isNotEmpty) body['nombre_acreedor'] = acreedor;
+      } else {
+        final tasa = double.tryParse(_tasaCtrl.text);
+        if (tasa != null && tasa > 0) body['tasa_interes'] = tasa;
+        final pagoMin = double.tryParse(_pagoMinCtrl.text);
+        if (pagoMin != null && pagoMin > 0) body['pago_minimo'] = pagoMin;
+      }
+
+      if (_diaPago != null) body['dia_pago'] = _diaPago;
+      if (_diaPago2 != null) body['dia_pago_2'] = _diaPago2;
+      if (_fechaProximoPago != null) {
+        body['fecha_proximo_pago'] =
+            _fechaProximoPago!.toIso8601String().substring(0, 10);
+      }
+
+      await DeudasService.crear(body);
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onCreada();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _guardando = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 }
 
-class _TipoBtn extends StatelessWidget {
+// ── Selector de día con botones (no TextField) ────────────────────────────────
+class _DiaPagoSelector extends StatelessWidget {
   final String label;
-  final String value;
-  final String selected;
-  final void Function(String) onTap;
-  const _TipoBtn(this.label, this.value, this.selected, this.onTap);
+  final int? value;
+  final int minDay;
+  final int maxDay;
+  final void Function(int?) onChanged;
+
+  const _DiaPagoSelector({
+    required this.label,
+    required this.value,
+    required this.minDay,
+    required this.maxDay,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final sel = selected == value;
-    return GestureDetector(
-      onTap: () => onTap(value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: sel ? AppTheme.danger.withOpacity(0.12) : AppTheme.surfaceAlt,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: sel ? AppTheme.danger : AppTheme.border),
+    return DropdownButtonFormField<int>(
+      value: value,
+      decoration: InputDecoration(labelText: label),
+      dropdownColor: AppTheme.surfaceAlt,
+      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+      hint: const Text('—', style: TextStyle(color: AppTheme.textMuted)),
+      items: [
+        const DropdownMenuItem<int>(value: null, child: Text('—',
+            style: TextStyle(color: AppTheme.textMuted))),
+        ...List.generate(
+          maxDay - minDay + 1,
+          (i) => DropdownMenuItem(value: minDay + i, child: Text('Día ${minDay + i}')),
         ),
-        child: Text(label, style: TextStyle(
-          color: sel ? AppTheme.danger : AppTheme.textSecondary,
-          fontSize: 12, fontWeight: FontWeight.w600,
-        )),
-      ),
+      ],
+      onChanged: onChanged,
     );
   }
 }

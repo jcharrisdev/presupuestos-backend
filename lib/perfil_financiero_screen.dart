@@ -5,6 +5,8 @@ import 'theme/app_theme.dart';
 import 'services/user_profile_service.dart';
 import 'services/gastos_variables_service.dart';
 import 'deudas/deudas_screen.dart';
+import 'widgets/financiero/mes_rango_selector.dart';
+import 'widgets/financiero/categoria_selector.dart';
 
 /// Pantalla central del perfil financiero global del usuario.
 /// Fuente de verdad de: ingreso, gastos fijos, deudas y gastos variables.
@@ -490,10 +492,13 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   }
 
   void _agregarVariableBase() {
-    final nombreCtrl  = TextEditingController();
-    final montoCtrl   = TextEditingController();
-    String categoria  = 'alimentacion';
-    String frecuencia = 'mensual';
+    final nombreCtrl   = TextEditingController();
+    final montoCtrl    = TextEditingController();
+    String categoria   = 'alimentacion';
+    String? catCustom;
+    String frecuencia  = 'mensual';
+    int mesInicio      = 1;
+    int mesFin         = 12;
 
     showModalBottomSheet(
       context: context,
@@ -507,77 +512,83 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
             color: AppTheme.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Center(child: Container(width: 36, height: 4,
-                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-            const Text('Nuevo gasto variable base',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nombreCtrl,
-              decoration: const InputDecoration(labelText: 'Nombre (ej: Supermercado)'),
-              style: const TextStyle(color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: montoCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Monto estimado (\$)', prefixText: '\$ '),
-              style: const TextStyle(color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: categoria,
-              decoration: const InputDecoration(labelText: 'Categoría'),
-              dropdownColor: AppTheme.surfaceAlt,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              items: const [
-                DropdownMenuItem(value: 'alimentacion', child: Text('Alimentación')),
-                DropdownMenuItem(value: 'transporte',   child: Text('Transporte')),
-                DropdownMenuItem(value: 'salud',        child: Text('Salud')),
-                DropdownMenuItem(value: 'ocio',         child: Text('Ocio')),
-                DropdownMenuItem(value: 'ropa',         child: Text('Ropa')),
-                DropdownMenuItem(value: 'deportes',     child: Text('Deportes')),
-                DropdownMenuItem(value: 'tecnologia',   child: Text('Tecnología')),
-                DropdownMenuItem(value: 'familia',      child: Text('Familia')),
-                DropdownMenuItem(value: 'otro',         child: Text('Otro')),
-              ],
-              onChanged: (v) => setModal(() => categoria = v ?? categoria),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: frecuencia,
-              decoration: const InputDecoration(labelText: 'Frecuencia'),
-              dropdownColor: AppTheme.surfaceAlt,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              items: const [
-                DropdownMenuItem(value: 'mensual',   child: Text('Mensual')),
-                DropdownMenuItem(value: 'quincenal', child: Text('Quincenal')),
-                DropdownMenuItem(value: 'semanal',   child: Text('Semanal')),
-                DropdownMenuItem(value: 'anual',     child: Text('Anual')),
-              ],
-              onChanged: (v) => setModal(() => frecuencia = v ?? frecuencia),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (nombreCtrl.text.isEmpty || montoCtrl.text.isEmpty) return;
-                  final monto = double.tryParse(montoCtrl.text);
-                  if (monto == null) return;
-                  await GastosVariablesService.crear(
-                    uid: widget.firebaseUid, nombre: nombreCtrl.text.trim(),
-                    categoria: categoria, montoEstimado: monto, frecuencia: frecuencia,
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _cargar();
-                },
-                child: const Text('Guardar'),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              const Text('Nuevo gasto variable base',
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+              const Text('Gastos esperados pero de monto variable (súper, gasolina, etc.)',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nombreCtrl,
+                decoration: const InputDecoration(labelText: 'Nombre (ej: Supermercado, Gasolina)'),
+                style: const TextStyle(color: AppTheme.textPrimary),
               ),
-            ),
-          ]),
+              const SizedBox(height: 12),
+              TextField(
+                controller: montoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Monto estimado (\$)', prefixText: '\$ '),
+                style: const TextStyle(color: AppTheme.textPrimary),
+              ),
+              const SizedBox(height: 16),
+              // Categoría con soporte de "Otro" personalizado
+              CategoriaSelector(
+                firebaseUid: widget.firebaseUid,
+                categoriaActual: categoria,
+                onChanged: (cat, custom) => setModal(() { categoria = cat; catCustom = custom; }),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: frecuencia,
+                decoration: const InputDecoration(labelText: 'Frecuencia de pago'),
+                dropdownColor: AppTheme.surfaceAlt,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                items: const [
+                  DropdownMenuItem(value: 'mensual',   child: Text('Mensual')),
+                  DropdownMenuItem(value: 'quincenal', child: Text('Quincenal (×2 al mes)')),
+                  DropdownMenuItem(value: 'semanal',   child: Text('Semanal (×4 al mes)')),
+                  DropdownMenuItem(value: 'anual',     child: Text('Anual (÷12 al mes)')),
+                ],
+                onChanged: (v) => setModal(() => frecuencia = v ?? frecuencia),
+              ),
+              const SizedBox(height: 16),
+              // Período de vigencia
+              MesRangoSelector(
+                mesInicio: mesInicio, mesFin: mesFin,
+                onChange: (i, f) => setModal(() { mesInicio = i; mesFin = f; }),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (nombreCtrl.text.isEmpty || montoCtrl.text.isEmpty) return;
+                    final monto = double.tryParse(montoCtrl.text);
+                    if (monto == null) return;
+                    if (categoria == 'otro' && (catCustom == null || catCustom!.isEmpty)) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Escribe el nombre de la categoría')));
+                      return;
+                    }
+                    final catFinal = (categoria == 'otro' && catCustom != null) ? catCustom! : categoria;
+                    await GastosVariablesService.crear(
+                      uid: widget.firebaseUid, nombre: nombreCtrl.text.trim(),
+                      categoria: catFinal, montoEstimado: monto, frecuencia: frecuencia,
+                      mesInicio: mesInicio, mesFin: mesFin,
+                      categoriaCustom: categoria == 'otro' ? catCustom : null,
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _cargar();
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ),
+            ]),
+          ),
         );
       }),
     );
