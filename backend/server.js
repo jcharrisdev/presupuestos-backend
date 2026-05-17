@@ -8535,40 +8535,14 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /user/estado-anual/:anio/recalcular?firebase_uid=
-// Recalcula estimados del estado anual cuando el perfil cambia.
+// PATCH /user/estado-anual/:anio/recalcular
+// Recalcula estimados del estado anual y los 12 meses usando _recalcularEstimadosAnio.
 app.patch('/user/estado-anual/:anio/recalcular', async (req, res) => {
   const { anio } = req.params;
   const { firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    const [[income]] = await db.execute(`SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
-    if (!income) return res.status(400).json({ error: 'Registra tu ingreso primero' });
-    const [gastosFijos] = await db.execute(`SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
-    const [deudasIndep] = await db.execute(
-      `SELECT d.* FROM deudas d LEFT JOIN user_gastos_fijos ugf ON ugf.deuda_id = d.id
-       WHERE d.firebase_uid = ? AND d.activa = 1 AND ugf.id IS NULL`, [firebase_uid]
-    );
-    const [variablesBase] = await db.execute(`SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
-    const ingresoMensual    = Number(income.ingreso_neto_mensual);
-    const totalFijosMensual = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0)
-                            + deudasIndep.reduce((s, d) => s + Number(d.pago_minimo || 0), 0);
-    const totalVarMensual   = variablesBase.reduce((s, g) => s + _montoMensual(g), 0);
-    const remanenteEstimado = ingresoMensual - totalFijosMensual - totalVarMensual;
-    await db.execute(
-      `UPDATE estado_financiero_anual SET
-         ingreso_anual_estimado   = ?,
-         gastos_fijos_anuales     = ?,
-         gastos_variables_anuales = ?,
-         remanente_anual_estimado = ?,
-         updated_at               = NOW()
-       WHERE firebase_uid = ? AND anio = ?`,
-      [parseFloat((ingresoMensual * 12).toFixed(2)),
-       parseFloat((totalFijosMensual * 12).toFixed(2)),
-       parseFloat((totalVarMensual * 12).toFixed(2)),
-       parseFloat((remanenteEstimado * 12).toFixed(2)),
-       firebase_uid, anio]
-    );
+    await _recalcularEstimadosAnio(firebase_uid, Number(anio));
     res.json({ recalculado: true, anio: Number(anio) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
