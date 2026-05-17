@@ -12,6 +12,7 @@ import 'widgets/widgets.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
 import 'deudas/deudas_screen.dart';
 import 'perfil_financiero_screen.dart';
+import 'estado_financiero_anual_screen.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -110,22 +111,34 @@ class MainMenu extends StatelessWidget {
               const SectionHeader('PANEL PRINCIPAL'),
               const SizedBox(height: 14),
 
+              // ── ESTADO FINANCIERO ANUAL — PANTALLA PRINCIPAL ─────────────
+              _NavCard(
+                icon: Icons.bar_chart_rounded,
+                title: 'Estado Financiero Anual',
+                subtitle: 'Tu panorama completo: ingresos, gastos y remanente mes a mes',
+                color: AppTheme.primary,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => EstadoFinancieroAnualScreen(firebaseUid: firebaseUid),
+                )),
+              ),
+              const SizedBox(height: 12),
+
               _NavCard(
                 icon: Icons.dashboard_outlined,
                 title: 'Dashboard',
                 subtitle: 'Resumen financiero inteligente',
-                color: AppTheme.primary,
+                color: AppTheme.info,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => DashboardScreen(firebaseUid: firebaseUid),
                 )),
               ),
               const SizedBox(height: 12),
 
-              // ── PERFIL FINANCIERO — punto de entrada obligatorio ──────────
+              // ── PERFIL FINANCIERO ──────────────────────────────────────────
               _NavCard(
                 icon: Icons.account_circle_outlined,
                 title: 'Mi Perfil Financiero',
-                subtitle: 'Ingreso + compromisos fijos — la base de todo',
+                subtitle: 'Ingreso · Gastos fijos · Gastos variables base',
                 color: AppTheme.success,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => PerfilFinancieroScreen(firebaseUid: firebaseUid),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'services/user_profile_service.dart';
+import 'services/gastos_variables_service.dart';
 import 'deudas/deudas_screen.dart';
 
 /// Pantalla central del perfil financiero global del usuario.
@@ -22,14 +23,16 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   Map<String, dynamic>? _income;
   List<dynamic> _gastos = [];
   List<dynamic> _ahorros = [];
+  List<dynamic> _variablesBase = [];
   double _totalMensual = 0;
   double _totalAhorrosMensual = 0;
+  double _totalVariablesMensual = 0;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _cargar();
   }
 
@@ -44,17 +47,21 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       UserProfileService.getIncome(widget.firebaseUid),
       UserProfileService.getGastosFijos(widget.firebaseUid),
       UserProfileService.getAhorrosActivos(widget.firebaseUid),
+      GastosVariablesService.getAll(widget.firebaseUid),
     ]);
     if (!mounted) return;
     final income = results[0] as Map<String, dynamic>?;
     final gfData = results[1] as Map<String, dynamic>;
     final ahData = results[2] as Map<String, dynamic>;
+    final varData = results[3] as Map<String, dynamic>;
     setState(() {
       _income = income;
       _gastos = gfData['gastos'] as List? ?? [];
       _totalMensual = _d(gfData['total_mensual']);
       _ahorros = ahData['ahorros'] as List? ?? [];
       _totalAhorrosMensual = _d(ahData['total_cuota_mensual']);
+      _variablesBase = varData['gastos'] as List? ?? [];
+      _totalVariablesMensual = _d(varData['total_mensual']);
       _loading = false;
     });
   }
@@ -91,7 +98,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
           indicatorColor: AppTheme.primary,
           labelColor: AppTheme.primary,
           unselectedLabelColor: AppTheme.textSecondary,
-          tabs: const [Tab(text: 'Ingresos'), Tab(text: 'Mis gastos')],
+          tabs: const [Tab(text: 'Ingresos'), Tab(text: 'Fijos'), Tab(text: 'Variables')],
         ),
       ),
       body: _loading
@@ -102,6 +109,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               Expanded(child: TabBarView(controller: _tabs, children: [
                 Container(color: AppTheme.background, child: _buildTabIngreso()),
                 Container(color: AppTheme.background, child: _buildTabGastos()),
+                Container(color: AppTheme.background, child: _buildTabVariablesBase()),
               ])),
             ]),
     );
@@ -419,6 +427,163 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   }
 
   double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0;
+
+  // ── Tab Variables Base ────────────────────────────────────────────────────
+  Widget _buildTabVariablesBase() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Encabezado
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Gastos variables presupuestados',
+                style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+            const SizedBox(height: 4),
+            const Text('Supermercado, gasolina, medicinas… gastos esperados pero de monto variable.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 10),
+            Row(children: [
+              const Icon(Icons.account_balance_wallet, color: AppTheme.warning, size: 16),
+              const SizedBox(width: 6),
+              Text('Total estimado: \$${_totalVariablesMensual.toStringAsFixed(2)}/mes',
+                  style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700)),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        if (_variablesBase.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(children: [
+                const Icon(Icons.shopping_cart_outlined, color: AppTheme.textMuted, size: 48),
+                const SizedBox(height: 12),
+                const Text('Sin gastos variables base', style: TextStyle(color: AppTheme.textSecondary)),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: _agregarVariableBase,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Agregar primero'),
+                ),
+              ]),
+            ),
+          )
+        else ...[
+          ..._variablesBase.map((g) => _VariableBaseTile(
+            gasto: g,
+            onDelete: () async {
+              await GastosVariablesService.eliminar(widget.firebaseUid, g['id'] as int);
+              _cargar();
+            },
+          )),
+          const SizedBox(height: 12),
+        ],
+        ElevatedButton.icon(
+          onPressed: _agregarVariableBase,
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('Agregar gasto variable base'),
+          style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+        ),
+      ],
+    );
+  }
+
+  void _agregarVariableBase() {
+    final nombreCtrl  = TextEditingController();
+    final montoCtrl   = TextEditingController();
+    String categoria  = 'alimentacion';
+    String frecuencia = 'mensual';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(builder: (ctx, setModal) {
+        final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+        return Container(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+          decoration: const BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            const Text('Nuevo gasto variable base',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nombreCtrl,
+              decoration: const InputDecoration(labelText: 'Nombre (ej: Supermercado)'),
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: montoCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Monto estimado (\$)', prefixText: '\$ '),
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: categoria,
+              decoration: const InputDecoration(labelText: 'Categoría'),
+              dropdownColor: AppTheme.surfaceAlt,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              items: const [
+                DropdownMenuItem(value: 'alimentacion', child: Text('Alimentación')),
+                DropdownMenuItem(value: 'transporte',   child: Text('Transporte')),
+                DropdownMenuItem(value: 'salud',        child: Text('Salud')),
+                DropdownMenuItem(value: 'ocio',         child: Text('Ocio')),
+                DropdownMenuItem(value: 'ropa',         child: Text('Ropa')),
+                DropdownMenuItem(value: 'deportes',     child: Text('Deportes')),
+                DropdownMenuItem(value: 'tecnologia',   child: Text('Tecnología')),
+                DropdownMenuItem(value: 'familia',      child: Text('Familia')),
+                DropdownMenuItem(value: 'otro',         child: Text('Otro')),
+              ],
+              onChanged: (v) => setModal(() => categoria = v ?? categoria),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: frecuencia,
+              decoration: const InputDecoration(labelText: 'Frecuencia'),
+              dropdownColor: AppTheme.surfaceAlt,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              items: const [
+                DropdownMenuItem(value: 'mensual',   child: Text('Mensual')),
+                DropdownMenuItem(value: 'quincenal', child: Text('Quincenal')),
+                DropdownMenuItem(value: 'semanal',   child: Text('Semanal')),
+                DropdownMenuItem(value: 'anual',     child: Text('Anual')),
+              ],
+              onChanged: (v) => setModal(() => frecuencia = v ?? frecuencia),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (nombreCtrl.text.isEmpty || montoCtrl.text.isEmpty) return;
+                  final monto = double.tryParse(montoCtrl.text);
+                  if (monto == null) return;
+                  await GastosVariablesService.crear(
+                    uid: widget.firebaseUid, nombre: nombreCtrl.text.trim(),
+                    categoria: categoria, montoEstimado: monto, frecuencia: frecuencia,
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _cargar();
+                },
+                child: const Text('Guardar'),
+              ),
+            ),
+          ]),
+        );
+      }),
+    );
+  }
 }
 
 // ── Sección header ────────────────────────────────────────────────────────────
@@ -1271,4 +1436,63 @@ class _SwitchRow extends StatelessWidget {
       ),
     ]),
   );
+}
+
+// ── Tile de gasto variable base ───────────────────────────────────────────────
+class _VariableBaseTile extends StatelessWidget {
+  final Map<String, dynamic> gasto;
+  final VoidCallback onDelete;
+  const _VariableBaseTile({required this.gasto, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    final monto = double.tryParse(gasto['monto_estimado']?.toString() ?? '0') ?? 0;
+    final frec  = gasto['frecuencia'] as String? ?? 'mensual';
+    final frecLabel = frec == 'quincenal' ? 'quincenal' : frec == 'semanal' ? 'semanal'
+        : frec == 'anual' ? 'anual' : 'mes';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.12), shape: BoxShape.circle),
+          child: const Icon(Icons.shopping_basket_outlined, color: AppTheme.warning, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(gasto['nombre'] as String? ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(gasto['categoria'] as String? ?? '', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('\$${monto.toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+          Text('/$frecLabel', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+        ]),
+        const SizedBox(width: 8),
+        IconButton(
+          icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+          onPressed: () => showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              backgroundColor: AppTheme.surface,
+              title: const Text('Eliminar', style: TextStyle(color: AppTheme.textPrimary)),
+              content: Text('¿Eliminar "${gasto['nombre']}"?', style: const TextStyle(color: AppTheme.textSecondary)),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                TextButton(onPressed: () { Navigator.pop(context); onDelete(); },
+                    child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
+              ],
+            ),
+          ),
+          constraints: const BoxConstraints(),
+          padding: EdgeInsets.zero,
+        ),
+      ]),
+    );
+  }
 }
