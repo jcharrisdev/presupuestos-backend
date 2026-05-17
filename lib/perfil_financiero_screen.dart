@@ -43,24 +43,22 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
     setState(() => _loading = true);
     // Sincronizar deudas del perfil sin deuda_id antes de cargar
     await UserProfileService.syncDeudas(widget.firebaseUid);
-    final results = await Future.wait([
-      UserProfileService.getIncome(widget.firebaseUid),
-      UserProfileService.getGastosFijos(widget.firebaseUid),
-      UserProfileService.getAhorrosActivos(widget.firebaseUid),
-      GastosVariablesService.getAll(widget.firebaseUid),
-    ]);
+    // Cargar cada fuente por separado para no fallar toda la pantalla si una falla
+    final income = await UserProfileService.getIncome(widget.firebaseUid);
+    final gfData = await UserProfileService.getGastosFijos(widget.firebaseUid);
+    final ahData = await UserProfileService.getAhorrosActivos(widget.firebaseUid);
+    Map<String, dynamic> varData = {'gastos': [], 'total_mensual': 0};
+    try {
+      varData = await GastosVariablesService.getAll(widget.firebaseUid);
+    } catch (_) {}
     if (!mounted) return;
-    final income = results[0] as Map<String, dynamic>?;
-    final gfData = results[1] as Map<String, dynamic>;
-    final ahData = results[2] as Map<String, dynamic>;
-    final varData = results[3] as Map<String, dynamic>;
     setState(() {
       _income = income;
-      _gastos = gfData['gastos'] as List? ?? [];
+      _gastos = (gfData['gastos'] as List?) ?? [];
       _totalMensual = _d(gfData['total_mensual']);
-      _ahorros = ahData['ahorros'] as List? ?? [];
+      _ahorros = (ahData['ahorros'] as List?) ?? [];
       _totalAhorrosMensual = _d(ahData['total_cuota_mensual']);
-      _variablesBase = varData['gastos'] as List? ?? [];
+      _variablesBase = (varData['gastos'] as List?) ?? [];
       _totalVariablesMensual = _d(varData['total_mensual']);
       _loading = false;
     });

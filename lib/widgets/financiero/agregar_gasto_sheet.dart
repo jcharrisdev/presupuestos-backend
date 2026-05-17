@@ -28,9 +28,21 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
 
   String _tipo      = 'variable';
   String _categoria = 'alimentacion';
-  DateTime _fecha   = DateTime.now();
+  late DateTime _fecha;
   bool _guardando   = false;
   bool _guardarComoBase = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializar fecha dentro del mes visualizado para evitar crash del DatePicker
+    final now = DateTime.now();
+    if (widget.anio == now.year && widget.mes == now.month) {
+      _fecha = now;
+    } else {
+      _fecha = DateTime(widget.anio, widget.mes, 1);
+    }
+  }
 
   static const _tipos = [
     {'value': 'fijo',             'label': 'Gasto fijo',             'icon': Icons.lock_clock,          'color': AppTheme.colorFijo},
@@ -56,7 +68,9 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
 
   @override
   void dispose() {
-    _nombre.dispose(); _monto.dispose(); _notas.dispose();
+    _nombre.dispose();
+    _monto.dispose();
+    _notas.dispose();
     super.dispose();
   }
 

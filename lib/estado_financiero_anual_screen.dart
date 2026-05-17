@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'mes_detalle_screen.dart';
+import 'perfil_financiero_screen.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -16,6 +17,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   Map<String, dynamic>? _data;
   bool _loading = true;
   String? _error;
+  bool _sinPerfil = false;
   bool _mesesExpanded = false;
   int _alertasCount = 0;
 
@@ -29,7 +31,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   }
 
   Future<void> _cargar() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() { _loading = true; _error = null; _sinPerfil = false; });
     try {
       final data = await EstadoAnualService.getEstadoAnual(widget.firebaseUid, _anio);
       if (!(data['existe'] as bool)) {
@@ -39,11 +41,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           final nuevo = await EstadoAnualService.getEstadoAnual(widget.firebaseUid, _anio);
           setState(() { _data = nuevo; _loading = false; });
         } catch (e) {
-          // Si falla (sin income), mostrar mensaje amigable de onboarding
-          setState(() {
-            _error = 'Primero configura tu ingreso en "Mi Perfil Financiero" para generar tu estado anual.';
-            _loading = false;
-          });
+          setState(() { _sinPerfil = true; _loading = false; });
           return;
         }
       } else {
@@ -75,11 +73,40 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError()
-              : RefreshIndicator(onRefresh: _cargar, child: _buildBody()),
+          : _sinPerfil
+              ? _buildSinPerfil()
+              : _error != null
+                  ? _buildError()
+                  : RefreshIndicator(onRefresh: _cargar, child: _buildBody()),
     );
   }
+
+  Widget _buildSinPerfil() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.person_outline, color: AppTheme.primary, size: 64),
+        const SizedBox(height: 16),
+        const Text('Configura tu perfil primero',
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        const Text(
+          'Para generar tu estado financiero anual necesitas registrar tu ingreso y tus gastos fijos.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.arrow_forward, size: 16),
+          label: const Text('Ir a Mi Perfil Financiero'),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => PerfilFinancieroScreen(firebaseUid: widget.firebaseUid)),
+          ).then((_) => _cargar()),
+        ),
+      ]),
+    ),
+  );
 
   Widget _buildError() => Center(
     child: Padding(
@@ -195,6 +222,7 @@ class _CardAnual extends StatelessWidget {
           ]),
           const SizedBox(height: 20),
           Row(children: [
+            const Expanded(flex: 1, child: SizedBox()),
             Expanded(child: _Col('Estimado', color: AppTheme.textSecondary)),
             Expanded(child: _Col('Real', color: AppTheme.primary)),
           ]),

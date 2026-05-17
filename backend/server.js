@@ -1030,7 +1030,6 @@ app.delete('/user/data', async (req, res) => {
     await db.execute(`DELETE FROM subcategorias WHERE firebase_uid = ?`, [firebase_uid]);
     await db.execute(`DELETE FROM alertas_financieras WHERE firebase_uid = ?`, [firebase_uid]);
     await db.execute(`DELETE FROM gastos_globales WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM deudas WHERE firebase_uid = ?`, [firebase_uid]);
     res.json({ success: true, message: 'Todos los datos del usuario eliminados' });
   } catch (e) {
     console.error(e);
