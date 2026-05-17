@@ -936,26 +936,29 @@ app.get('/user/gastos-fijos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Helper: genera eventos de calendario para un gasto del perfil con recordatorio
-async function _generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, diaPago) {
+// Helper: genera eventos de calendario para un gasto del perfil con recordatorio.
+// Si diaPago2 está definido, genera un segundo evento por mes (quincenas).
+async function _generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, diaPago, diaPago2) {
   const today = new Date();
   let generados = 0;
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const diasEnMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    const dia = Math.min(diaPago, diasEnMes);
-    const fecha = new Date(d.getFullYear(), d.getMonth(), dia);
-    const fechaStr = fecha.toISOString().split('T')[0];
-    // Fechas ya pasadas se insertan como vencidas para mantener historial visible
-    const estado = fecha < today ? 'vencido' : 'pendiente';
-    await db.execute(
-      `INSERT INTO calendario_eventos
-         (firebase_uid, user_gasto_fijo_id, titulo, tipo, fecha_evento,
-          monto_esperado, estado, notificacion_activa, dias_anticipacion)
-       VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 2)`,
-      [firebase_uid, ugfId, titulo, fechaStr, monto, estado]
-    );
-    generados++;
+  const dias = [diaPago, diaPago2].filter(Boolean);
+  for (const diaNum of dias) {
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const diasEnMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const dia = Math.min(diaNum, diasEnMes);
+      const fecha = new Date(d.getFullYear(), d.getMonth(), dia);
+      const fechaStr = fecha.toISOString().split('T')[0];
+      const estado = fecha < today ? 'vencido' : 'pendiente';
+      await db.execute(
+        `INSERT INTO calendario_eventos
+           (firebase_uid, user_gasto_fijo_id, titulo, tipo, fecha_evento,
+            monto_esperado, estado, notificacion_activa, dias_anticipacion)
+         VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 2)`,
+        [firebase_uid, ugfId, titulo, fechaStr, monto, estado]
+      );
+      generados++;
+    }
   }
   return generados;
 }
@@ -965,17 +968,17 @@ async function _generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, di
 app.post('/user/gastos-fijos', async (req, res) => {
   const { firebase_uid, descripcion, monto_mensual, tipo = 'otro',
     clasificacion = 'importante', es_deuda = 0, subcategoria, notas,
-    frecuencia = 'fijo', dia_pago = null, recordatorio = 0 } = req.body;
+    frecuencia = 'fijo', dia_pago = null, dia_pago_2 = null, recordatorio = 0 } = req.body;
   if (!firebase_uid || !descripcion || monto_mensual == null)
     return res.status(400).json({ error: 'firebase_uid, descripcion y monto_mensual requeridos' });
   try {
     const [result] = await db.execute(
       `INSERT INTO user_gastos_fijos
          (firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
-          subcategoria, notas, frecuencia, dia_pago, recordatorio)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          subcategoria, notas, frecuencia, dia_pago, dia_pago_2, recordatorio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
-       subcategoria || null, notas || null, frecuencia, dia_pago || null, recordatorio]
+       subcategoria || null, notas || null, frecuencia, dia_pago || null, dia_pago_2 || null, recordatorio]
     );
     const ugfId = result.insertId;
 
@@ -995,7 +998,7 @@ app.post('/user/gastos-fijos', async (req, res) => {
     }
 
     if (dia_pago) {
-      await _generarEventosPerfilGasto(firebase_uid, ugfId, descripcion, monto_mensual, dia_pago);
+      await _generarEventosPerfilGasto(firebase_uid, ugfId, descripcion, monto_mensual, dia_pago, dia_pago_2 || null);
     }
     const [[created]] = await db.execute(
       `SELECT ugf.*, CASE WHEN ugf.deuda_id IS NOT NULL AND d.monto_pendiente IS NOT NULL
@@ -1014,7 +1017,7 @@ app.post('/user/gastos-fijos', async (req, res) => {
 app.put('/user/gastos-fijos/:id', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
-    activo, subcategoria, notas, frecuencia, dia_pago, recordatorio } = req.body;
+    activo, subcategoria, notas, frecuencia, dia_pago, dia_pago_2, recordatorio } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[existing]] = await db.execute(
@@ -1037,12 +1040,14 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
          notas         = COALESCE(?, notas),
          frecuencia    = COALESCE(?, frecuencia),
          dia_pago      = ?,
+         dia_pago_2    = ?,
          recordatorio  = COALESCE(?, recordatorio),
          updated_at    = NOW()
        WHERE id = ?`,
       [descripcion ?? null, monto_mensual ?? null, tipo ?? null, clasificacion ?? null,
        es_deuda ?? null, activo ?? null, subcategoria ?? null, notas ?? null,
        frecuencia ?? null, dia_pago ?? existing.dia_pago ?? null,
+       dia_pago_2 !== undefined ? (dia_pago_2 ?? null) : (existing.dia_pago_2 ?? null),
        recordatorio ?? null, id]
     );
 
@@ -1073,12 +1078,13 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
     }
 
     // Regenerar eventos de calendario
-    const nuevoDiaPago = dia_pago ?? existing.dia_pago;
+    const nuevoDiaPago  = dia_pago   ?? existing.dia_pago;
+    const nuevoDiaPago2 = dia_pago_2 !== undefined ? (dia_pago_2 ?? null) : (existing.dia_pago_2 ?? null);
     await db.execute(
-      `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
+      `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado IN ('pendiente', 'vencido')`, [id]
     );
     if (nuevoDiaPago) {
-      await _generarEventosPerfilGasto(firebase_uid, id, nuevoTitulo, nuevoMonto, nuevoDiaPago);
+      await _generarEventosPerfilGasto(firebase_uid, id, nuevoTitulo, nuevoMonto, nuevoDiaPago, nuevoDiaPago2);
     }
 
     const [[updated]] = await db.execute(
@@ -1108,7 +1114,7 @@ app.delete('/user/gastos-fijos/:id', async (req, res) => {
       await db.execute(`UPDATE deudas SET activa = 0 WHERE id = ?`, [ugf.deuda_id]);
     }
     await db.execute(
-      `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado = 'pendiente'`, [id]
+      `DELETE FROM calendario_eventos WHERE user_gasto_fijo_id = ? AND estado IN ('pendiente', 'vencido')`, [id]
     );
     await db.execute(
       `DELETE FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
@@ -8607,7 +8613,12 @@ async function _recalcularEstimadosAnio(firebase_uid, anio) {
   const ingresoMensual    = Number(income.ingreso_neto_mensual);
   const totalFijosMensual = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0)
                           + deudasIndep.reduce((s, d) => s + Number(d.pago_minimo || d.cuota_fija || 0), 0);
-  const totalVarAnual     = variablesBase.reduce((s, g) => s + _montoMensual(g), 0) * 12;
+  const totalVarAnual     = variablesBase.reduce((s, g) => {
+    const arr = g.aplica_meses
+      ? (typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses)
+      : [1,2,3,4,5,6,7,8,9,10,11,12];
+    return s + _montoMensual(g) * arr.length;
+  }, 0);
 
   // Actualizar estado_financiero_anual
   await db.execute(
