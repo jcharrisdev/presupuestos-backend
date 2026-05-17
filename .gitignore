@@ -34,6 +34,7 @@ linux/flutter/ephemeral/
 .idea/
 *.iml
 
-# Build outputs
-build/
+# Build outputs — excluir todo menos build/web (necesario para Vercel deploy)
+build/*
+!build/web
 android/app/.cxx/
