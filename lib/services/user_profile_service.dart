@@ -35,19 +35,18 @@ class UserProfileService {
     } catch (_) { return {'gastos': [], 'total_mensual': 0}; }
   }
 
-  static Future<Map<String, dynamic>?> crearGastoFijo(String uid, Map<String, dynamic> body) async {
-    try {
-      final res = await ApiClient.post('/user/gastos-fijos', {'firebase_uid': uid, ...body});
-      if (res.statusCode == 201) return json.decode(res.body) as Map<String, dynamic>;
-      return null;
-    } catch (_) { return null; }
+  static Future<Map<String, dynamic>> crearGastoFijo(String uid, Map<String, dynamic> body) async {
+    final res = await ApiClient.post('/user/gastos-fijos', {'firebase_uid': uid, ...body});
+    if (res.statusCode == 201) return json.decode(res.body) as Map<String, dynamic>;
+    final errorMsg = json.decode(res.body)['error'] ?? 'Error ${res.statusCode}';
+    throw Exception(errorMsg);
   }
 
   static Future<bool> actualizarGastoFijo(int id, String uid, Map<String, dynamic> body) async {
-    try {
-      final res = await ApiClient.put('/user/gastos-fijos/$id', {'firebase_uid': uid, ...body});
-      return res.statusCode == 200;
-    } catch (_) { return false; }
+    final res = await ApiClient.put('/user/gastos-fijos/$id', {'firebase_uid': uid, ...body});
+    if (res.statusCode == 200) return true;
+    final errorMsg = json.decode(res.body)['error'] ?? 'Error ${res.statusCode}';
+    throw Exception(errorMsg);
   }
 
   static Future<bool> eliminarGastoFijo(int id, String uid) async {

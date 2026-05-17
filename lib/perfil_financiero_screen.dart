@@ -1227,31 +1227,18 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
     };
     try {
       if (widget.gastoActual != null) {
-        final res = await UserProfileService.actualizarGastoFijo(
+        await UserProfileService.actualizarGastoFijo(
             widget.gastoActual!['id'] as int, widget.firebaseUid, body);
-        if (!res && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Error al guardar. Intenta de nuevo.'),
-                  backgroundColor: AppTheme.danger));
-          setState(() => _guardando = false);
-          return;
-        }
       } else {
-        final result = await UserProfileService.crearGastoFijo(widget.firebaseUid, body);
-        if (result == null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Error al crear el gasto. Intenta de nuevo.'),
-                  backgroundColor: AppTheme.danger));
-          setState(() => _guardando = false);
-          return;
-        }
+        await UserProfileService.crearGastoFijo(widget.firebaseUid, body);
       }
       if (mounted) widget.onGuardado();
     } catch (e) {
       if (mounted) {
         setState(() => _guardando = false);
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger));
+            SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')),
+                backgroundColor: AppTheme.danger, duration: const Duration(seconds: 6)));
       }
     }
   }
