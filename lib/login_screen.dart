@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'main_menu.dart';
@@ -17,24 +18,33 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
+  final _emailCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  void _navegarConUid(String email, {String? displayName}) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MainMenu(
+          firebaseUid: email.trim().toLowerCase(),
+          displayName: displayName,
+          photoUrl: null,
+        ),
+      ),
+    );
+  }
 
   Future<void> _signInWithGoogle() async {
     setState(() => _loading = true);
     try {
       final account = await AuthService.signIn();
       if (!mounted) return;
-      if (account != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MainMenu(
-              firebaseUid: account.email,
-              displayName: account.displayName,
-              photoUrl: account.photoUrl,
-            ),
-          ),
-        );
-      }
+      if (account != null) _navegarConUid(account.email, displayName: account.displayName);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -43,6 +53,17 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _signInWithEmail() {
+    final email = _emailCtrl.text.trim().toLowerCase();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un email válido')),
+      );
+      return;
+    }
+    _navegarConUid(email);
   }
 
   @override
@@ -78,22 +99,67 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 64),
 
-                // ── BOTÓN GOOGLE SIGN-IN ───────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-                      : _GoogleSignInButton(onPressed: _signInWithGoogle),
-                ),
-
-                const SizedBox(height: 24),
-
-                Text(
-                  'Usa tu cuenta de Gmail para acceder',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
-                  textAlign: TextAlign.center,
-                ),
+                if (_loading)
+                  const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+                else if (kIsWeb)
+                  // ── WEB: campo de email ────────────────────────────────────
+                  Column(children: [
+                    TextField(
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      autofocus: true,
+                      style: const TextStyle(color: AppTheme.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Tu email de Gmail',
+                        hintText: 'ejemplo@gmail.com',
+                        prefixIcon: const Icon(Icons.email_outlined,
+                            color: AppTheme.textSecondary),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: AppTheme.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: AppTheme.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+                        ),
+                      ),
+                      onSubmitted: (_) => _signInWithEmail(),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _signInWithEmail,
+                        child: const Text('Entrar', style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Usa el mismo email con el que iniciaste sesión en la app móvil',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ])
+                else
+                  // ── MÓVIL: Google Sign-In ──────────────────────────────────
+                  Column(children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: _GoogleSignInButton(onPressed: _signInWithGoogle),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Usa tu cuenta de Gmail para acceder',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ]),
               ],
             ),
           ),
