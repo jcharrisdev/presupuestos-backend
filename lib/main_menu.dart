@@ -13,6 +13,7 @@ import 'invoice_scanner/invoice_history_screen.dart';
 import 'deudas/deudas_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'estado_financiero_anual_screen.dart';
+import 'debug_logs_screen.dart';
 
 class MainMenu extends StatelessWidget {
   final String firebaseUid;
@@ -223,6 +224,33 @@ class MainMenu extends StatelessWidget {
                   const Text('Clever Cloud · MySQL',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                 ]),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const DebugLogsScreen(),
+                )),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.bug_report_outlined, color: AppTheme.textMuted, size: 18),
+                    SizedBox(width: 10),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Logs del servidor',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                      Text('Ver errores recientes del backend',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    ])),
+                    Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 16),
+                  ]),
+                ),
               ),
             ],
           ),

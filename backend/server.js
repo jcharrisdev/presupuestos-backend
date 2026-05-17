@@ -401,11 +401,93 @@ pool.getConnection(async (err, conn) => {
     try { await db.execute(sql); } catch (_) { /* columna ya existe */ }
   }
   console.log('✅ Migración ALTER deudas / user_gastos_fijos OK');
+
+  // Migración: tabla de logs del servidor para diagnóstico de errores
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS server_logs (
+      id           INT AUTO_INCREMENT PRIMARY KEY,
+      nivel        ENUM('error','warn','info') DEFAULT 'error',
+      ruta         VARCHAR(255),
+      firebase_uid VARCHAR(255),
+      mensaje      TEXT,
+      stack        LONGTEXT,
+      req_body     LONGTEXT,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_sl_time (created_at),
+      KEY idx_sl_uid  (firebase_uid),
+      KEY idx_sl_nivel (nivel)
+    )`);
+    console.log('✅ Migración server_logs OK');
+  } catch (e) {
+    console.error('⚠️ Migración server_logs:', e.message);
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
 const db = pool.promise();
 
+// =============================================================================
+// SISTEMA DE LOGGING — guarda errores en server_logs para diagnóstico remoto
+// =============================================================================
+const LOG_SECRET = 'salarying_logs_2025';
+
+async function _logError(ruta, error, uid = '-', reqBody = null) {
+  try {
+    const bodyStr = reqBody ? JSON.stringify(reqBody).substring(0, 1000) : null;
+    await db.execute(
+      `INSERT INTO server_logs (nivel, ruta, firebase_uid, mensaje, stack, req_body)
+       VALUES ('error', ?, ?, ?, ?, ?)`,
+      [ruta, uid, error?.message || String(error),
+       error?.stack?.substring(0, 2000) || null, bodyStr]
+    );
+  } catch (_) {} // silencioso — no recursión si la DB falla
+}
+
+// Middleware que intercepta automáticamente todas las respuestas 5xx
+// y las guarda en server_logs sin modificar ningún endpoint existente.
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (res.statusCode >= 500 && data?.error) {
+      const uid = req.body?.firebase_uid || req.query?.firebase_uid || '-';
+      const safeBody = { ...req.body };
+      delete safeBody.firebase_uid; // no loguear uid completa en body
+      _logError(req.path, { message: data.error, stack: null }, uid, safeBody);
+    }
+    return originalJson(data);
+  };
+  next();
+});
+
+// GET /logs — devuelve los últimos errores del servidor (protegido por secret)
+app.get('/logs', async (req, res) => {
+  const { secret, limit = 50, nivel, uid, desde } = req.query;
+  if (secret !== LOG_SECRET)
+    return res.status(401).json({ error: 'Acceso denegado' });
+  try {
+    let sql = `SELECT id, nivel, ruta, firebase_uid, mensaje, stack, req_body, created_at
+               FROM server_logs WHERE 1=1`;
+    const params = [];
+    if (nivel) { sql += ` AND nivel = ?`; params.push(nivel); }
+    if (uid)   { sql += ` AND firebase_uid LIKE ?`; params.push(`%${uid}%`); }
+    if (desde) { sql += ` AND created_at >= ?`; params.push(desde); }
+    sql += ` ORDER BY created_at DESC LIMIT ?`;
+    params.push(Number(limit));
+    const [rows] = await db.execute(sql, params);
+    const [[{ total }]] = await db.execute(`SELECT COUNT(*) AS total FROM server_logs`);
+    res.json({ total, mostrados: rows.length, logs: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /logs — limpia los logs (protegido por secret)
+app.delete('/logs', async (req, res) => {
+  const { secret } = req.query;
+  if (secret !== LOG_SECRET) return res.status(401).json({ error: 'Acceso denegado' });
+  try {
+    await db.execute(`DELETE FROM server_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`);
+    res.json({ ok: true, mensaje: 'Logs de más de 7 días eliminados' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // =============================================================================
 // LÓGICA DE PERÍODOS
