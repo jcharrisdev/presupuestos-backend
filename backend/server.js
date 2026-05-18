@@ -476,6 +476,16 @@ pool.getConnection(async (err, conn) => {
     console.error('⚠️ Migración eventos_presupuesto:', e.message);
   }
 
+  // Migración: shared_expense_id en registros_gasto para vincular gastos compartidos con estado financiero
+  try {
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN shared_expense_id INT DEFAULT NULL`);
+    console.log('✅ Migración shared_expense_id en registros_gasto OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración shared_expense_id:', e.message);
+    }
+  }
+
   // Migración: roles en presupuesto compartido (Sprint 8)
   try {
     // ENUM ampliado: creador | admin | participante | lectura (owner queda como alias legacy)
@@ -483,6 +493,8 @@ pool.getConnection(async (err, conn) => {
       MODIFY COLUMN rol ENUM('owner','creador','admin','participante','lectura') NOT NULL DEFAULT 'participante'`);
     // owner existente → creador
     await db.execute(`UPDATE shared_budget_members SET rol = 'creador' WHERE rol = 'owner'`);
+    // member / vacío / inválido → participante (fix Sprint 8: el ENUM nuevo no incluye 'member')
+    await db.execute(`UPDATE shared_budget_members SET rol = 'participante' WHERE rol NOT IN ('owner','creador','admin','participante','lectura') OR rol = '' OR rol IS NULL`);
     // rol_invitado en invitaciones para que el owner elija el rol al invitar
     await db.execute(`ALTER TABLE shared_budget_invitations
       ADD COLUMN rol_invitado ENUM('admin','participante','lectura') NOT NULL DEFAULT 'participante'`);
@@ -4886,6 +4898,7 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
       [id, descripcion, monto, pagado_por, regla_override || null, es_personal ? 1 : 0, firebase_uid_personal || null, fecha]
     );
     const expenseId = r.insertId;
+    let payerSplitMonto = null;
     if (!es_personal) {
       const [members] = await conn.execute(
         `SELECT firebase_uid, porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ?`, [id]
@@ -4897,8 +4910,35 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
           `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
           [expenseId, sp.firebase_uid, sp.monto_responsabilidad]
         );
+        // El pagador ya pagó su parte al crear el gasto — registrar en su estado financiero
+        if (sp.firebase_uid === pagado_por) payerSplitMonto = sp.monto_responsabilidad;
       }
+    } else {
+      // Gasto personal: el monto completo es del creador
+      payerSplitMonto = parseFloat(monto);
     }
+
+    // Integración financiera: crear registros_gasto para el pagador en su mes activo
+    if (payerSplitMonto != null && payerSplitMonto > 0) {
+      try {
+        const hoy = new Date();
+        const anioHoy = hoy.getFullYear();
+        const mesHoy = hoy.getMonth() + 1;
+        const [[mesRow]] = await conn.execute(
+          `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ? AND estado = 'activo'`,
+          [pagado_por, anioHoy, mesHoy]
+        );
+        if (mesRow) {
+          await conn.execute(
+            `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, shared_expense_id)
+             VALUES (?, ?, ?, ?, 'no_presupuestado', 'Compartido', ?, ?, ?, 1, ?)`,
+            [pagado_por, mesRow.id, anioHoy, mesHoy, descripcion, payerSplitMonto, fecha, expenseId]
+          );
+          _actualizarTotalesMes(mesRow.id, pagado_por).catch(() => {});
+        }
+      } catch (_) { /* fire-and-forget — no bloquear el commit */ }
+    }
+
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
        VALUES (?, ?, 'crear_gasto', ?)`,
@@ -5014,6 +5054,18 @@ app.delete('/shared-expenses/:expenseId', async (req, res) => {
       [firebase_uid, expenseId]
     );
     if (!expense) return res.status(403).json({ error: 'No autorizado' });
+
+    // Limpiar registros_gasto vinculados antes de borrar el gasto compartido
+    try {
+      const [afectados] = await db.execute(
+        `SELECT DISTINCT firebase_uid, mes_id FROM registros_gasto WHERE shared_expense_id = ?`, [expenseId]
+      );
+      await db.execute(`DELETE FROM registros_gasto WHERE shared_expense_id = ?`, [expenseId]);
+      for (const a of afectados) {
+        _actualizarTotalesMes(a.mes_id, a.firebase_uid).catch(() => {});
+      }
+    } catch (_) { /* fire-and-forget */ }
+
     await db.execute(`DELETE FROM shared_expenses WHERE id = ?`, [expenseId]);
     res.json({ message: 'Eliminado' });
   } catch (err) {
@@ -5028,17 +5080,50 @@ app.post('/shared-expenses/:expenseId/confirm-payment', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[split]] = await db.execute(
-      `SELECT ses.id FROM shared_expense_splits ses
+      `SELECT ses.id, ses.monto_responsabilidad, ses.pagado,
+              se.descripcion, se.fecha
+       FROM shared_expense_splits ses
        JOIN shared_expenses se ON se.id = ses.expense_id
        JOIN shared_budget_members m ON m.shared_budget_id = se.shared_budget_id AND m.firebase_uid = ?
        WHERE ses.expense_id = ? AND ses.firebase_uid = ?`,
       [firebase_uid, expenseId, firebase_uid]
     );
     if (!split) return res.status(403).json({ error: 'No autorizado o split no encontrado' });
+    // Evitar doble pago
+    if (split.pagado === 1) return res.json({ message: 'Ya confirmado' });
+
     await db.execute(
       `UPDATE shared_expense_splits SET pagado = 1 WHERE expense_id = ? AND firebase_uid = ?`,
       [expenseId, firebase_uid]
     );
+
+    // Integración financiera: registrar en estado financiero del confirmante
+    try {
+      const hoy = new Date();
+      const anioHoy = hoy.getFullYear();
+      const mesHoy = hoy.getMonth() + 1;
+      const [[mesRow]] = await db.execute(
+        `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ? AND estado = 'activo'`,
+        [firebase_uid, anioHoy, mesHoy]
+      );
+      if (mesRow) {
+        // Verificar que no exista ya un registro para este split (evitar duplicado)
+        const [[existing]] = await db.execute(
+          `SELECT id FROM registros_gasto WHERE firebase_uid = ? AND shared_expense_id = ?`,
+          [firebase_uid, expenseId]
+        );
+        if (!existing) {
+          await db.execute(
+            `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, shared_expense_id)
+             VALUES (?, ?, ?, ?, 'no_presupuestado', 'Compartido', ?, ?, ?, 1, ?)`,
+            [firebase_uid, mesRow.id, anioHoy, mesHoy, split.descripcion,
+             Number(split.monto_responsabilidad), split.fecha || hoy.toISOString().split('T')[0], expenseId]
+          );
+          _actualizarTotalesMes(mesRow.id, firebase_uid).catch(() => {});
+        }
+      }
+    } catch (_) { /* fire-and-forget */ }
+
     res.json({ message: 'Pago confirmado' });
   } catch (err) {
     res.status(500).json({ error: err.message });

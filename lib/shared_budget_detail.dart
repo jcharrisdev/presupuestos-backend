@@ -757,6 +757,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
 
   void _showGestionarMiembros() {
     final members = List<dynamic>.from(_budget?['members'] ?? []);
+    final emailCtrl = TextEditingController();
+    String rolNuevoInvitado = 'participante';
+    bool invitando = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -765,82 +769,157 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       builder: (ctx) => StatefulBuilder(builder: (ctx, setM) {
         return Padding(
           padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Center(child: Container(width: 36, height: 4,
-                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-            const Text('Gestionar miembros',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            const Text('Cambia el rol de cada participante.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            const SizedBox(height: 16),
-            ...members.map((m) {
-              final uid = m['firebase_uid'] as String;
-              final rol = (m['rol'] as String?) ?? 'participante';
-              final esMismo = uid == widget.firebaseUid;
-              final esCreadorMiembro = rol == 'creador' || rol == 'owner';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(_shortUid(uid),
-                        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-                    if (esMismo)
-                      const Text('(tú)', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                  ])),
-                  if (esCreadorMiembro || esMismo)
-                    _rolChip(rol)
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: rol,
-                          dropdownColor: AppTheme.surface,
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                          items: const [
-                            DropdownMenuItem(value: 'admin', child: Text('admin')),
-                            DropdownMenuItem(value: 'participante', child: Text('participante')),
-                            DropdownMenuItem(value: 'lectura', child: Text('lectura')),
-                          ],
-                          onChanged: _esCreador
-                              ? (nuevoRol) async {
-                                  if (nuevoRol == null || nuevoRol == rol) return;
-                                  final ok = await SharedBudgetService.changeRole(
-                                      widget.budgetId, uid, widget.firebaseUid, nuevoRol);
-                                  if (ok) {
-                                    setM(() => m['rol'] = nuevoRol);
-                                    _recargar();
-                                  } else if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Error al cambiar el rol')));
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              const Text('Gestionar miembros',
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              const Text('Cambia roles o invita a alguien nuevo.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              const SizedBox(height: 16),
+              // ── Lista de miembros actuales ──────────────────────────
+              ...members.map((m) {
+                final uid = m['firebase_uid'] as String;
+                final rol = (m['rol'] as String?) ?? 'participante';
+                final esMismo = uid == widget.firebaseUid;
+                final esCreadorMiembro = rol == 'creador' || rol == 'owner';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(_shortUid(uid),
+                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                      if (esMismo)
+                        const Text('(tú)', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    ])),
+                    if (esCreadorMiembro || esMismo)
+                      _rolChip(rol)
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: rol,
+                            dropdownColor: AppTheme.surface,
+                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                            items: const [
+                              DropdownMenuItem(value: 'admin', child: Text('admin')),
+                              DropdownMenuItem(value: 'participante', child: Text('participante')),
+                              DropdownMenuItem(value: 'lectura', child: Text('lectura')),
+                            ],
+                            onChanged: _esCreador
+                                ? (nuevoRol) async {
+                                    if (nuevoRol == null || nuevoRol == rol) return;
+                                    final ok = await SharedBudgetService.changeRole(
+                                        widget.budgetId, uid, widget.firebaseUid, nuevoRol);
+                                    if (ok) {
+                                      setM(() => m['rol'] = nuevoRol);
+                                      _recargar();
+                                    } else if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Error al cambiar el rol')));
+                                    }
                                   }
-                                }
-                              : (nuevoRol) async {
-                                  // admin solo puede asignar participante/lectura
-                                  if (nuevoRol == null || nuevoRol == rol || nuevoRol == 'admin') return;
-                                  final ok = await SharedBudgetService.changeRole(
-                                      widget.budgetId, uid, widget.firebaseUid, nuevoRol);
-                                  if (ok) {
-                                    setM(() => m['rol'] = nuevoRol);
-                                    _recargar();
-                                  } else if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Error al cambiar el rol')));
-                                  }
-                                },
+                                : (nuevoRol) async {
+                                    if (nuevoRol == null || nuevoRol == rol || nuevoRol == 'admin') return;
+                                    final ok = await SharedBudgetService.changeRole(
+                                        widget.budgetId, uid, widget.firebaseUid, nuevoRol);
+                                    if (ok) {
+                                      setM(() => m['rol'] = nuevoRol);
+                                      _recargar();
+                                    } else if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Error al cambiar el rol')));
+                                    }
+                                  },
+                          ),
                         ),
                       ),
-                    ),
-                ]),
-              );
-            }),
-          ]),
+                  ]),
+                );
+              }),
+              // ── Invitar nuevo participante ──────────────────────────
+              const Divider(color: AppTheme.border, height: 28),
+              const Text('Invitar a alguien nuevo',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'correo@gmail.com',
+                  hintStyle: const TextStyle(color: AppTheme.textMuted),
+                  filled: true,
+                  fillColor: AppTheme.surfaceAlt,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: rolNuevoInvitado,
+                    isExpanded: true,
+                    dropdownColor: AppTheme.surface,
+                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                    items: const [
+                      DropdownMenuItem(value: 'admin',        child: Text('Admin — puede invitar y editar')),
+                      DropdownMenuItem(value: 'participante', child: Text('Participante — puede agregar gastos')),
+                      DropdownMenuItem(value: 'lectura',      child: Text('Solo lectura')),
+                    ],
+                    onChanged: (v) => setM(() => rolNuevoInvitado = v!),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: invitando
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.send_outlined, size: 18),
+                  label: const Text('Enviar invitación',
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: invitando ? null : () async {
+                    final email = emailCtrl.text.trim();
+                    if (email.isEmpty || !email.contains('@')) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ingresa un email válido')));
+                      return;
+                    }
+                    setM(() => invitando = true);
+                    final ok = await SharedBudgetService.invite(
+                        widget.budgetId, email, widget.firebaseUid,
+                        rolInvitado: rolNuevoInvitado);
+                    setM(() => invitando = false);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok ? 'Invitación enviada a $email' : 'Error al enviar la invitación'),
+                        backgroundColor: ok ? AppTheme.success : AppTheme.danger,
+                      ));
+                    }
+                  },
+                ),
+              ),
+            ]),
+          ),
         );
       }),
-    );
+    ).whenComplete(() => emailCtrl.dispose());
   }
 
   void _showEliminarDialog() {
