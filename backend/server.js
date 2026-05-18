@@ -4892,7 +4892,7 @@ app.patch('/shared-budgets/:id/members/:uid/rol', async (req, res) => {
 // POST /shared-budgets/:id/expenses
 app.post('/shared-budgets/:id/expenses', async (req, res) => {
   const { id } = req.params;
-  const { descripcion, monto, pagado_por, regla_override, es_personal, firebase_uid_personal, fecha, firebase_uid } = req.body;
+  const { descripcion, monto, pagado_por, regla_override, es_personal, firebase_uid_personal, fecha, firebase_uid, ya_pagado } = req.body;
   if (!descripcion || monto == null || !pagado_por || !fecha || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   // lectura no puede agregar gastos
   if (!(await _hasSharedRole(id, firebase_uid, 'participante'))) {
@@ -4927,9 +4927,38 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
         );
       }
     }
-    // Nota: NO se marca pagado ni se crea registros_gasto al crear el gasto.
-    // El impacto financiero ocurre solo cuando el usuario confirma su pago explícitamente
-    // mediante POST /shared-expenses/:id/confirm-payment.
+    // Si ya_pagado=true: confirmar el split del pagador y registrar en su estado financiero
+    if (ya_pagado && pagado_por) {
+      try {
+        await conn.execute(
+          `UPDATE shared_expense_splits SET pagado=1 WHERE expense_id=? AND firebase_uid=?`,
+          [expenseId, pagado_por]
+        );
+        const hoy = new Date();
+        const anioHoy = hoy.getFullYear();
+        const mesHoy = hoy.getMonth() + 1;
+        const [[mesRow]] = await conn.execute(
+          `SELECT id FROM meses_financieros WHERE firebase_uid=? AND anio=? AND mes=? AND estado='activo'`,
+          [pagado_por, anioHoy, mesHoy]
+        );
+        if (mesRow) {
+          // Calcular el monto del split del pagador
+          const [[payerSplit]] = await conn.execute(
+            `SELECT monto_responsabilidad FROM shared_expense_splits WHERE expense_id=? AND firebase_uid=?`,
+            [expenseId, pagado_por]
+          );
+          const montoRegistro = es_personal ? parseFloat(monto) : (payerSplit ? Number(payerSplit.monto_responsabilidad) : parseFloat(monto));
+          if (montoRegistro > 0) {
+            await conn.execute(
+              `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, shared_expense_id)
+               VALUES (?, ?, ?, ?, 'no_presupuestado', 'Compartido', ?, ?, ?, 1, ?)`,
+              [pagado_por, mesRow.id, anioHoy, mesHoy, descripcion, montoRegistro, fecha, expenseId]
+            );
+            _actualizarTotalesMes(mesRow.id, pagado_por).catch(() => {});
+          }
+        }
+      } catch (_) { /* fire-and-forget */ }
+    }
 
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)

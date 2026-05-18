@@ -1087,6 +1087,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
     final montoCtrl = TextEditingController();
     String pagadoPor = widget.firebaseUid;
     bool esPersonal = false;
+    bool yaPagado = false;
     DateTime fecha = DateTime.now();
     final otroUid = _otroUid();
 
@@ -1129,13 +1130,45 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               ),
               const SizedBox(height: 10),
             ],
+            // Toggle: ¿ya se pagó? — para tracking en tiempo real vs planificación
+            if (!esPersonal) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: yaPagado ? AppTheme.success.withValues(alpha: 0.1) : AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: yaPagado ? AppTheme.success.withValues(alpha: 0.4) : Colors.transparent),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(
+                      yaPagado ? '¿Ya se pagó? Sí' : '¿Ya se pagó? No (planeado)',
+                      style: TextStyle(
+                        color: yaPagado ? AppTheme.success : AppTheme.textSecondary,
+                        fontSize: 13, fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      yaPagado ? 'Se confirma el pago del pagador al guardar' : 'Nadie paga aún — se confirma después',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                    ),
+                  ]),
+                  Switch(
+                    value: yaPagado,
+                    activeColor: AppTheme.success,
+                    onChanged: (v) => setM(() => yaPagado = v),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 10),
+            ],
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               const Text('Gasto personal (no se divide)',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               Switch(
                 value: esPersonal,
                 activeColor: AppTheme.primary,
-                onChanged: (v) => setM(() => esPersonal = v),
+                onChanged: (v) => setM(() { esPersonal = v; if (v) yaPagado = false; }),
               ),
             ]),
             const SizedBox(height: 6),
@@ -1181,6 +1214,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     if (esPersonal) 'firebase_uid_personal': widget.firebaseUid,
                     'fecha': DateFormat('yyyy-MM-dd').format(fecha),
                     'firebase_uid': widget.firebaseUid,
+                    'ya_pagado': yaPagado,
                   };
                   Navigator.pop(ctx);
                   final ok = await SharedBudgetService.createExpense(widget.budgetId, body);
