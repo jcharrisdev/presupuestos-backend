@@ -29,15 +29,36 @@ class ProductosCatalogoService {
     String uid, {
     String categoria = 'Compras',
     String? nombreGasto,
+    String? origenTipo,
+    int? origenId,
   }) async {
     final body = <String, dynamic>{
       'firebase_uid': uid,
       'categoria': categoria,
       if (nombreGasto != null) 'nombre_gasto': nombreGasto,
+      if (origenTipo != null) 'origen_tipo': origenTipo,
+      if (origenId != null) 'origen_id': origenId,
     };
     final res = await ApiClient.post('/invoice-scanner/$invoiceId/registrar-en-mes', body);
     if (res.statusCode == 201) return json.decode(res.body);
     final err = json.decode(res.body);
     throw Exception(err['error'] ?? 'Error al registrar');
+  }
+
+  static Future<Map<String, dynamic>> getGastosParaVincular(String uid) async {
+    final hoy = DateTime.now();
+    final res = await ApiClient.get(
+      '/user/gastos-para-vincular?firebase_uid=$uid&anio=${hoy.year}&mes=${hoy.month}',
+    );
+    if (res.statusCode == 200) return json.decode(res.body);
+    return {'fijos': [], 'variables': []};
+  }
+
+  static Future<List<dynamic>> getAnalisisVsPresupuesto(String uid, {int meses = 6}) async {
+    final res = await ApiClient.get(
+      '/user/analisis-vs-presupuesto?firebase_uid=$uid&meses=$meses',
+    );
+    if (res.statusCode == 200) return json.decode(res.body) as List;
+    return [];
   }
 }

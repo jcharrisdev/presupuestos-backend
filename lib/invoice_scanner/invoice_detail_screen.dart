@@ -149,68 +149,182 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           const SnackBar(content: Text('Esta factura no tiene monto total')));
       return;
     }
-    final cats = ['Compras', 'Alimentación', 'Salud', 'Hogar', 'Transporte', 'Tecnología', 'Otro'];
-    String catSel = 'Compras';
 
-    final confirmar = await showDialog<bool>(
+    // Paso 1: ¿Es el pago de un gasto planificado?
+    final esVinculado = await showDialog<bool>(
       context: context,
-      builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+      builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Registrar en estado financiero',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Se agregará B/. ${NumberFormat('#,##0.00', 'en_US').format(total)} a tus gastos del mes actual.',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          const SizedBox(height: 14),
-          const Text('Categoría', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: catSel,
-                isExpanded: true,
-                dropdownColor: AppTheme.surface,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                items: cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (v) => setD(() => catSel = v!),
-              ),
-            ),
-          ),
+          Text('B/. ${NumberFormat('#,##0.00', 'en_US').format(total)}',
+              style: const TextStyle(color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          const Text('¿Esta factura corresponde a un gasto que ya tenías planificado?',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 4),
+          const Text('Ej: gasolina, supermercado, servicio mensual...',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('No, es nuevo')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Registrar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, vincular', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
-      )),
+      ),
     );
-    if (confirmar != true || !mounted) return;
+    if (esVinculado == null || !mounted) return;
 
-    setState(() => _registrando = true);
-    try {
-      await ProductosCatalogoService.registrarEnMes(
-        widget.invoiceId, widget.firebaseUid, categoria: catSel,
-      );
-      if (mounted) {
-        setState(() { _registrando = false; _yaRegistrado = true; });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Factura registrada en tu estado financiero'),
-          backgroundColor: AppTheme.success,
-        ));
+    if (esVinculado) {
+      // Paso 2: Seleccionar el gasto existente
+      setState(() => _registrando = true);
+      final gastosData = await ProductosCatalogoService.getGastosParaVincular(widget.firebaseUid);
+      setState(() => _registrando = false);
+      if (!mounted) return;
+
+      final fijos = (gastosData['fijos'] as List? ?? []);
+      final variables = (gastosData['variables'] as List? ?? []);
+      final todos = [...fijos, ...variables];
+
+      if (todos.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No tienes gastos planificados. Agrega gastos fijos o variables en tu Perfil Financiero.')));
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _registrando = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: AppTheme.danger,
-        ));
+
+      Map<String, dynamic>? seleccionado;
+      if (!mounted) return;
+      seleccionado = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: AppTheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('¿Cuál gasto es este pago?',
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: todos.length,
+              separatorBuilder: (_, __) => const Divider(height: 1, color: AppTheme.border),
+              itemBuilder: (_, i) {
+                final g = todos[i];
+                final presup = _d(g['monto_presupuestado']);
+                final esFijo = g['tipo'] == 'fijo';
+                final yaRegistrado = g['registro_id'] != null;
+                return ListTile(
+                  dense: true,
+                  leading: Icon(
+                    esFijo ? Icons.repeat : Icons.show_chart,
+                    color: esFijo ? AppTheme.colorFijo : AppTheme.primary,
+                    size: 20,
+                  ),
+                  title: Text(g['nombre'] as String,
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+                  subtitle: Text(
+                    'Presupuestado: B/. ${presup.toStringAsFixed(2)}${yaRegistrado ? ' · ya registrado' : ''}',
+                    style: TextStyle(
+                      color: yaRegistrado ? AppTheme.warning : AppTheme.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(context, g),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          ],
+        ),
+      );
+      if (seleccionado == null || !mounted) return;
+
+      setState(() => _registrando = true);
+      try {
+        await ProductosCatalogoService.registrarEnMes(
+          widget.invoiceId, widget.firebaseUid,
+          origenTipo: seleccionado['tipo'] as String,
+          origenId: seleccionado['id'] as int,
+        );
+        if (mounted) {
+          setState(() { _registrando = false; _yaRegistrado = true; });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Registrado como pago real de "${seleccionado['nombre']}"'),
+            backgroundColor: AppTheme.success,
+          ));
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _registrando = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: AppTheme.danger,
+          ));
+        }
+      }
+    } else {
+      // Gasto nuevo no presupuestado — solo elegir categoría
+      final cats = ['Compras', 'Alimentación', 'Salud', 'Hogar', 'Transporte', 'Tecnología', 'Otro'];
+      String catSel = 'Compras';
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+          backgroundColor: AppTheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Categoría del gasto',
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: catSel, isExpanded: true, dropdownColor: AppTheme.surface,
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                  items: cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setD(() => catSel = v!),
+                ),
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Registrar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        )),
+      );
+      if (confirmar != true || !mounted) return;
+      setState(() => _registrando = true);
+      try {
+        await ProductosCatalogoService.registrarEnMes(
+          widget.invoiceId, widget.firebaseUid, categoria: catSel,
+        );
+        if (mounted) {
+          setState(() { _registrando = false; _yaRegistrado = true; });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Factura registrada en tu estado financiero'),
+            backgroundColor: AppTheme.success,
+          ));
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _registrando = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: AppTheme.danger,
+          ));
+        }
       }
     }
   }

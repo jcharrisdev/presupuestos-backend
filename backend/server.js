@@ -6107,10 +6107,45 @@ app.patch('/user/productos-catalogo/:id', async (req, res) => {
   }
 });
 
+// GET /user/gastos-para-vincular — lista de gastos fijos + variables disponibles para vincular a una factura
+app.get('/user/gastos-para-vincular', async (req, res) => {
+  const { firebase_uid, anio, mes } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const anioN = parseInt(anio) || new Date().getFullYear();
+  const mesN  = parseInt(mes)  || (new Date().getMonth() + 1);
+  try {
+    const [fijos] = await db.execute(
+      `SELECT ugf.id, ugf.descripcion AS nombre, ugf.monto_mensual AS monto_presupuestado,
+              'fijo' AS tipo,
+              rg.id AS registro_id, rg.monto AS monto_real, rg.pagado
+       FROM user_gastos_fijos ugf
+       LEFT JOIN registros_gasto rg
+         ON rg.origen_fijo_id = ugf.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
+       WHERE ugf.firebase_uid = ? AND ugf.activo = 1
+       ORDER BY ugf.descripcion`,
+      [firebase_uid, anioN, mesN, firebase_uid]
+    );
+    const [variables] = await db.execute(
+      `SELECT gvb.id, gvb.nombre, gvb.monto_estimado AS monto_presupuestado,
+              'variable' AS tipo,
+              rg.id AS registro_id, rg.monto AS monto_real, rg.pagado
+       FROM gastos_variables_base gvb
+       LEFT JOIN registros_gasto rg
+         ON rg.origen_variable_id = gvb.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
+       WHERE gvb.firebase_uid = ? AND gvb.activo = 1
+       ORDER BY gvb.nombre`,
+      [firebase_uid, anioN, mesN, firebase_uid]
+    );
+    res.json({ fijos, variables });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /invoice-scanner/:id/registrar-en-mes — conecta factura con estado financiero
 app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid, categoria = 'Compras', nombre_gasto } = req.body;
+  const { firebase_uid, categoria = 'Compras', nombre_gasto, origen_tipo, origen_id } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[invoice]] = await db.execute(
@@ -6126,28 +6161,159 @@ app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
     );
     if (existing) return res.status(409).json({ error: 'Esta factura ya fue registrada en tu estado financiero' });
 
-    // Buscar mes activo
     const hoy = new Date();
     const anioHoy = hoy.getFullYear();
-    const mesHoy = hoy.getMonth() + 1;
+    const mesHoy  = hoy.getMonth() + 1;
     const [[mesRow]] = await db.execute(
       `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ? AND estado = 'activo'`,
       [firebase_uid, anioHoy, mesHoy]
     );
     if (!mesRow) return res.status(400).json({ error: 'No tienes un mes activo. Genera tu estado financiero anual primero.' });
 
-    const nombre = nombre_gasto || `${invoice.merchant_name || 'Factura QR'} #${invoice.numero_factura || id}`;
-    const [r] = await db.execute(
-      `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, scanned_invoice_id)
-       VALUES (?, ?, ?, ?, 'no_presupuestado', ?, ?, ?, ?, 1, ?)`,
-      [firebase_uid, mesRow.id, anioHoy, mesHoy, categoria, nombre,
-       Number(invoice.total_amount), invoice.invoice_date || hoy.toISOString().split('T')[0], id]
-    );
+    const montoReal = Number(invoice.total_amount);
+    const fechaGasto = invoice.invoice_date || hoy.toISOString().split('T')[0];
+    let registroId;
+
+    if (origen_tipo && origen_id) {
+      // ── VINCULAR A GASTO EXISTENTE ─────────────────────────────────────────
+      const esFijo = origen_tipo === 'fijo';
+      const origenCol = esFijo ? 'origen_fijo_id' : 'origen_variable_id';
+
+      // Obtener nombre del gasto para el registro
+      const tablaNombre = esFijo ? 'user_gastos_fijos' : 'gastos_variables_base';
+      const campoNombre = 'descripcion';
+      const [[gastoOrigen]] = await db.execute(
+        `SELECT ${campoNombre} AS nombre, ${esFijo ? 'monto_mensual' : 'monto_estimado'} AS monto_presupuestado
+         FROM ${tablaNombre} WHERE id = ? AND firebase_uid = ?`,
+        [origen_id, firebase_uid]
+      );
+      if (!gastoOrigen) return res.status(404).json({ error: 'Gasto origen no encontrado' });
+
+      // Buscar si ya existe un registros_gasto para ese origen en este mes
+      const [[registroExistente]] = await db.execute(
+        `SELECT id FROM registros_gasto WHERE firebase_uid = ? AND ${origenCol} = ? AND anio = ? AND mes = ?`,
+        [firebase_uid, origen_id, anioHoy, mesHoy]
+      );
+
+      if (registroExistente) {
+        // Actualizar el registro existente con el monto real de la factura
+        await db.execute(
+          `UPDATE registros_gasto SET monto = ?, pagado = 1, scanned_invoice_id = ?, fecha = ?
+           WHERE id = ?`,
+          [montoReal, id, fechaGasto, registroExistente.id]
+        );
+        registroId = registroExistente.id;
+      } else {
+        // Crear nuevo registro vinculado al gasto origen
+        const [r] = await db.execute(
+          `INSERT INTO registros_gasto
+             (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, ${origenCol}, scanned_invoice_id)
+           VALUES (?, ?, ?, ?, ?, 'General', ?, ?, ?, 1, ?, ?)`,
+          [firebase_uid, mesRow.id, anioHoy, mesHoy, esFijo ? 'fijo' : 'variable',
+           gastoOrigen.nombre, montoReal, fechaGasto, origen_id, id]
+        );
+        registroId = r.insertId;
+      }
+    } else {
+      // ── NUEVO GASTO NO PRESUPUESTADO ───────────────────────────────────────
+      const nombre = nombre_gasto || `${invoice.merchant_name || 'Factura QR'} #${invoice.numero_factura || id}`;
+      const [r] = await db.execute(
+        `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, scanned_invoice_id)
+         VALUES (?, ?, ?, ?, 'no_presupuestado', ?, ?, ?, ?, 1, ?)`,
+        [firebase_uid, mesRow.id, anioHoy, mesHoy, categoria, nombre, montoReal, fechaGasto, id]
+      );
+      registroId = r.insertId;
+    }
+
     _actualizarTotalesMes(mesRow.id, firebase_uid).catch(() => {});
     _logInfo('/invoice-scanner/registrar-en-mes', `Factura ${id} registrada en mes ${mesHoy}/${anioHoy}`, firebase_uid);
-    res.status(201).json({ id: r.insertId, monto: Number(invoice.total_amount), categoria, nombre });
+    res.status(201).json({ id: registroId, monto: montoReal, vinculado: !!(origen_tipo && origen_id) });
   } catch (err) {
     _logError('/invoice-scanner/registrar-en-mes', err, firebase_uid);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /user/analisis-vs-presupuesto — compara presupuestado vs real por gasto con recomendaciones
+app.get('/user/analisis-vs-presupuesto', async (req, res) => {
+  const { firebase_uid, meses = 6 } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const nMeses = Math.min(parseInt(meses) || 6, 12);
+  try {
+    // Gastos fijos con historial de registros reales (últimos N meses)
+    const [fijos] = await db.execute(
+      `SELECT ugf.id, ugf.descripcion AS nombre, ugf.monto_mensual AS presupuestado,
+              AVG(rg.monto) AS promedio_real,
+              COUNT(rg.id) AS meses_con_registro,
+              MIN(rg.monto) AS minimo_real,
+              MAX(rg.monto) AS maximo_real,
+              'fijo' AS tipo
+       FROM user_gastos_fijos ugf
+       LEFT JOIN registros_gasto rg
+         ON rg.origen_fijo_id = ugf.id
+         AND rg.firebase_uid = ugf.firebase_uid
+         AND rg.pagado = 1
+         AND (rg.anio * 12 + rg.mes) > ((YEAR(NOW()) * 12 + MONTH(NOW())) - ?)
+       WHERE ugf.firebase_uid = ? AND ugf.activo = 1 AND ugf.monto_mensual > 0
+       GROUP BY ugf.id, ugf.descripcion, ugf.monto_mensual
+       HAVING meses_con_registro >= 2
+       ORDER BY ABS(AVG(rg.monto) - ugf.monto_mensual) DESC`,
+      [nMeses, firebase_uid]
+    );
+
+    const resultado = fijos.map(g => {
+      const presup = Number(g.presupuestado);
+      const promReal = Number(g.promedio_real);
+      const mesesData = Number(g.meses_con_registro);
+      const diferencia = presup - promReal; // positivo = gastas menos de lo presupuestado
+      const pctDif = presup > 0 ? (diferencia / presup * 100) : 0;
+
+      let recomendacion = null;
+      let presupuestoSugerido = null;
+      let ahorroSugerido = null;
+
+      if (mesesData >= 3) {
+        if (pctDif >= 10) {
+          // Gastas consistentemente menos — recomienda bajar el presupuesto
+          presupuestoSugerido = Math.ceil(promReal * 1.05 / 5) * 5; // +5% buffer, redondeado a $5
+          ahorroSugerido = Math.round((presup - presupuestoSugerido) * 100) / 100;
+          recomendacion = {
+            tipo: 'reducir',
+            mensaje: `Llevas ${mesesData} meses presupuestando $${presup.toFixed(2)} en "${g.nombre}" pero gastas en promedio $${promReal.toFixed(2)}. Te recomiendo bajar a $${presupuestoSugerido.toFixed(2)} y usar los $${ahorroSugerido.toFixed(2)} restantes para ahorro.`,
+            presupuesto_actual: presup,
+            presupuesto_sugerido: presupuestoSugerido,
+            ahorro_mensual_posible: ahorroSugerido,
+          };
+        } else if (pctDif <= -10) {
+          // Gastas consistentemente más — recomienda subir el presupuesto
+          presupuestoSugerido = Math.ceil(promReal * 1.1 / 5) * 5;
+          recomendacion = {
+            tipo: 'aumentar',
+            mensaje: `Llevas ${mesesData} meses excediendo tu presupuesto de "$${g.nombre}". Tu gasto promedio es $${promReal.toFixed(2)}, te recomiendo subir a $${presupuestoSugerido.toFixed(2)}.`,
+            presupuesto_actual: presup,
+            presupuesto_sugerido: presupuestoSugerido,
+            ahorro_mensual_posible: null,
+          };
+        }
+      }
+
+      return {
+        id: g.id,
+        nombre: g.nombre,
+        tipo: 'fijo',
+        presupuestado: presup,
+        promedio_real: Math.round(promReal * 100) / 100,
+        minimo_real: Number(g.minimo_real),
+        maximo_real: Number(g.maximo_real),
+        meses_con_datos: mesesData,
+        diferencia_promedio: Math.round(diferencia * 100) / 100,
+        pct_diferencia: Math.round(pctDif * 10) / 10,
+        recomendacion,
+      };
+    });
+
+    res.json(resultado.filter(r => r.meses_con_datos >= 1));
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

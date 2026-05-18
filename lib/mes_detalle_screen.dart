@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'services/registros_service.dart';
+import 'services/productos_catalogo_service.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
@@ -119,7 +120,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                         uid: widget.firebaseUid,
                         onChanged: _cargar,
                       ),
-                      _TabAnalisis(data: _data!),
+                      _TabAnalisis(data: _data!, uid: widget.firebaseUid),
                     ],
                   ),
                 ),
@@ -632,35 +633,131 @@ class _CompromisoTile extends StatelessWidget {
 
 // ── TAB 3: ANÁLISIS ──────────────────────────────────────────────────────
 
-class _TabAnalisis extends StatelessWidget {
+class _TabAnalisis extends StatefulWidget {
   final Map<String, dynamic> data;
-  const _TabAnalisis({required this.data});
+  final String uid;
+  const _TabAnalisis({required this.data, required this.uid});
+
+  @override
+  State<_TabAnalisis> createState() => _TabAnalisisState();
+}
+
+class _TabAnalisisState extends State<_TabAnalisis> {
+  List<dynamic> _recomendaciones = [];
+  bool _loadingRec = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarRecomendaciones();
+  }
+
+  Future<void> _cargarRecomendaciones() async {
+    final data = await ProductosCatalogoService.getAnalisisVsPresupuesto(widget.uid);
+    if (mounted) setState(() { _recomendaciones = data; _loadingRec = false; });
+  }
+
+  double _d(dynamic v) => v == null ? 0.0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0);
 
   @override
   Widget build(BuildContext context) {
-    final cats = (data['analisis_categorias'] as List? ?? []).cast<Map<String, dynamic>>();
-    if (cats.isEmpty) {
-      return const Center(child: Text('Agrega gastos para ver el análisis por categoría.',
-          style: TextStyle(color: AppTheme.textSecondary), textAlign: TextAlign.center));
-    }
+    final cats = (widget.data['analisis_categorias'] as List? ?? []).cast<Map<String, dynamic>>();
+    final conRec = _recomendaciones.where((r) => r['recomendacion'] != null).toList();
 
-    // Ordenar por desviación descendente
     final sorted = List.of(cats)..sort((a, b) {
-      final da = double.tryParse(a['desviacion'].toString()) ?? 0.0;
-      final db = double.tryParse(b['desviacion'].toString()) ?? 0.0;
+      final da = _d(a['desviacion']);
+      final db = _d(b['desviacion']);
       return db.compareTo(da);
     });
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Presupuestado vs Real por categoría',
-            style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.6)),
+        // ── Recomendaciones de aprendizaje ─────────────────────────────
+        if (!_loadingRec && conRec.isNotEmpty) ...[
+          const Text('RECOMENDACIONES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ...conRec.map((r) => _RecomendacionCard(rec: r)),
+          const SizedBox(height: 20),
+        ],
+        if (_loadingRec)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: LinearProgressIndicator(minHeight: 2, color: AppTheme.primary),
+          ),
+        // ── Análisis por categoría este mes ────────────────────────────
+        const Text('PRESUPUESTADO VS REAL ESTE MES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.6)),
         const SizedBox(height: 12),
-        ...sorted.map((c) => _CategoriaCard(cat: c)),
+        if (cats.isEmpty)
+          const Center(child: Text('Agrega gastos para ver el análisis.',
+              style: TextStyle(color: AppTheme.textSecondary), textAlign: TextAlign.center))
+        else
+          ...sorted.map((c) => _CategoriaCard(cat: c)),
       ],
     );
   }
+}
+
+class _RecomendacionCard extends StatelessWidget {
+  final dynamic rec;
+  const _RecomendacionCard({required this.rec});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = rec['recomendacion'] as Map<String, dynamic>;
+    final tipo = r['tipo'] as String;
+    final reducir = tipo == 'reducir';
+    final color = reducir ? AppTheme.success : AppTheme.warning;
+    final icon = reducir ? Icons.trending_down : Icons.trending_up;
+    final presupActual = (r['presupuesto_actual'] as num).toDouble();
+    final presupSug = (r['presupuesto_sugerido'] as num).toDouble();
+    final ahorro = r['ahorro_mensual_posible'] != null ? (r['ahorro_mensual_posible'] as num).toDouble() : null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(rec['nombre'] as String,
+              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+            child: Text(reducir ? 'Optimizar' : 'Revisar',
+                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Text(r['mensaje'] as String,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+        const SizedBox(height: 8),
+        Row(children: [
+          _statMin('Actual', '\$${presupActual.toStringAsFixed(2)}', AppTheme.textMuted),
+          const SizedBox(width: 16),
+          _statMin('Sugerido', '\$${presupSug.toStringAsFixed(2)}', color),
+          if (ahorro != null) ...[
+            const SizedBox(width: 16),
+            _statMin('Ahorro/mes', '\$${ahorro.toStringAsFixed(2)}', AppTheme.success),
+          ],
+        ]),
+      ]),
+    );
+  }
+
+  Widget _statMin(String label, String value, Color color) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
+      Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+    ],
+  );
 }
 
 class _CategoriaCard extends StatelessWidget {
