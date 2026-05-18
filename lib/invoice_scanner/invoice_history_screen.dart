@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../services/invoice_scanner_service.dart';
 import 'invoice_scanner_screen.dart';
 import 'invoice_detail_screen.dart';
+import 'productos_catalogo_screen.dart';
 
 class InvoiceHistoryScreen extends StatefulWidget {
   final String firebaseUid;
@@ -84,7 +85,14 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
         iconTheme: IconThemeData(color: AppTheme.textPrimary),
         actions: [
           IconButton(
-            icon: Icon(Icons.filter_list, color: AppTheme.textSecondary),
+            icon: const Icon(Icons.inventory_2_outlined, color: AppTheme.textSecondary),
+            tooltip: 'Mis Productos',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ProductosCatalogoScreen(firebaseUid: widget.firebaseUid),
+            )),
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list, color: AppTheme.textSecondary),
             onPressed: _mostrarFiltros,
           ),
         ],

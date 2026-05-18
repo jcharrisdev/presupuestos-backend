@@ -505,6 +505,45 @@ pool.getConnection(async (err, conn) => {
       console.error('⚠️ Migración roles shared_budget:', e.message);
     }
   }
+
+  // Migración Sprint 9: catálogo de productos e historial de precios (facturas QR mejoradas)
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS productos_catalogo (
+      id                    INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid          VARCHAR(255) NOT NULL,
+      nombre                VARCHAR(255) NOT NULL,
+      nombre_normalizado    VARCHAR(255) NOT NULL,
+      categoria             VARCHAR(100) DEFAULT NULL,
+      merchant_name_habitual VARCHAR(255) DEFAULT NULL,
+      veces_comprado        INT DEFAULT 1,
+      ultimo_precio         DECIMAL(12,2) DEFAULT NULL,
+      ultima_compra         DATE DEFAULT NULL,
+      activo                TINYINT DEFAULT 1,
+      created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_uid_nombre (firebase_uid, nombre_normalizado),
+      KEY idx_pc_uid (firebase_uid)
+    )`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS historial_precios_producto (
+      id              INT AUTO_INCREMENT PRIMARY KEY,
+      producto_id     INT NOT NULL,
+      firebase_uid    VARCHAR(255) NOT NULL,
+      invoice_id      INT DEFAULT NULL,
+      precio_unitario DECIMAL(12,2) NOT NULL,
+      cantidad        DECIMAL(10,3) DEFAULT 1,
+      merchant_name   VARCHAR(255) DEFAULT NULL,
+      fecha_compra    DATE DEFAULT NULL,
+      created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_hpp_producto (producto_id),
+      KEY idx_hpp_uid_fecha (firebase_uid, fecha_compra)
+    )`);
+    // Columna para vincular registros_gasto con factura QR
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN scanned_invoice_id INT DEFAULT NULL`);
+    console.log('✅ Migración Sprint 9: productos_catalogo OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración Sprint 9 productos:', e.message);
+    }
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -5946,6 +5985,173 @@ app.get('/presupuestos/:budgetId/gustitos/summary', async (req, res) => {
 });
 
 // =============================================================================
+// ─── SPRINT 9: CATÁLOGO DE PRODUCTOS ─────────────────────────────────────────
+
+async function _indexarProductosFactura(firebase_uid, invoiceId, items, merchantName, fechaCompra) {
+  for (const item of items) {
+    if (!item.descripcion || !item.precio_unitario) continue;
+    const nombreNorm = item.descripcion.trim().toLowerCase().replace(/\s+/g, ' ');
+    const precio = parseFloat(item.precio_unitario);
+    const cantidad = parseFloat(item.cantidad) || 1;
+    const fecha = fechaCompra || new Date().toISOString().split('T')[0];
+
+    // Upsert en catálogo
+    const [[existing]] = await db.execute(
+      `SELECT id FROM productos_catalogo WHERE firebase_uid = ? AND nombre_normalizado = ?`,
+      [firebase_uid, nombreNorm]
+    );
+    let productoId;
+    if (existing) {
+      productoId = existing.id;
+      await db.execute(
+        `UPDATE productos_catalogo SET
+           veces_comprado = veces_comprado + 1,
+           ultimo_precio = ?,
+           ultima_compra = ?,
+           merchant_name_habitual = COALESCE(?, merchant_name_habitual)
+         WHERE id = ?`,
+        [precio, fecha, merchantName || null, productoId]
+      );
+    } else {
+      const [r] = await db.execute(
+        `INSERT INTO productos_catalogo (firebase_uid, nombre, nombre_normalizado, merchant_name_habitual, ultimo_precio, ultima_compra)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [firebase_uid, item.descripcion.trim(), nombreNorm, merchantName || null, precio, fecha]
+      );
+      productoId = r.insertId;
+    }
+
+    // Registrar en historial de precios
+    await db.execute(
+      `INSERT INTO historial_precios_producto (producto_id, firebase_uid, invoice_id, precio_unitario, cantidad, merchant_name, fecha_compra)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [productoId, firebase_uid, invoiceId, precio, cantidad, merchantName || null, fecha]
+    );
+  }
+}
+
+// GET /user/productos-catalogo
+app.get('/user/productos-catalogo', async (req, res) => {
+  const { firebase_uid, q } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    let sql = `SELECT pc.*,
+      (SELECT h2.precio_unitario FROM historial_precios_producto h2
+       WHERE h2.producto_id = pc.id ORDER BY h2.fecha_compra DESC, h2.id DESC LIMIT 1 OFFSET 1
+      ) AS precio_anterior
+     FROM productos_catalogo pc
+     WHERE pc.firebase_uid = ? AND pc.activo = 1`;
+    const params = [firebase_uid];
+    if (q) { sql += ` AND pc.nombre LIKE ?`; params.push(`%${q}%`); }
+    sql += ` ORDER BY pc.ultima_compra DESC, pc.veces_comprado DESC LIMIT ${250}`;
+    const [rows] = await db.execute(sql, params);
+    const result = rows.map(r => ({
+      ...r,
+      tendencia: (() => {
+        const act = Number(r.ultimo_precio);
+        const ant = r.precio_anterior != null ? Number(r.precio_anterior) : null;
+        if (ant == null || act === ant) return 'igual';
+        return act > ant ? 'sube' : 'baja';
+      })(),
+      pct_cambio: (() => {
+        const act = Number(r.ultimo_precio);
+        const ant = r.precio_anterior != null ? Number(r.precio_anterior) : null;
+        if (!ant || ant === 0) return null;
+        return Math.round(((act - ant) / ant) * 100 * 10) / 10;
+      })(),
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /user/productos-catalogo/:id/historial
+app.get('/user/productos-catalogo/:id/historial', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[producto]] = await db.execute(
+      `SELECT * FROM productos_catalogo WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
+    const [historial] = await db.execute(
+      `SELECT h.*, si.merchant_name AS factura_merchant, si.numero_factura
+       FROM historial_precios_producto h
+       LEFT JOIN scanned_invoices si ON si.id = h.invoice_id
+       WHERE h.producto_id = ? AND h.firebase_uid = ?
+       ORDER BY h.fecha_compra DESC, h.id DESC LIMIT ${100}`,
+      [id, firebase_uid]
+    );
+    res.json({ producto, historial });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /user/productos-catalogo/:id — actualizar categoría del producto
+app.patch('/user/productos-catalogo/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, categoria } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[p]] = await db.execute(
+      `SELECT id FROM productos_catalogo WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
+    await db.execute(`UPDATE productos_catalogo SET categoria = ? WHERE id = ?`, [categoria ?? null, id]);
+    res.json({ message: 'Categoría actualizada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /invoice-scanner/:id/registrar-en-mes — conecta factura con estado financiero
+app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, categoria = 'Compras', nombre_gasto } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[invoice]] = await db.execute(
+      `SELECT * FROM scanned_invoices WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+    if (!invoice.total_amount) return res.status(400).json({ error: 'La factura no tiene monto total' });
+
+    // Verificar que no esté ya registrada
+    const [[existing]] = await db.execute(
+      `SELECT id FROM registros_gasto WHERE firebase_uid = ? AND scanned_invoice_id = ?`,
+      [firebase_uid, id]
+    );
+    if (existing) return res.status(409).json({ error: 'Esta factura ya fue registrada en tu estado financiero' });
+
+    // Buscar mes activo
+    const hoy = new Date();
+    const anioHoy = hoy.getFullYear();
+    const mesHoy = hoy.getMonth() + 1;
+    const [[mesRow]] = await db.execute(
+      `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ? AND estado = 'activo'`,
+      [firebase_uid, anioHoy, mesHoy]
+    );
+    if (!mesRow) return res.status(400).json({ error: 'No tienes un mes activo. Genera tu estado financiero anual primero.' });
+
+    const nombre = nombre_gasto || `${invoice.merchant_name || 'Factura QR'} #${invoice.numero_factura || id}`;
+    const [r] = await db.execute(
+      `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, scanned_invoice_id)
+       VALUES (?, ?, ?, ?, 'no_presupuestado', ?, ?, ?, ?, 1, ?)`,
+      [firebase_uid, mesRow.id, anioHoy, mesHoy, categoria, nombre,
+       Number(invoice.total_amount), invoice.invoice_date || hoy.toISOString().split('T')[0], id]
+    );
+    _actualizarTotalesMes(mesRow.id, firebase_uid).catch(() => {});
+    _logInfo('/invoice-scanner/registrar-en-mes', `Factura ${id} registrada en mes ${mesHoy}/${anioHoy}`, firebase_uid);
+    res.status(201).json({ id: r.insertId, monto: Number(invoice.total_amount), categoria, nombre });
+  } catch (err) {
+    _logError('/invoice-scanner/registrar-en-mes', err, firebase_uid);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // INVOICE SCANNER — FACTURAS ESCANEADAS QR DGI PANAMA
 // =============================================================================
 
@@ -6129,6 +6335,8 @@ app.post('/invoice-scanner/process', async (req, res) => {
         `INSERT INTO scanned_invoice_items (invoice_id, descripcion, cantidad, precio_unitario, subtotal, impuesto) VALUES ?`,
         [itemVals]
       );
+      // Sprint 9: auto-indexar en catálogo de productos (fire-and-forget)
+      _indexarProductosFactura(firebase_uid, invoiceId, dgiItems, dgiData?.merchant_name, dgiData?.invoice_date).catch(() => {});
     }
 
     await db.query(
@@ -6204,6 +6412,12 @@ app.get('/invoice-scanner/invoices/:id', async (req, res) => {
     const total_assigned = Math.round(Number(agg.total_assigned) * 100) / 100;
     const remaining      = Math.round((Number(invoice.total_amount || 0) - total_assigned) * 100) / 100;
 
+    // Sprint 9: ¿ya fue registrada en meses_financieros?
+    const [[regRow]] = await db.query(
+      `SELECT id FROM registros_gasto WHERE firebase_uid = ? AND scanned_invoice_id = ? LIMIT 1`,
+      [firebase_uid, id]
+    );
+
     res.json({
       ...invoice,
       items,
@@ -6211,6 +6425,7 @@ app.get('/invoice-scanner/invoices/:id', async (req, res) => {
       total_assigned,
       remaining,
       is_overpaid: remaining < 0,
+      ya_registrado_en_mes: !!regRow,
     });
   } catch (error) {
     console.error(error);

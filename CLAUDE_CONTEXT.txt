@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-18 (v7.0 — sprints 1-8 completados)
+Última actualización: 2026-05-18 (v7.1 — sprint 8 completo + fixes presupuesto compartido)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -485,6 +485,18 @@ GIT:
     Usar _hasSharedRole(budgetId, uid, minRole) para verificar permisos
   - Admin puede invitar pero NO puede asignar rol 'admin' a otros (solo creador)
   - Lectura: solo lectura — no puede crear gastos ni invitar
+  - Migración fix: rol='member'/'' → 'participante' (corrige miembros antiguos)
+  - Budget inicia en estado='active' (antes 'waiting_for_members' bloqueaba el Add)
+  - POST /expenses: permite estado != closed/paused (no solo 'active')
+  - Toggle ya_pagado en formulario: OFF=planificación (nadie paga aún), ON=tracking (pago inmediato)
+  - mi_parte_pagada / su_parte_pagada: solo reflejan split.pagado=1 (no se infiere de pagado_por)
+  - Al aceptar invitación: recalcula todos los splits pendientes con los nuevos miembros
+  - shared_expense_id en registros_gasto vincula gasto compartido con estado financiero
+  - confirm-payment: crea registros_gasto para el confirmante en su mes activo
+  - DELETE shared expense: limpia registros_gasto vinculados
+  - GET /shared-budgets (lista): incluye balance_neto por usuario (subqueries)
+  - Detalle: card de balance + botón Liquidar → POST /shared-budgets/:id/settlements
+  - Gestionar miembros: incluye formulario de invitar nuevo participante con rol
 
 ================================================================================
 12. INSTRUCCIÓN PARA NUEVA SESIÓN
