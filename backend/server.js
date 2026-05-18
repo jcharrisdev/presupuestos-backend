@@ -4770,6 +4770,39 @@ app.post('/shared-budget-invitations/:token/accept', async (req, res) => {
     await conn.execute(
       `UPDATE shared_budgets SET estado = 'active' WHERE id = ?`, [inv.shared_budget_id]
     );
+
+    // Recalcular splits de todos los gastos pendientes (no pagados) con los nuevos miembros
+    // Solo se tocan gastos donde NINGÚN split ha sido confirmado (pagado=0 en todos)
+    try {
+      const [allMembers] = await conn.execute(
+        `SELECT firebase_uid, porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ?`,
+        [inv.shared_budget_id]
+      );
+      // Gastos compartidos del presupuesto donde ningún split está confirmado
+      const [gastosPendientes] = await conn.execute(
+        `SELECT DISTINCT se.id, se.monto, se.regla_override
+         FROM shared_expenses se
+         WHERE se.shared_budget_id = ? AND se.es_personal = 0
+           AND NOT EXISTS (
+             SELECT 1 FROM shared_expense_splits s2
+             WHERE s2.expense_id = se.id AND s2.pagado = 1
+           )`,
+        [inv.shared_budget_id]
+      );
+      for (const gasto of gastosPendientes) {
+        const reglaGasto = gasto.regla_override || budget.regla_reparto;
+        const nuevosSplits = calcularSplits(parseFloat(gasto.monto), reglaGasto, allMembers);
+        // Borrar splits anteriores y recalcular
+        await conn.execute(`DELETE FROM shared_expense_splits WHERE expense_id = ?`, [gasto.id]);
+        for (const sp of nuevosSplits) {
+          await conn.execute(
+            `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
+            [gasto.id, sp.firebase_uid, sp.monto_responsabilidad]
+          );
+        }
+      }
+    } catch (_) { /* fire-and-forget — no bloquear el accept */ }
+
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
        VALUES (?, ?, 'aceptar_invitacion', NULL)`,
