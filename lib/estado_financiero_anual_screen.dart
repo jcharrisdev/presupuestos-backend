@@ -402,16 +402,11 @@ class _MesCard extends StatelessWidget {
                 )),
                 const SizedBox(height: 4),
                 if ((esCerrado || (esActual && tieneReal)) && remReal != null)
-                  Column(children: [
-                    Text('\$${remReal.toStringAsFixed(0)}',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: remReal >= 0 ? AppTheme.success : AppTheme.danger,
-                            fontWeight: FontWeight.w600)),
-                    if (esActual && tieneReal && remEst != null)
-                      Text('est \$${remEst.toStringAsFixed(0)}',
-                          style: const TextStyle(fontSize: 9, color: AppTheme.textMuted)),
-                  ])
+                  Text('\$${remReal.toStringAsFixed(0)}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: remReal >= 0 ? AppTheme.success : AppTheme.danger,
+                          fontWeight: FontWeight.w600))
                 else if (remEst != null)
                   Text('\$${remEst.toStringAsFixed(0)}',
                       style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))
