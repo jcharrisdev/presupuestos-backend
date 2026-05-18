@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-18 (v6.0 — sprints 1-7 completados + hotfixes)
+Última actualización: 2026-05-18 (v7.0 — sprints 1-8 completados)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -361,7 +361,7 @@ SESIÓN 8 (2026-05-17 — v4.0):
 SESIÓN 9 (2026-05-18 — v5.0):
   AUDITORÍA + SPRINTS 1-4 (ver historial en git)
 
-SESIÓN 10 (2026-05-18 — v6.0 — ACTUAL):
+SESIÓN 10 (2026-05-18 — v6.0):
   SPRINTS 5-7 + HOTFIXES
 
   Sprint 5 — Wizard cierre mensual/anual:
@@ -396,8 +396,28 @@ SESIÓN 10 (2026-05-18 — v6.0 — ACTUAL):
   - _MesCard: mes activo muestra remanente_real en color cuando hay gastos registrados
   - Fix tamaño cards: Column anidado sin mainAxisSize.min → revertido a Text simple
 
+SESIÓN 11 (2026-05-18 — v7.0 — ACTUAL):
+  SPRINT 8 — Roles en presupuesto compartido
+
+  Sprint 8 — Roles en presupuesto compartido:
+  - BD: ALTER shared_budget_members.rol ENUM → ('owner','creador','admin','participante','lectura')
+    UPDATE SET rol='creador' WHERE rol='owner'  ← migración automática al arrancar
+  - BD: ALTER shared_budget_invitations ADD COLUMN rol_invitado ENUM('admin','participante','lectura') DEFAULT 'participante'
+  - Backend: ROLE_LEVEL = {creador:4, admin:3, participante:2, lectura:1, owner:4, member:2}
+  - Backend: helpers _getSharedRole(budgetId, uid) y _hasSharedRole(budgetId, uid, minRole)
+  - Backend: PATCH /shared-budgets/:id — requiere admin/creador
+  - Backend: DELETE /shared-budgets/:id — requiere creador
+  - Backend: PATCH /shared-budgets/:id/members/:uid — requiere admin/creador
+  - Backend: POST /shared-budgets/:id/expenses — requiere participante+; lectura bloqueado
+  - Backend: POST /shared-budgets/:id/invitations — acepta rol_invitado; admin no puede invitar admin
+  - Backend: PATCH /shared-budgets/:id/members/:uid/rol → nuevo endpoint cambio de rol
+  - Flutter: SharedBudgetService.changeRole(), rolLevel(), canEdit(), canAddExpense(), isCreador()
+  - Flutter: invite() acepta named param rolInvitado
+  - Flutter: SharedBudgetDetailScreen: badge rol en AppBar, botones condicionales por rol,
+    sheet "Gestionar miembros" con dropdown de rol por miembro
+  - Flutter: SharedBudgetListScreen: chip de rol en cada card
+
   Próximos sprints:
-  - Sprint 8: Roles en presupuesto compartido
   - Sprint 9: Productos y precios (facturas QR mejoradas)
   - APK final: generar solo cuando todo esté validado en web
 
@@ -459,6 +479,12 @@ GIT:
   - Column anidada en GridView sin mainAxisSize.min achica las tarjetas — usar Text directo
   - AgregarGastoSheet: tipo 'fijo' → pagado=1; variable/no_presupuestado → pagado=0
   - No generar APK en cada sprint — solo web build durante desarrollo; APK al final
+  - shared_budget_members.rol ahora es ENUM('owner','creador','admin','participante','lectura')
+    'owner' se migró a 'creador' al arrancar el servidor (Sprint 8)
+  - Roles shared budget: creador=4 > admin=3 > participante=2 > lectura=1
+    Usar _hasSharedRole(budgetId, uid, minRole) para verificar permisos
+  - Admin puede invitar pero NO puede asignar rol 'admin' a otros (solo creador)
+  - Lectura: solo lectura — no puede crear gastos ni invitar
 
 ================================================================================
 12. INSTRUCCIÓN PARA NUEVA SESIÓN
