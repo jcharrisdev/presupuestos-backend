@@ -4914,7 +4914,6 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
       [id, descripcion, monto, pagado_por, regla_override || null, es_personal ? 1 : 0, firebase_uid_personal || null, fecha]
     );
     const expenseId = r.insertId;
-    let payerSplitMonto = null;
     if (!es_personal) {
       const [members] = await conn.execute(
         `SELECT firebase_uid, porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ?`, [id]
@@ -4926,40 +4925,11 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
           `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
           [expenseId, sp.firebase_uid, sp.monto_responsabilidad]
         );
-        if (sp.firebase_uid === pagado_por) {
-          payerSplitMonto = sp.monto_responsabilidad;
-          // El pagador ya pagó — marcar su split como pagado en BD
-          await conn.execute(
-            `UPDATE shared_expense_splits SET pagado=1 WHERE expense_id=? AND firebase_uid=?`,
-            [expenseId, pagado_por]
-          );
-        }
       }
-    } else {
-      // Gasto personal: el monto completo es del creador
-      payerSplitMonto = parseFloat(monto);
     }
-
-    // Integración financiera: crear registros_gasto para el pagador en su mes activo
-    if (payerSplitMonto != null && payerSplitMonto > 0) {
-      try {
-        const hoy = new Date();
-        const anioHoy = hoy.getFullYear();
-        const mesHoy = hoy.getMonth() + 1;
-        const [[mesRow]] = await conn.execute(
-          `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ? AND estado = 'activo'`,
-          [pagado_por, anioHoy, mesHoy]
-        );
-        if (mesRow) {
-          await conn.execute(
-            `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, shared_expense_id)
-             VALUES (?, ?, ?, ?, 'no_presupuestado', 'Compartido', ?, ?, ?, 1, ?)`,
-            [pagado_por, mesRow.id, anioHoy, mesHoy, descripcion, payerSplitMonto, fecha, expenseId]
-          );
-          _actualizarTotalesMes(mesRow.id, pagado_por).catch(() => {});
-        }
-      } catch (_) { /* fire-and-forget — no bloquear el commit */ }
-    }
+    // Nota: NO se marca pagado ni se crea registros_gasto al crear el gasto.
+    // El impacto financiero ocurre solo cuando el usuario confirma su pago explícitamente
+    // mediante POST /shared-expenses/:id/confirm-payment.
 
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
@@ -4990,16 +4960,8 @@ app.get('/shared-budgets/:id/expenses', async (req, res) => {
       `SELECT se.id, se.descripcion, se.monto, se.pagado_por, se.regla_override,
               se.es_personal, se.firebase_uid_personal, se.fecha, se.created_at,
               my_split.monto_responsabilidad AS mi_responsabilidad,
-              CASE
-                WHEN se.pagado_por = ? OR my_split.pagado = 1 THEN 1
-                ELSE 0
-              END AS mi_parte_pagada,
-              CASE
-                WHEN (se.es_personal = 0 AND se.pagado_por IS NOT NULL AND se.pagado_por != ? AND se.pagado_por != '')
-                     OR other_split.pagado = 1
-                THEN 1
-                ELSE 0
-              END AS su_parte_pagada
+              CASE WHEN my_split.pagado = 1 THEN 1 ELSE 0 END AS mi_parte_pagada,
+              CASE WHEN other_split.pagado = 1 THEN 1 ELSE 0 END AS su_parte_pagada
        FROM shared_expenses se
        LEFT JOIN shared_expense_splits my_split
          ON my_split.expense_id = se.id AND my_split.firebase_uid = ?
@@ -5007,7 +4969,7 @@ app.get('/shared-budgets/:id/expenses', async (req, res) => {
          ON other_split.expense_id = se.id AND other_split.firebase_uid != ?
        WHERE se.shared_budget_id = ?
        ORDER BY se.fecha DESC, se.created_at DESC`,
-      [firebase_uid, firebase_uid, firebase_uid, firebase_uid, id]
+      [firebase_uid, firebase_uid, id]
     );
     res.json(expenses);
   } catch (err) {

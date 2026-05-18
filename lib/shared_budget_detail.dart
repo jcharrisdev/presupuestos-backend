@@ -82,18 +82,11 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
 
   int get _movimientosPagados => _gastos.where(_miPartePagada).length;
 
-  bool _miPartePagada(dynamic e) {
-    if ((e['mi_parte_pagada'] as int? ?? 0) == 1) return true;
-    if (e['pagado_por'] == widget.firebaseUid) return true;
-    return false;
-  }
+  // Pagado = solo cuando el usuario confirmó explícitamente vía "Pagar"
+  // No se asume pagado por ser el pagado_por (puede ser planificación futura)
+  bool _miPartePagada(dynamic e) => (e['mi_parte_pagada'] as int? ?? 0) == 1;
 
-  bool _suPartePagada(dynamic e) {
-    if ((e['su_parte_pagada'] as int? ?? 0) == 1) return true;
-    final otro = _otroUid();
-    if (otro.isNotEmpty && e['pagado_por'] == otro) return true;
-    return false;
-  }
+  bool _suPartePagada(dynamic e) => (e['su_parte_pagada'] as int? ?? 0) == 1;
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
@@ -1114,7 +1107,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             _modalInput(montoCtrl, 'Monto', numeric: true),
             const SizedBox(height: 10),
             if (!esPersonal) ...[
-              const Text('¿Quién pagó?', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              const Text('¿Quién lo pagará / ya pagó?', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
