@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'services/registros_service.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
+import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 
 class MesDetalleScreen extends StatefulWidget {
@@ -110,6 +111,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                         uid: widget.firebaseUid,
                         anio: widget.anio,
                         mes: widget.mes,
+                        labelMes: widget.label,
                         onChanged: _cargar,
                       ),
                       _TabGastos(
@@ -147,6 +149,7 @@ class _TabResumen extends StatelessWidget {
   final String uid;
   final int anio;
   final int mes;
+  final String labelMes;
   final VoidCallback onChanged;
 
   const _TabResumen({
@@ -155,6 +158,7 @@ class _TabResumen extends StatelessWidget {
     required this.uid,
     required this.anio,
     required this.mes,
+    required this.labelMes,
     required this.onChanged,
   });
 
@@ -232,6 +236,55 @@ class _TabResumen extends StatelessWidget {
 
         // Compromisos fijos del mes
         _CompromisosSection(data: data),
+
+        // Botón cierre mensual (solo si el mes está activo)
+        if ((data['mes']?['estado'] as String? ?? '') == 'activo') ...[
+          const SizedBox(height: 28),
+          const Divider(color: AppTheme.border),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.lock_outline, size: 16),
+              label: const Text('Cerrar mes'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textSecondary,
+                side: const BorderSide(color: AppTheme.border),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final res = await showModalBottomSheet<bool>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => DraggableScrollableSheet(
+                    initialChildSize: 0.75,
+                    minChildSize: 0.5,
+                    maxChildSize: 0.95,
+                    expand: false,
+                    builder: (_, ctrl) => CierreMesSheet(
+                      firebaseUid: uid,
+                      anio: anio,
+                      mes: mes,
+                      labelMes: labelMes,
+                      data: data,
+                      alertas: alertas,
+                    ),
+                  ),
+                );
+                if (res == true) onChanged();
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'El cierre guarda un snapshot del mes y lo marca como histórico.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+          ),
+          const SizedBox(height: 20),
+        ],
       ],
     );
   }

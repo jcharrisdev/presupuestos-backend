@@ -35,6 +35,12 @@ class EstadoAnualService {
     return jsonDecode(res.body);
   }
 
+  static Future<Map<String, dynamic>> cerrarAnio(String uid, int anio) async {
+    final res = await ApiClient.post('/user/cerrar-anio/$anio', {'firebase_uid': uid});
+    if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
+    return jsonDecode(res.body);
+  }
+
   static Future<Map<String, dynamic>> getAlertas(String uid, {int? anio, int? mes}) async {
     var path = '/user/alertas?firebase_uid=$uid&leidas=0';
     if (anio != null) path += '&anio=$anio';

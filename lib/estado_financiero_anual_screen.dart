@@ -4,6 +4,7 @@ import 'services/estado_anual_service.dart';
 import 'mes_detalle_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
+import 'cierre_anio_screen.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -173,6 +174,28 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           ),
         ] else
           _TocaMeses(onTap: () => setState(() => _mesesExpanded = true)),
+
+        const SizedBox(height: 24),
+        const Divider(color: AppTheme.border),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.lock_outline, size: 16),
+          label: Text('Cerrar año $_anio / Proyección ${_anio + 1}'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.textSecondary,
+            side: const BorderSide(color: AppTheme.border),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => CierreAnioScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _anio,
+            )),
+          ).then((_) => _cargar()),
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }

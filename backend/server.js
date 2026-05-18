@@ -9161,6 +9161,119 @@ app.post('/user/cerrar-mes-financiero/:anio/:mes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /user/cerrar-anio/:anio
+// Cierra el año financiero: snapshot en cierres_anuales + recomendaciones para el siguiente año.
+app.post('/user/cerrar-anio/:anio', async (req, res) => {
+  const { anio } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    // Verificar que existe el estado anual
+    const [[efa]] = await db.execute(
+      `SELECT * FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`,
+      [firebase_uid, anio]
+    );
+    if (!efa) return res.status(404).json({ error: 'Estado anual no encontrado. Genera el estado anual primero.' });
+
+    // Obtener todos los meses del año
+    const [meses] = await db.execute(
+      `SELECT * FROM meses_financieros WHERE firebase_uid = ? AND anio = ? ORDER BY mes ASC`,
+      [firebase_uid, anio]
+    );
+    if (!meses.length) return res.status(404).json({ error: 'No hay meses registrados para este año.' });
+
+    // Calcular totales reales del año
+    let ingresoTotal = 0, fijosTotal = 0, variablesTotal = 0, noPresTotal = 0;
+    for (const m of meses) {
+      ingresoTotal    += Number(m.ingreso_real) || Number(m.ingreso_estimado);
+      fijosTotal      += Number(m.fijos_reales) || 0;
+      variablesTotal  += Number(m.variables_reales) || 0;
+      noPresTotal     += Number(m.no_presupuestados_reales) || 0;
+    }
+    const remanenteReal = parseFloat((ingresoTotal - fijosTotal - variablesTotal - noPresTotal).toFixed(2));
+
+    // Análisis de categorías del año (para recomendaciones)
+    const [analisis] = await db.execute(
+      `SELECT categoria,
+              SUM(CASE WHEN tipo='variable'          THEN monto ELSE 0 END) AS total_variable,
+              SUM(CASE WHEN tipo='no_presupuestado'  THEN monto ELSE 0 END) AS total_no_presup,
+              SUM(monto)                                                      AS total_anual,
+              COUNT(DISTINCT mes)                                             AS meses_presentes
+       FROM registros_gasto
+       WHERE firebase_uid = ? AND anio = ?
+       GROUP BY categoria ORDER BY total_anual DESC`,
+      [firebase_uid, anio]
+    );
+
+    const [varBase] = await db.execute(
+      `SELECT categoria, SUM(monto_estimado) AS presupuestado_mensual
+       FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1 GROUP BY categoria`,
+      [firebase_uid]
+    );
+    const presupActual = {};
+    for (const g of varBase) presupActual[g.categoria] = Number(g.presupuestado_mensual);
+
+    const recomendaciones = analisis.map(a => {
+      const promedioVariable  = Number(a.total_variable)  / Number(a.meses_presentes);
+      const promedioNoPresup  = Number(a.total_no_presup) / Number(a.meses_presentes);
+      const avgReal    = promedioVariable + promedioNoPresup;
+      const presup     = presupActual[a.categoria] || 0;
+      const diferencia = parseFloat((avgReal - presup).toFixed(2));
+      return {
+        categoria:                a.categoria,
+        presupuesto_actual:       parseFloat(presup.toFixed(2)),
+        promedio_real_mensual:    parseFloat(avgReal.toFixed(2)),
+        promedio_no_presupuestado: parseFloat(promedioNoPresup.toFixed(2)),
+        total_anual:              parseFloat(Number(a.total_anual).toFixed(2)),
+        meses_presentes:          Number(a.meses_presentes),
+        diferencia,
+        recomendacion: diferencia > 5
+          ? `Aumentar presupuesto de ${a.categoria} en $${diferencia.toFixed(2)}/mes`
+          : diferencia < -20
+            ? `Podrías reducir presupuesto de ${a.categoria} en $${Math.abs(diferencia).toFixed(2)}/mes`
+            : 'Presupuesto adecuado',
+        accion: diferencia > 5 ? 'aumentar' : diferencia < -20 ? 'reducir' : 'mantener',
+      };
+    });
+
+    // Snapshot en cierres_anuales
+    await db.execute(
+      `INSERT INTO cierres_anuales
+         (firebase_uid, anio, ingreso_total, fijos_total, variables_total,
+          no_presupuestados_total, remanente_real, analisis_categorias, recomendaciones_sig)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         ingreso_total = VALUES(ingreso_total), fijos_total = VALUES(fijos_total),
+         variables_total = VALUES(variables_total), no_presupuestados_total = VALUES(no_presupuestados_total),
+         remanente_real = VALUES(remanente_real),
+         analisis_categorias = VALUES(analisis_categorias),
+         recomendaciones_sig = VALUES(recomendaciones_sig)`,
+      [firebase_uid, anio,
+       parseFloat(ingresoTotal.toFixed(2)), parseFloat(fijosTotal.toFixed(2)),
+       parseFloat(variablesTotal.toFixed(2)), parseFloat(noPresTotal.toFixed(2)),
+       remanenteReal,
+       JSON.stringify(analisis),
+       JSON.stringify(recomendaciones)]
+    );
+
+    _logInfo(`/user/cerrar-anio/${anio}`, `Cierre anual ${anio} generado`, firebase_uid);
+
+    res.json({
+      cerrado: true,
+      anio: Number(anio),
+      resumen_anual: {
+        ingreso_total:           parseFloat(ingresoTotal.toFixed(2)),
+        fijos_total:             parseFloat(fijosTotal.toFixed(2)),
+        variables_total:         parseFloat(variablesTotal.toFixed(2)),
+        no_presupuestados_total: parseFloat(noPresTotal.toFixed(2)),
+        remanente_real:          remanenteReal,
+      },
+      recomendaciones,
+      mensaje: `Cierre ${anio} completado. ${recomendaciones.filter(r => r.accion !== 'mantener').length} ajustes sugeridos para ${Number(anio) + 1}.`,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
