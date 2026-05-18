@@ -20,6 +20,20 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
 
   final _fmt = NumberFormat('#,##0.00', 'es');
 
+  String get _miRol {
+    if (_budget == null) return '';
+    final members = _budget!['members'] as List? ?? [];
+    final me = members.firstWhere(
+      (m) => m['firebase_uid'] == widget.firebaseUid,
+      orElse: () => null,
+    );
+    return (me?['rol'] as String?) ?? '';
+  }
+
+  bool get _puedeAgregarGasto => SharedBudgetService.canAddExpense(_miRol);
+  bool get _puedeEditar => SharedBudgetService.canEdit(_miRol);
+  bool get _esCreador => SharedBudgetService.isCreador(_miRol);
+
   @override
   void initState() {
     super.initState();
@@ -92,14 +106,18 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text(nombre, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+        title: Row(children: [
+          Expanded(child: Text(nombre, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16))),
+          if (_miRol.isNotEmpty) _rolChip(_miRol),
+        ]),
         iconTheme: const IconThemeData(color: AppTheme.textPrimary),
         actions: [
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _recargar),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
-            onPressed: _showEliminarDialog,
-          ),
+          if (_esCreador)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+              onPressed: _showEliminarDialog,
+            ),
         ],
       ),
       body: _loadingBudget
@@ -257,11 +275,32 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
     );
   }
 
+  Widget _rolChip(String rol) {
+    const colors = {
+      'creador': AppTheme.primary,
+      'owner': AppTheme.primary,
+      'admin': AppTheme.info,
+      'participante': AppTheme.success,
+      'lectura': AppTheme.textMuted,
+    };
+    final color = colors[rol] ?? AppTheme.textMuted;
+    return Container(
+      margin: const EdgeInsets.only(right: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(rol, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+    );
+  }
+
   Widget _buildBotones(bool activo) {
-    final esOwner = _budget?['owner_uid'] == widget.firebaseUid;
+    final regla = _budget?['regla_reparto'] as String? ?? '';
+    final puedeEditorDivision = _puedeEditar && (regla == 'porcentual' || regla == 'pool_contribucion');
     return Column(children: [
       Row(children: [
-        if (activo) ...[
+        if (activo && _puedeAgregarGasto) ...[
           Expanded(
             child: OutlinedButton.icon(
               onPressed: _showAgregarGasto,
@@ -277,21 +316,22 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
           ),
           const SizedBox(width: 10),
         ],
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _showEliminarDialog,
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Eliminar'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.danger,
-              side: const BorderSide(color: AppTheme.danger),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        if (_esCreador)
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _showEliminarDialog,
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('Eliminar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.danger,
+                side: const BorderSide(color: AppTheme.danger),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             ),
           ),
-        ),
       ]),
-      if (esOwner && (_budget?['regla_reparto'] == 'porcentual' || _budget?['regla_reparto'] == 'pool_contribucion')) ...[
+      if (puedeEditorDivision) ...[
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
@@ -301,6 +341,23 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             label: const Text('Editar división entre miembros'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.border),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
+      if (_puedeEditar) ...[
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _showGestionarMiembros,
+            icon: const Icon(Icons.manage_accounts_outlined, size: 18),
+            label: const Text('Gestionar miembros y roles'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.textSecondary,
               side: const BorderSide(color: AppTheme.border),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -358,13 +415,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               Text(_shortUid(m['firebase_uid'] as String),
                   style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               Row(children: [
-                if ((m['rol'] as String?) == 'owner')
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                    child: const Text('owner', style: TextStyle(color: AppTheme.primary, fontSize: 10)),
-                  ),
+                if ((m['rol'] as String?) != null && (m['rol'] as String).isNotEmpty) ...[
+                  _rolChip(m['rol'] as String),
+                  const SizedBox(width: 6),
+                ],
                 Text('\$${_fmt.format(contrib)}',
                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
               ]),
@@ -699,6 +753,94 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         );
       }
     }
+  }
+
+  void _showGestionarMiembros() {
+    final members = List<dynamic>.from(_budget?['members'] ?? []);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setM) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            const Text('Gestionar miembros',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            const Text('Cambia el rol de cada participante.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            const SizedBox(height: 16),
+            ...members.map((m) {
+              final uid = m['firebase_uid'] as String;
+              final rol = (m['rol'] as String?) ?? 'participante';
+              final esMismo = uid == widget.firebaseUid;
+              final esCreadorMiembro = rol == 'creador' || rol == 'owner';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(_shortUid(uid),
+                        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                    if (esMismo)
+                      const Text('(tú)', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  ])),
+                  if (esCreadorMiembro || esMismo)
+                    _rolChip(rol)
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: rol,
+                          dropdownColor: AppTheme.surface,
+                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                          items: const [
+                            DropdownMenuItem(value: 'admin', child: Text('admin')),
+                            DropdownMenuItem(value: 'participante', child: Text('participante')),
+                            DropdownMenuItem(value: 'lectura', child: Text('lectura')),
+                          ],
+                          onChanged: _esCreador
+                              ? (nuevoRol) async {
+                                  if (nuevoRol == null || nuevoRol == rol) return;
+                                  final ok = await SharedBudgetService.changeRole(
+                                      widget.budgetId, uid, widget.firebaseUid, nuevoRol);
+                                  if (ok) {
+                                    setM(() => m['rol'] = nuevoRol);
+                                    _recargar();
+                                  } else if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Error al cambiar el rol')));
+                                  }
+                                }
+                              : (nuevoRol) async {
+                                  // admin solo puede asignar participante/lectura
+                                  if (nuevoRol == null || nuevoRol == rol || nuevoRol == 'admin') return;
+                                  final ok = await SharedBudgetService.changeRole(
+                                      widget.budgetId, uid, widget.firebaseUid, nuevoRol);
+                                  if (ok) {
+                                    setM(() => m['rol'] = nuevoRol);
+                                    _recargar();
+                                  } else if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Error al cambiar el rol')));
+                                  }
+                                },
+                        ),
+                      ),
+                    ),
+                ]),
+              );
+            }),
+          ]),
+        );
+      }),
+    );
   }
 
   void _showEliminarDialog() {

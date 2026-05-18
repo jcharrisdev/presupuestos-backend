@@ -20,10 +20,16 @@ class SharedBudgetService {
     return null;
   }
 
-  static Future<bool> invite(int budgetId, String emailInvitado, String uid) async {
+  static Future<bool> invite(
+    int budgetId,
+    String emailInvitado,
+    String uid, {
+    String rolInvitado = 'participante',
+  }) async {
     final res = await ApiClient.post('/shared-budgets/$budgetId/invitations', {
       'email_invitado': emailInvitado,
       'firebase_uid': uid,
+      'rol_invitado': rolInvitado,
     });
     return res.statusCode == 201;
   }
@@ -98,4 +104,28 @@ class SharedBudgetService {
     final res = await ApiClient.patch('/shared-budgets/$budgetId/members/$memberUid', body);
     return res.statusCode == 200;
   }
+
+  // Sprint 8: cambiar rol de un miembro
+  static Future<bool> changeRole(
+    int budgetId,
+    String memberUid,
+    String myUid,
+    String nuevoRol,
+  ) async {
+    final res = await ApiClient.patch(
+      '/shared-budgets/$budgetId/members/$memberUid/rol',
+      {'firebase_uid': myUid, 'rol': nuevoRol},
+    );
+    return res.statusCode == 200;
+  }
+
+  // Retorna el nivel numérico del rol para comparaciones de UI
+  static int rolLevel(String? rol) {
+    const levels = {'creador': 4, 'admin': 3, 'participante': 2, 'lectura': 1, 'owner': 4, 'member': 2};
+    return levels[rol] ?? 0;
+  }
+
+  static bool canEdit(String? rol) => rolLevel(rol) >= rolLevel('admin');
+  static bool canAddExpense(String? rol) => rolLevel(rol) >= rolLevel('participante');
+  static bool isCreador(String? rol) => rol == 'creador' || rol == 'owner';
 }

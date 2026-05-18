@@ -475,6 +475,24 @@ pool.getConnection(async (err, conn) => {
   } catch (e) {
     console.error('⚠️ Migración eventos_presupuesto:', e.message);
   }
+
+  // Migración: roles en presupuesto compartido (Sprint 8)
+  try {
+    // ENUM ampliado: creador | admin | participante | lectura (owner queda como alias legacy)
+    await db.execute(`ALTER TABLE shared_budget_members
+      MODIFY COLUMN rol ENUM('owner','creador','admin','participante','lectura') NOT NULL DEFAULT 'participante'`);
+    // owner existente → creador
+    await db.execute(`UPDATE shared_budget_members SET rol = 'creador' WHERE rol = 'owner'`);
+    // rol_invitado en invitaciones para que el owner elija el rol al invitar
+    await db.execute(`ALTER TABLE shared_budget_invitations
+      ADD COLUMN rol_invitado ENUM('admin','participante','lectura') NOT NULL DEFAULT 'participante'`);
+    console.log('✅ Migración roles shared_budget OK');
+  } catch (e) {
+    // Silencioso si las columnas ya existen
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración roles shared_budget:', e.message);
+    }
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -4443,6 +4461,25 @@ function calcularSplits(monto, regla, miembros) {
   return [];
 }
 
+// Jerarquía de roles: creador > admin > participante > lectura
+const ROLE_LEVEL = { creador: 4, admin: 3, participante: 2, lectura: 1, owner: 4, member: 2 };
+
+// Retorna el rol del usuario en el presupuesto, o null si no es miembro
+async function _getSharedRole(budgetId, uid) {
+  const [[row]] = await db.execute(
+    `SELECT rol FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`,
+    [budgetId, uid]
+  );
+  return row ? row.rol : null;
+}
+
+// Retorna true si el usuario tiene al menos el nivel de rol requerido
+async function _hasSharedRole(budgetId, uid, minRole) {
+  const rol = await _getSharedRole(budgetId, uid);
+  if (!rol) return false;
+  return (ROLE_LEVEL[rol] || 0) >= (ROLE_LEVEL[minRole] || 0);
+}
+
 // POST /shared-budgets
 app.post('/shared-budgets', async (req, res) => {
   const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, contribucion_owner, aporte_periodo_owner = 0, firebase_uid } = req.body;
@@ -4461,7 +4498,7 @@ app.post('/shared-budgets', async (req, res) => {
     const contribucion = regla_reparto === 'pool_contribucion' ? (contribucion_owner || null) : null;
     await conn.execute(
       `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual, aporte_periodo)
-       VALUES (?, ?, 'owner', ?, ?, ?, ?)`,
+       VALUES (?, ?, 'creador', ?, ?, ?, ?)`,
       [budgetId, firebase_uid, pct, ingreso, contribucion, Number(aporte_periodo_owner) || 0]
     );
     await conn.execute(
@@ -4575,10 +4612,10 @@ app.patch('/shared-budgets/:id', async (req, res) => {
   const { nombre, regla_reparto, tipo_periodo, dia_inicio_periodo, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    const [[budget]] = await db.execute(
-      `SELECT id FROM shared_budgets WHERE id = ? AND owner_uid = ?`, [id, firebase_uid]
-    );
-    if (!budget) return res.status(403).json({ error: 'No autorizado' });
+    // Solo creador o admin pueden editar el presupuesto
+    if (!(await _hasSharedRole(id, firebase_uid, 'admin'))) {
+      return res.status(403).json({ error: 'Se requiere rol admin o creador' });
+    }
     await db.execute(
       `UPDATE shared_budgets SET
         nombre = COALESCE(?, nombre),
@@ -4600,10 +4637,10 @@ app.delete('/shared-budgets/:id', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    const [[budget]] = await db.execute(
-      `SELECT id FROM shared_budgets WHERE id = ? AND owner_uid = ?`, [id, firebase_uid]
-    );
-    if (!budget) return res.status(403).json({ error: 'No autorizado' });
+    // Solo el creador puede eliminar el presupuesto
+    if (!(await _hasSharedRole(id, firebase_uid, 'creador'))) {
+      return res.status(403).json({ error: 'Solo el creador puede eliminar el presupuesto' });
+    }
     await db.execute(`DELETE FROM shared_budgets WHERE id = ?`, [id]);
     res.json({ message: 'Eliminado' });
   } catch (err) {
@@ -4614,13 +4651,22 @@ app.delete('/shared-budgets/:id', async (req, res) => {
 // POST /shared-budgets/:id/invitations
 app.post('/shared-budgets/:id/invitations', async (req, res) => {
   const { id } = req.params;
-  const { email_invitado, firebase_uid } = req.body;
+  const { email_invitado, firebase_uid, rol_invitado = 'participante' } = req.body;
   if (!email_invitado || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  const rolesValidos = ['admin', 'participante', 'lectura'];
+  if (!rolesValidos.includes(rol_invitado)) return res.status(400).json({ error: 'rol_invitado inválido' });
   try {
-    const [[budget]] = await db.execute(
-      `SELECT id FROM shared_budgets WHERE id = ? AND owner_uid = ?`, [id, firebase_uid]
+    // Solo creador o admin pueden invitar
+    const [[myMember]] = await db.execute(
+      `SELECT rol FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
-    if (!budget) return res.status(403).json({ error: 'No autorizado' });
+    if (!myMember || !['creador', 'admin'].includes(myMember.rol)) {
+      return res.status(403).json({ error: 'Solo el creador o un admin puede invitar' });
+    }
+    // Admin no puede invitar a otro admin (solo creador puede)
+    if (myMember.rol === 'admin' && rol_invitado === 'admin') {
+      return res.status(403).json({ error: 'Solo el creador puede asignar rol admin' });
+    }
     // Cancelar invitaciones previas pendientes al mismo email
     await db.execute(
       `UPDATE shared_budget_invitations SET estado = 'cancelled'
@@ -4630,18 +4676,18 @@ app.post('/shared-budgets/:id/invitations', async (req, res) => {
     const token = require('crypto').randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await db.execute(
-      `INSERT INTO shared_budget_invitations (shared_budget_id, email_invitado, token, expires_at)
-       VALUES (?, ?, ?, ?)`,
-      [id, email_invitado, token, expiresAt]
+      `INSERT INTO shared_budget_invitations (shared_budget_id, email_invitado, token, expires_at, rol_invitado)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, email_invitado, token, expiresAt, rol_invitado]
     );
     await db.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
        VALUES (?, ?, 'invitar_usuario', ?)`,
-      [id, firebase_uid, JSON.stringify({ email_invitado })]
+      [id, firebase_uid, JSON.stringify({ email_invitado, rol_invitado })]
     );
     const [[budgetInfo]] = await db.execute(`SELECT nombre FROM shared_budgets WHERE id = ?`, [id]);
     sendInvitationEmail({ emailInvitado: email_invitado, ownerUid: firebase_uid, presupuestoNombre: budgetInfo.nombre });
-    res.status(201).json({ token, email_invitado, expires_at: expiresAt });
+    res.status(201).json({ token, email_invitado, rol_invitado, expires_at: expiresAt });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4685,13 +4731,13 @@ app.post('/shared-budget-invitations/:token/accept', async (req, res) => {
       `UPDATE shared_budget_invitations SET estado = 'accepted' WHERE id = ?`, [inv.id]
     );
     const [[budget]] = await conn.execute(`SELECT regla_reparto FROM shared_budgets WHERE id = ?`, [inv.shared_budget_id]);
-    // Nuevo miembro entra con porcentaje 0 y contribucion_mensual del body si aplica.
-    // El owner debe rebalancear porcentajes usando PATCH /shared-budgets/:id/members/:uid.
+    // Nuevo miembro entra con el rol definido en la invitación
+    const rolNuevo = inv.rol_invitado || 'participante';
     const contribucionNuevo = budget.regla_reparto === 'pool_contribucion' ? (ingreso_declarado || null) : null;
     await conn.execute(
       `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual)
-       VALUES (?, ?, 'member', 0, ?, ?)`,
-      [inv.shared_budget_id, firebase_uid, ingreso_declarado || null, contribucionNuevo]
+       VALUES (?, ?, ?, 0, ?, ?)`,
+      [inv.shared_budget_id, firebase_uid, rolNuevo, ingreso_declarado || null, contribucionNuevo]
     );
     await conn.execute(
       `UPDATE shared_budgets SET estado = 'active' WHERE id = ?`, [inv.shared_budget_id]
@@ -4729,18 +4775,19 @@ app.post('/shared-budget-invitations/:token/reject', async (req, res) => {
   }
 });
 
-// PATCH /shared-budgets/:id/members/:uid — Editar porcentaje/contribución de un miembro (solo el owner)
+// PATCH /shared-budgets/:id/members/:uid — Editar porcentaje/contribución de un miembro (admin o creador)
 app.patch('/shared-budgets/:id/members/:uid', async (req, res) => {
   const { id, uid } = req.params;
   const { porcentaje, ingreso_declarado, contribucion_mensual, firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Verificar que el que hace el cambio es el owner
+    if (!(await _hasSharedRole(id, firebase_uid, 'admin'))) {
+      return res.status(403).json({ error: 'Se requiere rol admin o creador' });
+    }
     const [[budget]] = await db.execute(
-      `SELECT owner_uid, regla_reparto FROM shared_budgets WHERE id = ?`, [id]
+      `SELECT regla_reparto FROM shared_budgets WHERE id = ?`, [id]
     );
     if (!budget) return res.status(404).json({ error: 'Presupuesto no encontrado' });
-    if (budget.owner_uid !== firebase_uid) return res.status(403).json({ error: 'Solo el owner puede editar miembros' });
 
     // Validar que los porcentajes no superen 100% si regla es porcentual
     if (budget.regla_reparto === 'porcentual' && porcentaje != null) {
@@ -4777,11 +4824,52 @@ app.patch('/shared-budgets/:id/members/:uid', async (req, res) => {
   }
 });
 
+// PATCH /shared-budgets/:id/members/:uid/rol — Cambiar rol de un miembro (Sprint 8)
+app.patch('/shared-budgets/:id/members/:uid/rol', async (req, res) => {
+  const { id, uid } = req.params;
+  const { rol, firebase_uid } = req.body;
+  if (!firebase_uid || !rol) return res.status(400).json({ error: 'firebase_uid y rol requeridos' });
+  const rolesAsignables = ['admin', 'participante', 'lectura'];
+  if (!rolesAsignables.includes(rol)) return res.status(400).json({ error: 'Rol inválido. Valores: admin, participante, lectura' });
+  try {
+    const miRol = await _getSharedRole(id, firebase_uid);
+    if (!miRol || (ROLE_LEVEL[miRol] || 0) < ROLE_LEVEL['admin']) {
+      return res.status(403).json({ error: 'Se requiere rol admin o creador' });
+    }
+    // Admin no puede asignar rol admin a otro
+    if (miRol === 'admin' && rol === 'admin') {
+      return res.status(403).json({ error: 'Solo el creador puede asignar rol admin' });
+    }
+    // No se puede cambiar el rol del creador
+    const rolTarget = await _getSharedRole(id, uid);
+    if (rolTarget === 'creador') {
+      return res.status(403).json({ error: 'No se puede cambiar el rol del creador' });
+    }
+    if (!rolTarget) return res.status(404).json({ error: 'Miembro no encontrado' });
+    await db.execute(
+      `UPDATE shared_budget_members SET rol = ? WHERE shared_budget_id = ? AND firebase_uid = ?`,
+      [rol, id, uid]
+    );
+    await db.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'cambiar_rol', ?)`,
+      [id, firebase_uid, JSON.stringify({ uid, rol_anterior: rolTarget, rol_nuevo: rol })]
+    );
+    res.json({ message: 'Rol actualizado', uid, rol });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /shared-budgets/:id/expenses
 app.post('/shared-budgets/:id/expenses', async (req, res) => {
   const { id } = req.params;
   const { descripcion, monto, pagado_por, regla_override, es_personal, firebase_uid_personal, fecha, firebase_uid } = req.body;
   if (!descripcion || monto == null || !pagado_por || !fecha || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
+  // lectura no puede agregar gastos
+  if (!(await _hasSharedRole(id, firebase_uid, 'participante'))) {
+    return res.status(403).json({ error: 'Sin permiso para agregar gastos (rol lectura)' });
+  }
   const conn = await db.getConnection();
   await conn.beginTransaction();
   try {

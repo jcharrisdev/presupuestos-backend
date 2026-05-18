@@ -153,6 +153,25 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
     );
   }
 
+  Widget _rolChip(String rol) {
+    const colors = {
+      'creador': AppTheme.primary,
+      'owner': AppTheme.primary,
+      'admin': AppTheme.info,
+      'participante': AppTheme.success,
+      'lectura': AppTheme.textMuted,
+    };
+    final color = colors[rol] ?? AppTheme.textMuted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(rol, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+    );
+  }
+
   Widget _card(dynamic b) {
     return GestureDetector(
       onTap: () async {
@@ -173,14 +192,20 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
             Expanded(
               child: Text(b['nombre'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _estadoColor(b['estado'] ?? '').withOpacity(0.15),
-                borderRadius: BorderRadius.circular(6),
+            Row(children: [
+              if ((b['rol'] as String?) != null) ...[
+                _rolChip(b['rol'] as String),
+                const SizedBox(width: 6),
+              ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _estadoColor(b['estado'] ?? '').withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(_estadoLabel(b['estado'] ?? ''), style: TextStyle(color: _estadoColor(b['estado'] ?? ''), fontSize: 11, fontWeight: FontWeight.w600)),
               ),
-              child: Text(_estadoLabel(b['estado'] ?? ''), style: TextStyle(color: _estadoColor(b['estado'] ?? ''), fontSize: 11, fontWeight: FontWeight.w600)),
-            ),
+            ]),
           ]),
           const SizedBox(height: 8),
           Row(children: [
