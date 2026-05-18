@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-18 (v5.0 — sprints 1-4 completados + hotfixes críticos)
+Última actualización: 2026-05-18 (v6.0 — sprints 1-7 completados + hotfixes)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -261,6 +261,23 @@ POST   /user/expense-definitions                   → crear/deduplicar definici
 --- INGRESO REAL (v5.0) ---
 PATCH  /user/meses/:anio/:mes/ingreso              → {firebase_uid, ingreso_real}
 
+--- CIERRE MENSUAL/ANUAL (v6.0) ---
+POST   /user/cerrar-mes-financiero/:anio/:mes      → cierra mes, snapshot en cierres_mensuales
+POST   /user/cerrar-anio/:anio                     → snapshot en cierres_anuales + recomendaciones
+GET    /user/proyeccion-siguiente-anio/:anio       → recomendaciones por categoría para N+1
+
+--- ALERTAS AVANZADAS (v6.0) ---
+GET    /user/alertas/resumen?firebase_uid=&anio=   → conteo alertas por mes (badges)
+
+--- PRESUPUESTOS DE EVENTOS (v6.0) ---
+GET    /user/eventos?firebase_uid=&anio=           → lista de eventos del año
+POST   /user/eventos                               → crear evento
+PUT    /user/eventos/:id                           → editar evento
+DELETE /user/eventos/:id?firebase_uid=             → cancelar evento (soft)
+GET    /user/eventos/:id?firebase_uid=             → detalle con gastos
+POST   /user/eventos/:id/gastos                    → registrar gasto del evento
+DELETE /user/eventos/:id/gastos/:gastoId?firebase_uid= → eliminar gasto del evento
+
 --- ENDPOINTS EXISTENTES (sin cambios) ---
 (Ver sección anterior del contexto para lista completa de /presupuestos,
  /deudas, /ventas, /calendario, /shared-budgets, /invoice-scanner, etc.)
@@ -341,46 +358,48 @@ SESIÓN 8 (2026-05-17 — v4.0):
   - Nuevas pantallas: EstadoFinancieroAnualScreen, MesDetalleScreen, DebugLogsScreen
   - SALARYING_VISION.md creado con visión completa
 
-SESIÓN 9 (2026-05-18 — v5.0 — ACTUAL):
-  AUDITORÍA + SPRINTS 1-4
+SESIÓN 9 (2026-05-18 — v5.0):
+  AUDITORÍA + SPRINTS 1-4 (ver historial en git)
 
-  Sprint 1 — Bugs críticos:
-  - Fix: _recalcularEstimadosAnio respeta aplica_meses (no * 12 ciegamente)
-  - Fix: PATCH /recalcular tenía cálculo inline duplicado — delegado a la función
-  - Fix: DELETE eventos borra 'pendiente' Y 'vencido' (no dejaba duplicados)
-  - Fix: dia_pago_2 funcional — backend (PUT/POST/generación) + Flutter (form + chip)
+SESIÓN 10 (2026-05-18 — v6.0 — ACTUAL):
+  SPRINTS 5-7 + HOTFIXES
 
-  Sprint 2 — Brechas funcionales:
-  - Alertas auto: _generarAlertasMes fire-and-forget en POST/DELETE /registros
-  - Alertas visibles: _AlertaMesCard en tab Resumen de MesDetalleScreen
-  - PATCH /user/meses/:anio/:mes/ingreso — registrar ingreso real del mes
-  - _IngresoRealCard en tab Resumen con bottom sheet para ingresar monto
-  - DashboardScreen reescrito: EstadoAnualService, barra uso, próximos pagos, alertas, metas
+  Sprint 5 — Wizard cierre mensual/anual:
+  - POST /user/cerrar-anio/:anio → cierres_anuales + recomendaciones por categoría
+  - CierreMesSheet: wizard 3 pasos (resumen → pendientes → alertas → confirmar)
+  - CierreAnioScreen: análisis anual, ajustes sugeridos para año siguiente
+  - MesDetalleScreen: botón "Cerrar mes" (solo si estado=activo)
+  - EstadoFinancieroAnualScreen: botón "Cerrar año / Proyección N+1"
+  - EstadoAnualService.cerrarAnio()
 
-  Sprint 3 — Scanner QR global:
-  - Ícono QR en AppBar de EstadoFinancieroAnualScreen, MesDetalleScreen, PerfilFinancieroScreen
+  Sprint 6 — Alertas avanzadas:
+  - _generarAlertasMes: 5 nuevos tipos (remanente_bajo, remanente_negativo,
+    tendencia_creciente, presupuesto_subestimado, impacto_anual)
+  - GET /user/alertas/resumen → badges por mes para grid
+  - AlertasScreen: filtros por nivel, agrupación por mes, marcar leídas
+  - Grid de meses: badges numéricos de alertas no leídas
+  - EstadoAnualService.getResumenAlertas()
 
-  Sprint 4 — Gastos reutilizables:
-  - Tabla expense_definitions (plantillas)
-  - Columna definition_id en registros_gasto
-  - GET/POST /user/expense-definitions
-  - POST /registros auto-vincula/crea definición
-  - AgregarGastoSheet: sección "GASTOS ANTERIORES" con chips pre-llenado
+  Sprint 7 — Presupuestos de eventos:
+  - Tablas: eventos_presupuesto + eventos_gastos (migración automática)
+  - CRUD: GET/POST/PUT/DELETE /user/eventos + /user/eventos/:id/gastos
+  - GET /user/meses integra cuotas de eventos activos en compromisos_fijos
+  - EventosService, EventosScreen, CrearEventoSheet, EventoDetalleScreen
+  - EstadoFinancieroAnualScreen: botón "Eventos YYYY"
+  - MesDetalleScreen: sección EVENTOS en compromisos del mes
 
-  Hotfixes sesión 9:
-  - "0.00" string MySQL es truthy: Number(campo) || Number(otro) en 4 lugares
-  - meses_financieros no tiene updated_at — removido del PATCH ingreso
-  - web/index.html: script skip-waiting para SW auto-activación en deploys
-  - vercel.json: no-store en main.dart.js, index.html, flutter_bootstrap.js
-  - flutter clean OBLIGATORIO antes de flutter build web (caché incremental)
-  - CHECKLIST_ENTREGABLE.md creado en raíz del proyecto
+  Hotfixes sesión 10:
+  - Bug precedencia operadores: (Number(x) || Number(y)) - gastos en remanente_real
+    (GET /user/estado-anual retornaba solo el ingreso sin restar gastos)
+  - RegistrosService.crear(): parámetro pagado añadido (default 0)
+  - AgregarGastoSheet: tipo 'fijo' → pagado=1 por defecto
+  - _MesCard: mes activo muestra remanente_real en color cuando hay gastos registrados
+  - Fix tamaño cards: Column anidado sin mainAxisSize.min → revertido a Text simple
 
-  Próximos sprints (ver plan en CHECKLIST_ENTREGABLE.md):
-  - Sprint 5: Wizard cierre mensual/anual
-  - Sprint 6: Alertas avanzadas + push notifications
-  - Sprint 7: Presupuestos de eventos
-  - Sprint 8: Roles presupuesto compartido
-  - Sprint 9: Productos y precios (facturas QR)
+  Próximos sprints:
+  - Sprint 8: Roles en presupuesto compartido
+  - Sprint 9: Productos y precios (facturas QR mejoradas)
+  - APK final: generar solo cuando todo esté validado en web
 
 ================================================================================
 10. CONVENCIONES DEL PROYECTO
@@ -435,6 +454,11 @@ GIT:
   - Verificar strings del sprint en build/web/main.dart.js antes de subir
   - El service worker de Vercel tiene skip-waiting en web/index.html (auto-actualiza)
   - Tabla expense_definitions existe desde v5.0 — definition_id en registros_gasto
+  - Tablas eventos_presupuesto y eventos_gastos existen desde v6.0
+  - Operador precedencia JS: SIEMPRE (Number(a) || Number(b)) - c, nunca sin paréntesis
+  - Column anidada en GridView sin mainAxisSize.min achica las tarjetas — usar Text directo
+  - AgregarGastoSheet: tipo 'fijo' → pagado=1; variable/no_presupuestado → pagado=0
+  - No generar APK en cada sprint — solo web build durante desarrollo; APK al final
 
 ================================================================================
 12. INSTRUCCIÓN PARA NUEVA SESIÓN
@@ -447,7 +471,7 @@ CHECKLIST inicio de sesión:
   1. Leer CLAUDE_CONTEXT.txt + SALARYING_VISION.md
   2. flutter analyze antes de cada commit
   3. Un commit por feature/fix
-  4. Orden de deploy: push → Render → APK → web build → push web
+  4. Orden de deploy: push → Render → web build → push web (NO APK durante desarrollo)
   5. NO tocar módulo Ventas
   6. _recalcularEstimadosAnio fire-and-forget en cambios de perfil
   7. _logInfo en endpoints de escritura exitosos
