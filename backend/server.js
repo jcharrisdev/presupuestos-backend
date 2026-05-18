@@ -8562,7 +8562,7 @@ app.patch('/user/meses/:anio/:mes/ingreso', async (req, res) => {
     );
     if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado. Genera el estado anual primero.' });
     await db.execute(
-      `UPDATE meses_financieros SET ingreso_real = ?, updated_at = NOW() WHERE id = ?`,
+      `UPDATE meses_financieros SET ingreso_real = ? WHERE id = ?`,
       [parseFloat(Number(ingreso_real).toFixed(2)), mesRow.id]
     );
     const [[updated]] = await db.execute(`SELECT * FROM meses_financieros WHERE id = ?`, [mesRow.id]);
