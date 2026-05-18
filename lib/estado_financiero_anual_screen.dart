@@ -5,6 +5,7 @@ import 'mes_detalle_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 import 'cierre_anio_screen.dart';
+import 'alertas_screen.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -22,6 +23,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   bool _sinPerfil = false;
   bool _mesesExpanded = false;
   int _alertasCount = 0;
+  Map<int, Map<String, dynamic>> _alertasResumen = {};
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -49,10 +51,16 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       } else {
         setState(() { _data = data; _loading = false; });
       }
-      // Cargar alertas no leídas en segundo plano
+      // Cargar alertas y resumen por mes en segundo plano
       try {
         final alertas = await EstadoAnualService.getAlertas(widget.firebaseUid, anio: _anio);
         if (mounted) setState(() => _alertasCount = alertas['no_leidas'] as int? ?? 0);
+      } catch (_) {}
+      try {
+        final resumen = await EstadoAnualService.getResumenAlertas(widget.firebaseUid, _anio);
+        final porMes = (resumen['por_mes'] as Map? ?? {})
+            .map((k, v) => MapEntry(int.tryParse(k.toString()) ?? 0, Map<String, dynamic>.from(v as Map)));
+        if (mounted) setState(() => _alertasResumen = porMes);
       } catch (_) {}
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
@@ -139,7 +147,16 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       children: [
         _CardAnual(ea: ea, anio: _anio, onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
         if (_alertasCount > 0)
-          _AlertaBanner(count: _alertasCount),
+          _AlertaBanner(
+            count: _alertasCount,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => AlertasScreen(
+                firebaseUid: widget.firebaseUid,
+                anio: _anio,
+              )),
+            ).then((_) => _cargar()),
+          ),
         const SizedBox(height: 8),
         if (_mesesExpanded) ...[
           const Padding(
@@ -160,6 +177,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
                 mes: i + 1,
                 label: _mesesLabel[i + 1],
                 data: m,
+                alertasBadge: _alertasResumen[i + 1],
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => MesDetalleScreen(
@@ -317,8 +335,9 @@ class _MesCard extends StatelessWidget {
   final int mes;
   final String label;
   final Map<String, dynamic>? data;
+  final Map<String, dynamic>? alertasBadge;
   final VoidCallback onTap;
-  const _MesCard({required this.mes, required this.label, this.data, required this.onTap});
+  const _MesCard({required this.mes, required this.label, this.data, this.alertasBadge, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -332,40 +351,65 @@ class _MesCard extends StatelessWidget {
     if (esActual) borderColor = AppTheme.primary;
     if (esCerrado && remReal != null && remReal < 0) borderColor = AppTheme.danger;
 
+    final noLeidas = alertasBadge?['no_leidas'] as int? ?? 0;
+    final hayPeligro = (alertasBadge?['peligro'] as int? ?? 0) > 0;
+    final badgeColor = hayPeligro ? AppTheme.danger : AppTheme.warning;
+
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: esActual ? AppTheme.primary.withOpacity(0.08) : AppTheme.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: borderColor, width: esActual ? 1.5 : 1),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(label, style: TextStyle(
-              color: esActual ? AppTheme.primary : AppTheme.textPrimary,
-              fontSize: 13, fontWeight: FontWeight.w700,
-            )),
-            const SizedBox(height: 4),
-            if (esCerrado && remReal != null)
-              Text('\$${remReal.toStringAsFixed(0)}',
-                  style: TextStyle(fontSize: 11, color: remReal >= 0 ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w600))
-            else if (remEst != null)
-              Text('\$${remEst.toStringAsFixed(0)}',
-                  style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))
-            else
-              const Text('—', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-            if (esActual)
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(3)),
-                child: const Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: esActual ? AppTheme.primary.withOpacity(0.08) : AppTheme.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: borderColor, width: esActual ? 1.5 : 1),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: TextStyle(
+                  color: esActual ? AppTheme.primary : AppTheme.textPrimary,
+                  fontSize: 13, fontWeight: FontWeight.w700,
+                )),
+                const SizedBox(height: 4),
+                if (esCerrado && remReal != null)
+                  Text('\$${remReal.toStringAsFixed(0)}',
+                      style: TextStyle(fontSize: 11, color: remReal >= 0 ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w600))
+                else if (remEst != null)
+                  Text('\$${remEst.toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))
+                else
+                  const Text('—', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                if (esActual)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(3)),
+                    child: const Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
+                  ),
+              ],
+            ),
+          ),
+          // Badge de alertas no leídas
+          if (noLeidas > 0)
+            Positioned(
+              top: -5,
+              right: -5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.background, width: 1.5),
+                ),
+                child: Text('$noLeidas',
+                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -399,20 +443,27 @@ class _TocaMeses extends StatelessWidget {
 
 class _AlertaBanner extends StatelessWidget {
   final int count;
-  const _AlertaBanner({required this.count});
+  final VoidCallback onTap;
+  const _AlertaBanner({required this.count, required this.onTap});
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(
-      color: AppTheme.warning.withOpacity(0.10),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.warning.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.notifications_active, color: AppTheme.warning, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text('$count alerta${count > 1 ? "s" : ""} sin leer — toca para ver',
+              style: const TextStyle(color: AppTheme.warning, fontSize: 13, fontWeight: FontWeight.w600)),
+        ),
+        const Icon(Icons.chevron_right, color: AppTheme.warning, size: 18),
+      ]),
     ),
-    child: Row(children: [
-      const Icon(Icons.notifications_active, color: AppTheme.warning, size: 16),
-      const SizedBox(width: 8),
-      Text('$count alerta${count > 1 ? "s" : ""} financiera${count > 1 ? "s" : ""} sin leer',
-          style: const TextStyle(color: AppTheme.warning, fontSize: 13, fontWeight: FontWeight.w600)),
-    ]),
   );
 }

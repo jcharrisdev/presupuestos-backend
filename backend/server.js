@@ -9004,6 +9004,107 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
     }
   }
 
+  // Alerta 4: remanente bajo (< 10% del ingreso)
+  const ingresoMes = Number(mesRow.ingreso_real) || Number(mesRow.ingreso_estimado);
+  const fijosReal  = Number(mesRow.fijos_reales) || 0;
+  const varReal    = Number(mesRow.variables_reales) || 0;
+  const noPresReal = Number(mesRow.no_presupuestados_reales) || 0;
+  const remanenteReal = ingresoMes - fijosReal - varReal - noPresReal;
+  if (ingresoMes > 0 && remanenteReal < ingresoMes * 0.10 && remanenteReal >= 0) {
+    alertas.push({
+      tipo: 'remanente_bajo', categoria: null, nivel: 'warning',
+      titulo: 'Remanente muy ajustado',
+      mensaje: `Tu remanente este mes es $${remanenteReal.toFixed(2)}, menos del 10% de tu ingreso ($${ingresoMes.toFixed(2)}). Queda poco margen ante imprevistos.`,
+      accion_sugerida: 'Revisa si hay gastos variables que puedas reducir o diferir al mes siguiente.',
+    });
+  }
+  if (ingresoMes > 0 && remanenteReal < 0) {
+    alertas.push({
+      tipo: 'remanente_negativo', categoria: null, nivel: 'danger',
+      titulo: 'Gasto mayor al ingreso',
+      mensaje: `Tus gastos superan tu ingreso en $${Math.abs(remanenteReal).toFixed(2)} este mes.`,
+      accion_sugerida: 'Identifica los gastos que puedas eliminar o reducir para volver a terreno positivo.',
+    });
+  }
+
+  // Alerta 5: tendencia creciente — categoría con gasto creciendo 3 meses seguidos
+  if (mes >= 3) {
+    const [tendencia] = await db.execute(
+      `SELECT categoria,
+              SUM(CASE WHEN mes = ? THEN monto ELSE 0 END) AS mes0,
+              SUM(CASE WHEN mes = ? THEN monto ELSE 0 END) AS mes1,
+              SUM(CASE WHEN mes = ? THEN monto ELSE 0 END) AS mes2
+       FROM registros_gasto
+       WHERE firebase_uid = ? AND anio = ? AND mes BETWEEN ? AND ?
+         AND tipo IN ('variable','no_presupuestado')
+       GROUP BY categoria`,
+      [mes - 2, mes - 1, mes, firebase_uid, anio, mes - 2, mes]
+    );
+    for (const t of tendencia) {
+      const m0 = Number(t.mes0), m1 = Number(t.mes1), m2 = Number(t.mes2);
+      if (m0 > 0 && m1 > m0 && m2 > m1) {
+        const crec = ((m2 - m0) / m0 * 100).toFixed(0);
+        alertas.push({
+          tipo: 'tendencia_creciente', categoria: t.categoria, nivel: 'warning',
+          titulo: `Tendencia creciente en ${t.categoria}`,
+          mensaje: `Tu gasto en ${t.categoria} lleva 3 meses subiendo: $${m0.toFixed(0)} → $${m1.toFixed(0)} → $${m2.toFixed(0)} (+${crec}% total).`,
+          accion_sugerida: `Revisa qué está impulsando el aumento en ${t.categoria} antes de que impacte más el presupuesto.`,
+        });
+      }
+    }
+  }
+
+  // Alerta 6: presupuesto subestimado — promedio real últimos 3 meses supera estimado >20%
+  if (mes >= 3) {
+    const [promCat] = await db.execute(
+      `SELECT categoria, AVG(monto) AS promedio_real
+       FROM registros_gasto
+       WHERE firebase_uid = ? AND anio = ? AND mes BETWEEN ? AND ?
+         AND tipo = 'variable'
+       GROUP BY categoria`,
+      [firebase_uid, anio, mes - 2, mes]
+    );
+    for (const p of promCat) {
+      const presup  = presupPorCat[p.categoria] || 0;
+      const promedio = Number(p.promedio_real);
+      if (presup > 0 && promedio > presup * 1.20) {
+        const exceso = ((promedio / presup - 1) * 100).toFixed(0);
+        alertas.push({
+          tipo: 'presupuesto_subestimado', categoria: p.categoria, nivel: 'info',
+          titulo: `Presupuesto subestimado en ${p.categoria}`,
+          mensaje: `Tu gasto real promedio en ${p.categoria} ($${promedio.toFixed(2)}/mes) supera tu presupuesto ($${presup.toFixed(2)}/mes) en ${exceso}% durante 3 meses.`,
+          accion_sugerida: `Considera aumentar el presupuesto de ${p.categoria} a al menos $${Math.ceil(promedio).toFixed(0)}/mes.`,
+        });
+      }
+    }
+  }
+
+  // Alerta 7: impacto anual — si el ritmo actual persiste, el remanente anual cambia >20%
+  if (ingresoMes > 0 && mes >= 2) {
+    const [[efaRow]] = await db.execute(
+      `SELECT remanente_anual_estimado FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`,
+      [firebase_uid, anio]
+    );
+    if (efaRow) {
+      const remEst = Number(efaRow.remanente_anual_estimado);
+      // Ritmo mensual real proyectado al año
+      const ritmoMensual = remanenteReal;
+      const remProyectado = ritmoMensual * 12;
+      const diferencia = Math.abs(remProyectado - remEst);
+      if (remEst !== 0 && diferencia / Math.abs(remEst) > 0.25) {
+        const dir = remProyectado < remEst ? 'bajar' : 'subir';
+        alertas.push({
+          tipo: 'impacto_anual', categoria: null, nivel: remProyectado < remEst ? 'warning' : 'info',
+          titulo: 'Impacto anual proyectado',
+          mensaje: `Si mantienes este ritmo de gasto, tu remanente anual podría ${dir} de $${remEst.toFixed(0)} a $${remProyectado.toFixed(0)}.`,
+          accion_sugerida: dir === 'bajar'
+            ? 'Revisa tus gastos variables para acercarte al plan original.'
+            : 'Vas mejor que lo planeado — considera destinar el extra a una meta de ahorro.',
+        });
+      }
+    }
+  }
+
   // Guardar alertas nuevas (evitar duplicados del mismo mes/tipo/categoría)
   for (const a of alertas) {
     try {
@@ -9052,6 +9153,37 @@ app.patch('/user/alertas/:id/leer', async (req, res) => {
   try {
     await db.execute(`UPDATE alertas_financieras SET leida = 1 WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/alertas/resumen?firebase_uid=&anio=
+// Devuelve conteo de alertas no leídas por mes del año (para badges en el grid).
+app.get('/user/alertas/resumen', async (req, res) => {
+  const { firebase_uid, anio } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT mes,
+              COUNT(*) AS total,
+              SUM(CASE WHEN leida = 0 THEN 1 ELSE 0 END) AS no_leidas,
+              SUM(CASE WHEN nivel = 'danger' AND leida = 0 THEN 1 ELSE 0 END) AS peligro,
+              SUM(CASE WHEN nivel = 'warning' AND leida = 0 THEN 1 ELSE 0 END) AS advertencia
+       FROM alertas_financieras
+       WHERE firebase_uid = ? AND anio = ?
+       GROUP BY mes ORDER BY mes ASC`,
+      [firebase_uid, anio || new Date().getFullYear()]
+    );
+    // Convertir a mapa mes→conteos
+    const porMes = {};
+    for (const r of rows) {
+      porMes[Number(r.mes)] = {
+        total:       Number(r.total),
+        no_leidas:   Number(r.no_leidas),
+        peligro:     Number(r.peligro),
+        advertencia: Number(r.advertencia),
+      };
+    }
+    res.json({ anio: Number(anio || new Date().getFullYear()), por_mes: porMes });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

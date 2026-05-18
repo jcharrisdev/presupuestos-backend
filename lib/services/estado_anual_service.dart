@@ -54,6 +54,12 @@ class EstadoAnualService {
     await ApiClient.patch('/user/alertas/$alertaId/leer', {'firebase_uid': uid});
   }
 
+  static Future<Map<String, dynamic>> getResumenAlertas(String uid, int anio) async {
+    final res = await ApiClient.get('/user/alertas/resumen?firebase_uid=$uid&anio=$anio');
+    if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
+    return jsonDecode(res.body);
+  }
+
   static Future<Map<String, dynamic>> registrarIngresoReal(
       String uid, int anio, int mes, double ingresoReal) async {
     final res = await ApiClient.patch('/user/meses/$anio/$mes/ingreso', {
