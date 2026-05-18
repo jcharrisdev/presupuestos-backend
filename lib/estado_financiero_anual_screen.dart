@@ -361,15 +361,21 @@ class _MesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final estado = data?['estado'] as String? ?? 'futuro';
-    final remReal = data != null ? _d(data!['remanente_real']) : null;
-    final remEst  = data != null ? _d(data!['remanente_estimado']) : null;
-    final esActual = estado == 'activo';
+    final estado   = data?['estado'] as String? ?? 'futuro';
+    final remReal  = data != null ? _d(data!['remanente_real']) : null;
+    final remEst   = data != null ? _d(data!['remanente_estimado']) : null;
+    final tieneReal = data != null &&
+        (_d(data!['fijos_reales']) > 0 ||
+         _d(data!['variables_reales']) > 0 ||
+         _d(data!['no_presupuestados_reales']) > 0 ||
+         _d(data!['ingreso_real']) > 0);
+    final esActual  = estado == 'activo';
     final esCerrado = estado == 'cerrado';
 
     Color borderColor = AppTheme.border;
     if (esActual) borderColor = AppTheme.primary;
-    if (esCerrado && remReal != null && remReal < 0) borderColor = AppTheme.danger;
+    if ((esCerrado || (esActual && tieneReal)) && remReal != null && remReal < 0)
+      borderColor = AppTheme.danger;
 
     final noLeidas = alertasBadge?['no_leidas'] as int? ?? 0;
     final hayPeligro = (alertasBadge?['peligro'] as int? ?? 0) > 0;
@@ -395,9 +401,17 @@ class _MesCard extends StatelessWidget {
                   fontSize: 13, fontWeight: FontWeight.w700,
                 )),
                 const SizedBox(height: 4),
-                if (esCerrado && remReal != null)
-                  Text('\$${remReal.toStringAsFixed(0)}',
-                      style: TextStyle(fontSize: 11, color: remReal >= 0 ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w600))
+                if ((esCerrado || (esActual && tieneReal)) && remReal != null)
+                  Column(children: [
+                    Text('\$${remReal.toStringAsFixed(0)}',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: remReal >= 0 ? AppTheme.success : AppTheme.danger,
+                            fontWeight: FontWeight.w600)),
+                    if (esActual && tieneReal && remEst != null)
+                      Text('est \$${remEst.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 9, color: AppTheme.textMuted)),
+                  ])
                 else if (remEst != null)
                   Text('\$${remEst.toStringAsFixed(0)}',
                       style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))

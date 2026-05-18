@@ -27,6 +27,7 @@ class RegistrosService {
     int? origenFijoId,
     int? origenVariableId,
     int? definitionId,
+    int pagado = 0,
   }) async {
     final res = await ApiClient.post('/registros', {
       'firebase_uid': uid,
@@ -37,6 +38,7 @@ class RegistrosService {
       'nombre': nombre,
       'monto': monto,
       'fecha': fecha,
+      'pagado': pagado,
       if (subcategoriaId != null) 'subcategoria_id': subcategoriaId,
       if (notas != null) 'notas': notas,
       if (origenFijoId != null) 'origen_fijo_id': origenFijoId,

@@ -358,6 +358,8 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         fecha: DateFormat('yyyy-MM-dd').format(_fecha),
         notas: _notas.text.isEmpty ? null : _notas.text.trim(),
         definitionId: _defSeleccionada,
+        // Los fijos se crean como pagados (ya pagaste el compromiso)
+        pagado: _tipo == 'fijo' ? 1 : 0,
       );
       if (_guardarComoBase && _tipo != 'fijo') {
         await GastosVariablesService.crear(

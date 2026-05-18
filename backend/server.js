@@ -8453,7 +8453,7 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
         ...m,
         label: MESES_LABEL[m.mes],
         remanente_real: parseFloat((
-          Number(m.ingreso_real) || Number(m.ingreso_estimado)
+          (Number(m.ingreso_real) || Number(m.ingreso_estimado))
           - Number(m.fijos_reales)
           - Number(m.variables_reales)
           - Number(m.no_presupuestados_reales)
