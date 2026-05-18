@@ -8401,7 +8401,7 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
     const totalFijosReales = meses.reduce((s, m) => s + Number(m.fijos_reales), 0);
     const totalVarReales   = meses.reduce((s, m) => s + Number(m.variables_reales), 0);
     const totalNoPres      = meses.reduce((s, m) => s + Number(m.no_presupuestados_reales), 0);
-    const totalIngReal     = meses.reduce((s, m) => s + Number(m.ingreso_real || m.ingreso_estimado), 0);
+    const totalIngReal     = meses.reduce((s, m) => s + Number(m.ingreso_real) || Number(m.ingreso_estimado), 0);
 
     const MESES_LABEL = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     res.json({
@@ -8418,7 +8418,7 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
         ...m,
         label: MESES_LABEL[m.mes],
         remanente_real: parseFloat((
-          Number(m.ingreso_real || m.ingreso_estimado)
+          Number(m.ingreso_real) || Number(m.ingreso_estimado)
           - Number(m.fijos_reales)
           - Number(m.variables_reales)
           - Number(m.no_presupuestados_reales)
@@ -8458,7 +8458,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       else if (r.tipo === 'variable') variablesReales += Number(r.monto);
       else noPresReales += Number(r.monto);
     }
-    const ingresoReal  = Number(mesRow.ingreso_real || mesRow.ingreso_estimado);
+    const ingresoReal  = Number(mesRow.ingreso_real) || Number(mesRow.ingreso_estimado);
     const remanenteReal = ingresoReal - fijosReales - variablesReales - noPresReales;
 
     // Análisis por categoría
@@ -9151,9 +9151,9 @@ app.post('/user/cerrar-mes-financiero/:anio/:mes', async (req, res) => {
          variables_reales = VALUES(variables_reales), no_presupuestados = VALUES(no_presupuestados),
          remanente_real = VALUES(remanente_real), recomendaciones = VALUES(recomendaciones)`,
       [firebase_uid, mesRow.id, anio, mes,
-       mesRow.ingreso_real || mesRow.ingreso_estimado,
+       Number(mesRow.ingreso_real) || Number(mesRow.ingreso_estimado),
        mesRow.fijos_reales, mesRow.variables_reales, mesRow.no_presupuestados_reales,
-       parseFloat((Number(mesRow.ingreso_real || mesRow.ingreso_estimado) - Number(mesRow.fijos_reales) - Number(mesRow.variables_reales) - Number(mesRow.no_presupuestados_reales)).toFixed(2)),
+       parseFloat(((Number(mesRow.ingreso_real) || Number(mesRow.ingreso_estimado)) - Number(mesRow.fijos_reales) - Number(mesRow.variables_reales) - Number(mesRow.no_presupuestados_reales)).toFixed(2)),
        JSON.stringify(alertas.map(a => ({ tipo: a.tipo, categoria: a.categoria, mensaje: a.mensaje })))]
     );
 

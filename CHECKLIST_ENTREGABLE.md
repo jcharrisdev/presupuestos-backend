@@ -62,7 +62,16 @@ grep -n "ALTER TABLE.*ADD COLUMN.*nueva_columna\|CREATE TABLE.*nueva_columna" ba
 ```
 **Resultado esperado:** la migración existe en server.js **antes** del endpoint que la usa. Si no existe, agregar la migración primero.
 
-### 2E. Reglas críticas de MySQL 5.6 respetadas
+### 2E. Columnas Decimal de MySQL no usar con || directamente
+```bash
+# MySQL retorna Decimal como string "0.00" que es TRUTHY en JS.
+# Nunca: Number(row.campo_decimal || row.otro)  → "0.00" es truthy, falla
+# Siempre: Number(row.campo_decimal) || Number(row.otro)
+grep -n 'Number(.*ingreso_real ||' backend/server.js
+```
+**Resultado esperado:** salida vacía (nunca el patrón raw `||` antes de Number).
+
+### 2F. Reglas críticas de MySQL 5.6 respetadas
 ```bash
 # No debe haber LIMIT ? en el código nuevo
 grep -n "LIMIT ?" backend/server.js | tail -20
