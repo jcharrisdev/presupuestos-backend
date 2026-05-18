@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'services/registros_service.dart';
@@ -26,6 +25,7 @@ class MesDetalleScreen extends StatefulWidget {
 class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerProviderStateMixin {
   late TabController _tabs;
   Map<String, dynamic>? _data;
+  List<Map<String, dynamic>> _alertas = [];
   bool _loading = true;
   String? _error;
 
@@ -46,7 +46,18 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
     setState(() { _loading = true; _error = null; });
     try {
       final data = await EstadoAnualService.getMes(widget.firebaseUid, widget.anio, widget.mes);
+      if (!mounted) return;
       setState(() { _data = data; _loading = false; });
+      // Cargar alertas del mes en segundo plano
+      try {
+        final al = await EstadoAnualService.getAlertas(
+          widget.firebaseUid, anio: widget.anio, mes: widget.mes);
+        if (mounted) {
+          setState(() {
+            _alertas = (al['alertas'] as List? ?? []).cast<Map<String, dynamic>>();
+          });
+        }
+      } catch (_) {}
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
@@ -83,7 +94,14 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                   child: TabBarView(
                     controller: _tabs,
                     children: [
-                      _TabResumen(data: _data!),
+                      _TabResumen(
+                        data: _data!,
+                        alertas: _alertas,
+                        uid: widget.firebaseUid,
+                        anio: widget.anio,
+                        mes: widget.mes,
+                        onChanged: _cargar,
+                      ),
                       _TabGastos(
                         data: _data!,
                         uid: widget.firebaseUid,
@@ -115,7 +133,20 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
 
 class _TabResumen extends StatelessWidget {
   final Map<String, dynamic> data;
-  const _TabResumen({required this.data});
+  final List<Map<String, dynamic>> alertas;
+  final String uid;
+  final int anio;
+  final int mes;
+  final VoidCallback onChanged;
+
+  const _TabResumen({
+    required this.data,
+    required this.alertas,
+    required this.uid,
+    required this.anio,
+    required this.mes,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +186,20 @@ class _TabResumen extends StatelessWidget {
             )),
           ]),
         ),
+        const SizedBox(height: 12),
+
+        // Ingreso real
+        _IngresoRealCard(
+          ingEst: ingEst, ingReal: ingReal,
+          uid: uid, anio: anio, mes: mes, onChanged: onChanged,
+        ),
+
+        // Alertas del mes
+        if (alertas.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ...alertas.map((a) => _AlertaMesCard(alerta: a)),
+        ],
+
         const SizedBox(height: 20),
 
         // Tabla estimado vs real
@@ -606,6 +651,165 @@ class _CategoriaCard extends StatelessWidget {
             backgroundColor: AppTheme.surfaceAlt,
           ),
         ),
+      ]),
+    );
+  }
+}
+
+// ── Card de ingreso real ──────────────────────────────────────────────────────
+class _IngresoRealCard extends StatelessWidget {
+  final double ingEst;
+  final double ingReal;
+  final String uid;
+  final int anio;
+  final int mes;
+  final VoidCallback onChanged;
+
+  const _IngresoRealCard({
+    required this.ingEst, required this.ingReal,
+    required this.uid, required this.anio, required this.mes,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tieneReal = ingReal > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: tieneReal ? AppTheme.success.withValues(alpha: 0.3) : AppTheme.border,
+        ),
+      ),
+      child: Row(children: [
+        Icon(Icons.account_balance_wallet_outlined,
+            color: tieneReal ? AppTheme.success : AppTheme.textMuted, size: 20),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Ingreso cobrado este mes',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+          const SizedBox(height: 2),
+          Text(
+            tieneReal
+                ? '\$${ingReal.toStringAsFixed(2)}'
+                : 'Sin registrar — estimado: \$${ingEst.toStringAsFixed(2)}',
+            style: TextStyle(
+              color: tieneReal ? AppTheme.success : AppTheme.textMuted,
+              fontSize: tieneReal ? 15 : 12,
+              fontWeight: tieneReal ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
+        ])),
+        TextButton(
+          onPressed: () => _mostrarSheet(context),
+          style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+          child: Text(tieneReal ? 'Editar' : 'Registrar'),
+        ),
+      ]),
+    );
+  }
+
+  void _mostrarSheet(BuildContext context) {
+    final ctrl = TextEditingController(
+        text: ingReal > 0 ? ingReal.toStringAsFixed(2) : '');
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Ingreso real del mes',
+              style: TextStyle(color: AppTheme.textPrimary,
+                  fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Estimado: \$${ingEst.toStringAsFixed(2)}',
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18),
+            decoration: const InputDecoration(
+              labelText: 'Monto cobrado',
+              prefixText: '\$ ',
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                final val = double.tryParse(ctrl.text.replaceAll(',', '.'));
+                if (val == null || val < 0) return;
+                Navigator.pop(ctx);
+                try {
+                  await EstadoAnualService.registrarIngresoReal(uid, anio, mes, val);
+                  onChanged();
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Error: $e'),
+                          backgroundColor: AppTheme.danger));
+                  }
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Card de alerta del mes ────────────────────────────────────────────────────
+class _AlertaMesCard extends StatelessWidget {
+  final Map<String, dynamic> alerta;
+  const _AlertaMesCard({required this.alerta});
+
+  @override
+  Widget build(BuildContext context) {
+    final nivel = alerta['nivel'] as String? ?? 'info';
+    final color = nivel == 'danger' ? AppTheme.danger
+        : nivel == 'warning' ? AppTheme.warning
+        : AppTheme.info;
+    final icon = nivel == 'danger' ? Icons.error_outline
+        : nivel == 'warning' ? Icons.warning_amber_rounded
+        : Icons.info_outline;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(alerta['titulo'] as String? ?? '',
+              style: TextStyle(color: color,
+                  fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(alerta['mensaje'] as String? ?? '',
+              style: const TextStyle(color: AppTheme.textSecondary,
+                  fontSize: 11, height: 1.4)),
+          if ((alerta['accion_sugerida'] as String?)?.isNotEmpty == true) ...[
+            const SizedBox(height: 4),
+            Text('→ ${alerta['accion_sugerida']}',
+                style: TextStyle(color: color, fontSize: 11,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ])),
       ]),
     );
   }

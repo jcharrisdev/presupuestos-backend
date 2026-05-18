@@ -8547,6 +8547,30 @@ app.patch('/user/estado-anual/:anio/recalcular', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// PATCH /user/meses/:anio/:mes/ingreso
+// Registra el ingreso real cobrado en un mes específico.
+app.patch('/user/meses/:anio/:mes/ingreso', async (req, res) => {
+  const { anio, mes } = req.params;
+  const { firebase_uid, ingreso_real } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  if (ingreso_real == null || isNaN(Number(ingreso_real)) || Number(ingreso_real) < 0)
+    return res.status(400).json({ error: 'ingreso_real debe ser un número >= 0' });
+  try {
+    const [[mesRow]] = await db.execute(
+      `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, anio, mes]
+    );
+    if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado. Genera el estado anual primero.' });
+    await db.execute(
+      `UPDATE meses_financieros SET ingreso_real = ?, updated_at = NOW() WHERE id = ?`,
+      [parseFloat(Number(ingreso_real).toFixed(2)), mesRow.id]
+    );
+    const [[updated]] = await db.execute(`SELECT * FROM meses_financieros WHERE id = ?`, [mesRow.id]);
+    res.json(updated);
+    _logInfo(`/user/meses/${anio}/${mes}/ingreso`, `Ingreso real registrado: $${Number(ingreso_real).toFixed(2)} para ${anio}/${mes}`, firebase_uid);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // =============================================================================
 // MÓDULO: REGISTROS DE GASTO
 // Lo que realmente ocurrió en cada mes. Tres tipos:
@@ -8715,6 +8739,7 @@ app.post('/registros', async (req, res) => {
     const [[created]] = await db.execute(`SELECT * FROM registros_gasto WHERE id = ?`, [r.insertId]);
     res.status(201).json(created);
     _logInfo('/registros', `Gasto registrado: "${nombre}" $${Number(monto).toFixed(2)} (${tipo} · ${categoria}) en ${anio}/${mes}`, firebase_uid);
+    _generarAlertasMes(firebase_uid, Number(anio), Number(mes)).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8756,6 +8781,7 @@ app.delete('/registros/:id', async (req, res) => {
     await db.execute(`DELETE FROM registros_gasto WHERE id = ?`, [id]);
     await _actualizarTotalesMes(existing.mes_id, firebase_uid);
     res.json({ success: true });
+    _generarAlertasMes(firebase_uid, Number(existing.anio), Number(existing.mes)).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1,17 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'theme/app_theme.dart';
-import 'services/api_client.dart';
-import 'services/shared_budget_service.dart';
-import 'services/deudas_service.dart';
-import 'lista_presupuestos.dart';
-import 'ahorro_meta.dart';
-import 'cobros_home.dart';
-import 'shared_budgets_list_screen.dart';
-import 'deudas/deudas_screen.dart';
-import 'services/income_service.dart';
-import 'detalles_presupuesto.dart';
+import 'services/estado_anual_service.dart';
+import 'services/calendar_service.dart';
+import 'services/savings_service.dart';
+import 'mes_detalle_screen.dart';
+import 'widgets/financiero/agregar_gasto_sheet.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String firebaseUid;
@@ -22,1185 +15,389 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Data
-  Map<String, dynamic>? _presupuesto;
-  List<dynamic> _sharedBudgets = [];
+  final _now = DateTime.now();
+
+  Map<String, dynamic>? _mes;
   List<dynamic> _proximosPagos = [];
-  Map<String, dynamic>? _metaAhorro;
-  List<dynamic> _todasMetas = [];
-  Map<String, dynamic>? _resumenVentas;
-  double _totalDeudas = 0;
-  bool _loadingDeudas = true;
-  Map<String, dynamic>? _fondo;
-  bool _loadingFondo = true;
+  List<Map<String, dynamic>> _alertas = [];
+  List<dynamic> _metas = [];
 
-  // Loading
-  bool _loadingPresupuesto = true;
-  bool _loadingShared = true;
-  bool _loadingPagos = true;
-  bool _loadingAhorro = true;
-  bool _loadingVentas = true;
-
-  // Errors
-  String? _errorPresupuesto;
-  String? _errorAhorro;
-  String? _errorVentas;
-
-  final _fmt = NumberFormat('#,##0.00', 'es');
-  bool _conexionLenta = false;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    ApiClient.onSlowConnection = (lento) {
-      if (mounted) setState(() => _conexionLenta = lento);
-    };
     _cargar();
   }
 
-  @override
-  void dispose() {
-    ApiClient.onSlowConnection = null;
-    super.dispose();
-  }
-
   Future<void> _cargar() async {
-    final now = DateTime.now();
-    setState(() {
-      _loadingPresupuesto = _loadingShared = _loadingPagos = _loadingAhorro = _loadingVentas = _loadingDeudas = _loadingFondo = true;
-      _errorPresupuesto = _errorAhorro = _errorVentas = null;
-    });
-    // _cargarPresupuesto primero para que _cargarFondo reutilice su ID sin llamada duplicada
-    await _cargarPresupuesto();
-    await Future.wait([
-      _cargarSharedBudgets(),
-      _cargarProximosPagos(now),
-      _cargarAhorro(),
-      _cargarVentas(),
-      _cargarDeudas(),
-      _cargarFondo(),
-    ]);
-  }
-
-  // ── Loaders ────────────────────────────────────────────────────────────────
-
-  Future<void> _cargarPresupuesto() async {
+    setState(() { _loading = true; _error = null; });
     try {
-      final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode != 200) {
-        if (mounted) setState(() { _errorPresupuesto = 'Error ${res.statusCode}'; _loadingPresupuesto = false; });
-        return;
-      }
-      final list = json.decode(res.body) as List;
-      final activo = list.firstWhere(
-        (p) => p['estado'] == 'activo' || p['estado'] == null,
-        orElse: () => list.isNotEmpty ? list.first : null,
-      );
-      if (activo == null) {
-        if (mounted) setState(() { _presupuesto = null; _loadingPresupuesto = false; });
-        return;
-      }
+      // Mes actual
+      final mes = await EstadoAnualService.getMes(
+          widget.firebaseUid, _now.year, _now.month);
 
-      // Llamar al detalle para obtener gastado real, fechas y breakdown
+      // Proximos pagos del calendario
+      List<dynamic> pagos = [];
       try {
-        final detRes = await ApiClient.get('/presupuestos/${activo['id']}/detalle?firebase_uid=${widget.firebaseUid}');
-        if (detRes.statusCode == 200) {
-          final det = json.decode(detRes.body) as Map<String, dynamic>;
-          final movimientos = det['movimientos'] as List? ?? [];
-          final resumen = det['resumen'] as Map<String, dynamic>? ?? {};
-          final periodo  = det['periodo']  as Map<String, dynamic>? ?? {};
-
-          // gastado real = suma de monto_pagado_real de movimientos pagados
-          final gastadoReal = movimientos
-              .where((m) => m['pagado'] == 1)
-              .fold<double>(0, (s, m) => s + (double.tryParse(m['monto_pagado_real']?.toString() ?? '0') ?? 0));
-
-          final monto = double.tryParse(activo['monto_total']?.toString() ?? '0') ?? 0;
-          final merged = Map<String, dynamic>.from(activo)
-            ..['gastado']        = gastadoReal
-            ..['disponible']     = monto - gastadoReal
-            ..['fecha_inicio']   = periodo['fecha_inicio']
-            ..['fecha_fin']      = periodo['fecha_fin']
-            ..['total_fijos']    = resumen['totalFijo']    ?? 0
-            ..['total_variables']= resumen['totalNoFijo']  ?? 0
-            ..['total_ahorro']   = resumen['totalAhorro']  ?? 0;
-
-          if (mounted) setState(() { _presupuesto = merged; _loadingPresupuesto = false; });
-          return;
-        }
+        final res = await CalendarService.getEventos(
+            widget.firebaseUid, _now.month, _now.year);
+        pagos = (res as List?)
+            ?.where((e) => e['estado'] == 'pendiente')
+            .toList() ?? [];
+        pagos.sort((a, b) {
+          final da = a['fecha_evento']?.toString() ?? '';
+          final db = b['fecha_evento']?.toString() ?? '';
+          return da.compareTo(db);
+        });
+        if (pagos.length > 5) pagos = pagos.sublist(0, 5);
       } catch (_) {}
 
-      // Fallback: solo datos básicos del list
-      if (mounted) setState(() { _presupuesto = activo; _loadingPresupuesto = false; });
-    } catch (e) {
-      if (mounted) setState(() { _errorPresupuesto = e.toString(); _loadingPresupuesto = false; });
-    }
-  }
+      // Alertas no leídas
+      List<Map<String, dynamic>> alertas = [];
+      try {
+        final al = await EstadoAnualService.getAlertas(
+            widget.firebaseUid, anio: _now.year, mes: _now.month);
+        alertas = (al['alertas'] as List? ?? []).cast<Map<String, dynamic>>();
+      } catch (_) {}
 
-  Future<void> _cargarSharedBudgets() async {
-    try {
-      final data = await SharedBudgetService.getAll(widget.firebaseUid);
-      if (mounted) setState(() { _sharedBudgets = data; _loadingShared = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loadingShared = false);
-    }
-  }
+      // Metas de ahorro activas
+      List<dynamic> metas = [];
+      try {
+        final m = await SavingsService.getAhorros(widget.firebaseUid);
+        metas = m.where((x) =>
+            (x['activa'] as int? ?? 1) == 1).take(3).toList();
+      } catch (_) {}
 
-  Future<void> _cargarProximosPagos(DateTime now) async {
-    try {
-      final res = await ApiClient.get(
-        '/calendario/eventos?firebase_uid=${widget.firebaseUid}&mes=${now.month}&anio=${now.year}',
-      );
-      if (res.statusCode == 200) {
-        final list = json.decode(res.body) as List;
-        final en7Dias = now.add(const Duration(days: 7));
-        final proximos = list.where((e) {
-          if (e['estado'] != 'pendiente') return false;
-          try {
-            final f = DateTime.parse(e['fecha_evento'] as String);
-            return !f.isBefore(DateTime(now.year, now.month, now.day)) && f.isBefore(en7Dias);
-          } catch (_) { return false; }
-        }).toList()
-          ..sort((a, b) => (a['fecha_evento'] as String).compareTo(b['fecha_evento'] as String));
-        if (mounted) setState(() { _proximosPagos = proximos; _loadingPagos = false; });
-      } else {
-        if (mounted) setState(() => _loadingPagos = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingPagos = false);
-    }
-  }
-
-  Future<void> _cargarAhorro() async {
-    try {
-      final res = await ApiClient.get('/ahorros?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode == 200) {
-        final list = json.decode(res.body) as List;
-        if (mounted) {
-          Map<String, dynamic>? mejor;
-          double mejorPct = -1;
-          for (final m in list) {
-            final metaRaw  = m['monto_meta_total'] ?? m['monto_meta'];
-            final meta     = double.tryParse(metaRaw?.toString() ?? '0') ?? 0;
-            final ahorrado = (double.tryParse(m['monto_ahorrado']?.toString() ?? '0') ?? 0)
-                           + (double.tryParse(m['total_aportaciones']?.toString() ?? '0') ?? 0);
-            final pct = meta > 0 ? ahorrado / meta : 0;
-            if (pct > mejorPct) { mejorPct = pct.toDouble(); mejor = Map<String, dynamic>.from(m); }
-          }
-          setState(() { _metaAhorro = mejor; _todasMetas = list; _loadingAhorro = false; });
-        }
-      } else {
-        if (mounted) setState(() { _errorAhorro = 'Error ${res.statusCode}'; _loadingAhorro = false; });
-      }
-    } catch (e) {
-      if (mounted) setState(() { _errorAhorro = e.toString(); _loadingAhorro = false; });
-    }
-  }
-
-  Future<void> _cargarVentas() async {
-    try {
-      final res = await ApiClient.get('/ventas?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode == 200) {
-        final list = json.decode(res.body) as List;
-        final activas = list.where((v) => v['estado'] == 'activa').toList();
-        double cobrado = 0;
-        for (final v in activas) {
-          cobrado += double.tryParse(v['total_cobrado']?.toString() ?? '0') ?? 0;
-        }
-        if (mounted) setState(() {
-          _resumenVentas = {'cantidad': activas.length, 'total_cobrado': cobrado};
-          _loadingVentas = false;
-        });
-      } else {
-        if (mounted) setState(() { _errorVentas = 'Error ${res.statusCode}'; _loadingVentas = false; });
-      }
-    } catch (e) {
-      if (mounted) setState(() { _errorVentas = e.toString(); _loadingVentas = false; });
-    }
-  }
-
-  Future<void> _cargarDeudas() async {
-    try {
-      final data = await DeudasService.getAll(widget.firebaseUid);
-      if (mounted) setState(() {
-        _totalDeudas = _d(data['total_pendiente']);
-        _loadingDeudas = false;
+      if (!mounted) return;
+      setState(() {
+        _mes = mes;
+        _proximosPagos = pagos;
+        _alertas = alertas;
+        _metas = metas;
+        _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loadingDeudas = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = e.toString(); _loading = false; });
     }
   }
-
-  Future<void> _cargarFondo() async {
-    try {
-      // Reutiliza el ID del presupuesto ya cargado — evita la llamada duplicada a /presupuestos
-      final id = _presupuesto?['id'] as int?;
-      if (id == null) {
-        if (mounted) setState(() => _loadingFondo = false);
-        return;
-      }
-      final data = await IncomeService.getFondoSeguridad(id, widget.firebaseUid);
-      if (mounted) setState(() {
-        _fondo = data;
-        _loadingFondo = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loadingFondo = false);
-    }
-  }
-
-  // ── Financial computations ─────────────────────────────────────────────────
-
-  double get _gastado =>
-      double.tryParse(_presupuesto?['gastado']?.toString() ?? _presupuesto?['total_gastado']?.toString() ?? '0') ?? 0;
-
-  double get _totalPresupuesto =>
-      double.tryParse(_presupuesto?['monto_total']?.toString() ?? '0') ?? 0;
-
-  double get _disponible =>
-      double.tryParse(_presupuesto?['disponible']?.toString() ?? '0') ??
-      (_totalPresupuesto - _gastado).clamp(0.0, double.infinity);
-
-  double get _totalAhorro =>
-      double.tryParse(_presupuesto?['total_ahorro']?.toString() ?? '0') ?? 0;
-
-  double get _sharedBalanceNeto =>
-      _sharedBudgets.fold(0.0, (s, b) => s + (double.tryParse(b['balance_neto']?.toString() ?? '0') ?? 0));
-
-  double _getPctPeriodo() {
-    try {
-      final inicio = _presupuesto?['fecha_inicio'] ?? _presupuesto?['periodo_inicio'];
-      final fin = _presupuesto?['fecha_fin'] ?? _presupuesto?['periodo_fin'];
-      if (inicio == null || fin == null) return 0.5;
-      final start = DateTime.parse(inicio.toString());
-      final end = DateTime.parse(fin.toString());
-      final now = DateTime.now();
-      if (now.isBefore(start)) return 0;
-      if (now.isAfter(end)) return 1;
-      final total = end.difference(start).inDays;
-      if (total == 0) return 1;
-      return (now.difference(start).inDays / total).clamp(0.0, 1.0);
-    } catch (_) { return 0.5; }
-  }
-
-  // Índice de Salud Financiera (0–100)
-  // Control presupuesto: 50 pts | Tasa ahorro: 30 pts | Compromisos cubiertos: 20 pts
-  int _calcularPuntaje() {
-    if (_presupuesto == null) return 0;
-    final total = _totalPresupuesto;
-    if (total == 0) return 75;
-
-    int score = 0;
-    final gastadoPct = total > 0 ? _gastado / total : 0;
-    final periodoPct = _getPctPeriodo();
-    final diff = gastadoPct - periodoPct;
-
-    // Control de presupuesto (50 pts)
-    if (_gastado >= total) score += 0;
-    else if (diff > 0.25) score += 15;
-    else if (diff > 0.10) score += 32;
-    else score += 50;
-
-    // Tasa de ahorro (30 pts)
-    final tasaAhorro = total > 0 ? _totalAhorro / total : 0;
-    if (tasaAhorro >= 0.20) score += 30;
-    else if (tasaAhorro >= 0.10) score += 20;
-    else if (tasaAhorro >= 0.05) score += 10;
-
-    // Compromisos cubiertos (20 pts)
-    // Asalariados: si no excedió el presupuesto → compromisos cubiertos
-    // Usuarios con ventas: se exige que cobros >= gastado
-    final cobrado = (_resumenVentas?['total_cobrado'] as double?) ?? 0;
-    final totalVentas = (_resumenVentas?['total_ventas'] as num?)?.toInt() ?? 0;
-    if (totalVentas > 0) {
-      if (cobrado >= _gastado) score += 20;
-      else if (cobrado >= _gastado * 0.75) score += 10;
-    } else {
-      // Sin ventas activas: dar puntos por no exceder el presupuesto
-      if (_gastado < total) score += 20;
-      else if (_gastado < total * 1.05) score += 8;
-    }
-
-    return score.clamp(0, 100);
-  }
-
-  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
-        title: const Text('Dashboard', style: TextStyle(color: AppTheme.textPrimary)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        title: const Text('Dashboard'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
+          IconButton(
+            icon: const Icon(Icons.refresh, size: 20),
+            onPressed: _cargar,
+          ),
         ],
       ),
-      body: RefreshIndicator(
-        color: AppTheme.primary,
-        onRefresh: _cargar,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (_conexionLenta)
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppTheme.info.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
-                ),
-                child: const Row(children: [
-                  SizedBox(width: 12, height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.info)),
-                  SizedBox(width: 10),
-                  Expanded(child: Text(
-                    'Conectando con el servidor... esto puede tardar hasta 1 minuto la primera vez del día.',
-                    style: TextStyle(color: AppTheme.info, fontSize: 11, height: 1.4),
-                  )),
-                ]),
-              ),
-            _buildSaludCard(),
-            const SizedBox(height: 12),
-            _buildPeriodoCard(),
-            const SizedBox(height: 12),
-            _buildMiniRow(),
-            const SizedBox(height: 12),
-            _buildAhorroCard(),
-            const SizedBox(height: 12),
-            _buildFondoSeguridadMiniCard(),
-            const SizedBox(height: 12),
-            // Card de compartidos solo visible si hay presupuestos compartidos activos
-            if (!_loadingShared && _sharedBudgets.any((b) => b['estado'] == 'active')) ...[
-              _buildCompartidoCard(),
-              const SizedBox(height: 12),
-            ],
-            _buildProximosPagosCard(),
-            const SizedBox(height: 12),
-            _buildVentasCard(),
-            const SizedBox(height: 12),
-            _buildDeudasCard(),
-            const SizedBox(height: 24),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _abrirAgregarGasto,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: AppTheme.background,
+        icon: const Icon(Icons.add),
+        label: const Text('Agregar gasto'),
       ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildError()
+              : RefreshIndicator(onRefresh: _cargar, child: _buildBody()),
     );
   }
 
-  // ── Card helpers ───────────────────────────────────────────────────────────
-
-  Widget _skeleton({double height = 100}) => Container(
-    height: height,
-    decoration: BoxDecoration(
-      color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppTheme.border),
+  Widget _buildError() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.cloud_off, color: AppTheme.textMuted, size: 48),
+        const SizedBox(height: 12),
+        Text(_error!, textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+        const SizedBox(height: 16),
+        ElevatedButton(onPressed: _cargar, child: const Text('Reintentar')),
+      ]),
     ),
   );
 
-  Widget _cardWrapper({
-    required String title,
-    required Color accentColor,
-    required Widget child,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              width: 3, height: 14,
-              decoration: BoxDecoration(color: accentColor, borderRadius: BorderRadius.circular(2)),
+  Widget _buildBody() {
+    final r = (_mes?['resumen'] as Map<String, dynamic>?) ?? {};
+    final ingEst   = _d(r['ingreso_estimado']);
+    final ingReal  = _d(r['ingreso_real']);
+    final ingreso  = ingReal > 0 ? ingReal : ingEst;
+    final fijos    = _d(r['fijos_reales']);
+    final vars     = _d(r['variables_reales']);
+    final noPres   = _d(r['no_presupuestados']);
+    final gastos   = fijos + vars + noPres;
+    final remReal  = _d(r['remanente_real']);
+    final pct      = ingreso > 0 ? (gastos / ingreso).clamp(0.0, 1.0) : 0.0;
+    final mesNombre = _mesLabel(_now.month);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // ── CARD PRINCIPAL DEL MES ────────────────────────────────────────
+        GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => MesDetalleScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _now.year, mes: _now.month, label: mesNombre,
             ),
-            const SizedBox(width: 8),
-            Text(title,
-                style: const TextStyle(
-                    color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 14),
-          child,
-        ]),
-      ),
-    );
-  }
-
-  // ── 1. Salud Financiera ────────────────────────────────────────────────────
-
-  Widget _buildSaludCard() {
-    final allLoaded = !_loadingPresupuesto && !_loadingShared && !_loadingVentas;
-    if (!allLoaded) return _skeleton(height: 110);
-
-    final score = _calcularPuntaje();
-    final Color scoreColor;
-    final String scoreLabel;
-    if (score >= 90) { scoreColor = AppTheme.success; scoreLabel = 'EXCELENTE'; }
-    else if (score >= 75) { scoreColor = AppTheme.success; scoreLabel = 'BUENA'; }
-    else if (score >= 60) { scoreColor = AppTheme.primary; scoreLabel = 'REGULAR'; }
-    else if (score >= 40) { scoreColor = AppTheme.warning; scoreLabel = 'BAJA'; }
-    else { scoreColor = AppTheme.danger; scoreLabel = 'CRÍTICA'; }
-
-    final insights = _buildInsights();
-
-    return _cardWrapper(
-      title: 'SALUD FINANCIERA',
-      accentColor: scoreColor,
-      child: Column(children: [
-        Row(children: [
-          Stack(alignment: Alignment.center, children: [
-            SizedBox(
-              width: 68, height: 68,
-              child: CircularProgressIndicator(
-                value: score / 100, strokeWidth: 7,
-                backgroundColor: AppTheme.surfaceAlt,
-                valueColor: AlwaysStoppedAnimation(scoreColor),
-              ),
-            ),
-            Text('$score',
-                style: TextStyle(color: scoreColor, fontSize: 18, fontWeight: FontWeight.bold)),
-          ]),
-          const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(scoreLabel, style: TextStyle(color: scoreColor, fontSize: 20, fontWeight: FontWeight.bold)),
-            const Text('Índice de Salud Financiera',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          ])),
-        ]),
-        if (insights.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Divider(color: AppTheme.border, height: 1),
-          const SizedBox(height: 12),
-          ...insights.map((i) => Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(
-                i.positive ? Icons.check_circle_outline : Icons.warning_amber_outlined,
-                color: i.positive ? AppTheme.success : AppTheme.danger,
-                size: 14,
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text(i.text,
-                  style: TextStyle(
-                    color: i.positive ? AppTheme.textSecondary : AppTheme.danger,
-                    fontSize: 12,
-                  ))),
-            ]),
-          )),
-        ],
-      ]),
-    );
-  }
-
-  List<_Insight> _buildInsights() {
-    final insights = <_Insight>[];
-    if (_presupuesto == null) return insights;
-
-    final total = _totalPresupuesto;
-    if (total > 0) {
-      final gastadoPct = _gastado / total;
-      final periodoPct = _getPctPeriodo();
-      final diff = gastadoPct - periodoPct;
-
-      if (_gastado >= total) {
-        insights.add(_Insight('Presupuesto agotado este período', positive: false));
-      } else if (diff > 0.20) {
-        insights.add(_Insight('Ritmo de gasto alto: ${(diff * 100).toStringAsFixed(0)}% por encima del período', positive: false));
-      } else if (diff <= 0.05) {
-        insights.add(_Insight('Gasto bajo control para el período actual', positive: true));
-      }
-
-      final tasaAhorro = _totalAhorro / total;
-      final disponiblePct = total > 0 ? (_totalPresupuesto - _gastado) / total : 0;
-      if (tasaAhorro >= 0.20) {
-        insights.add(_Insight('Tasa de ahorro excelente (${(tasaAhorro * 100).toStringAsFixed(0)}%)', positive: true));
-      } else if (tasaAhorro < 0.10 && tasaAhorro >= 0) {
-        if (disponiblePct < 0.10) {
-          insights.add(_Insight('Tu margen es ajustado. Primero cubre todos tus compromisos fijos.', positive: false));
-        } else {
-          insights.add(_Insight('Tasa de ahorro baja (${(tasaAhorro * 100).toStringAsFixed(0)}%) — intenta reservar al menos el 5%.', positive: false));
-        }
-      }
-    }
-
-    // Balance compartido: solo informativo, no afecta el score numérico
-    final bal = _sharedBalanceNeto;
-    if (bal > 100) {
-      insights.add(_Insight('Deuda compartida pendiente: \$${_fmt.format(bal)}', positive: false));
-    } else if (bal.abs() < 1 && _sharedBudgets.isNotEmpty) {
-      insights.add(_Insight('Deudas compartidas al día', positive: true));
-    }
-
-    if (_proximosPagos.isNotEmpty) {
-      insights.add(_Insight('${_proximosPagos.length} pago(s) urgente(s) esta semana', positive: false));
-    }
-
-    return insights.take(4).toList();
-  }
-
-  // ── 2. Período actual ──────────────────────────────────────────────────────
-
-  Widget _buildPeriodoCard() {
-    if (_loadingPresupuesto) return _skeleton(height: 180);
-    if (_errorPresupuesto != null) {
-      return _cardWrapper(
-        title: 'PERÍODO ACTUAL',
-        accentColor: AppTheme.colorFijo,
-        child: Column(children: [
-          Text('Error al cargar', style: const TextStyle(color: AppTheme.danger, fontSize: 13)),
-          TextButton(onPressed: _cargarPresupuesto, child: const Text('Reintentar')),
-        ]),
-      );
-    }
-    if (_presupuesto == null) {
-      return _cardWrapper(
-        title: 'PERÍODO ACTUAL',
-        accentColor: AppTheme.colorFijo,
-        onTap: () => Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ListaPresupuestos(firebaseUid: widget.firebaseUid),
-        )),
-        child: Row(children: [
-          const Text('Sin presupuesto activo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
-          const Spacer(),
-          Icon(Icons.add_circle_outline, color: AppTheme.colorFijo, size: 20),
-        ]),
-      );
-    }
-
-    final nombre = _presupuesto!['nombre'] ?? '';
-    final total = _totalPresupuesto;
-    final gastado = _gastado;
-    final disponible = _disponible;
-    final pctGasto = total > 0 ? (gastado / total).clamp(0.0, 1.0) : 0.0;
-    final pctPeriodo = _getPctPeriodo();
-    final barColor = pctGasto >= 1.0 ? AppTheme.danger : (pctGasto > 0.85 ? AppTheme.warning : AppTheme.primary);
-
-    // Pace analysis
-    final diff = pctGasto - pctPeriodo;
-    final String paceText;
-    final Color paceColor;
-    final IconData paceIcon;
-    if (pctGasto >= 1.0) {
-      paceText = 'Presupuesto agotado';
-      paceColor = AppTheme.danger; paceIcon = Icons.error_outline;
-    } else if (diff > 0.20) {
-      paceText = 'Ritmo alto — gastas más rápido de lo esperado';
-      paceColor = AppTheme.danger; paceIcon = Icons.trending_up;
-    } else if (diff > 0.08) {
-      paceText = 'Ritmo ligeramente elevado';
-      paceColor = AppTheme.warning; paceIcon = Icons.trending_up;
-    } else if (diff < -0.10) {
-      paceText = 'Excelente control — gasto por debajo del ritmo';
-      paceColor = AppTheme.success; paceIcon = Icons.trending_down;
-    } else {
-      paceText = 'Ritmo ideal para el período';
-      paceColor = AppTheme.success; paceIcon = Icons.trending_flat;
-    }
-
-    return _cardWrapper(
-      title: 'PERÍODO ACTUAL',
-      accentColor: AppTheme.colorFijo,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ListaPresupuestos(firebaseUid: widget.firebaseUid),
-      )),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(nombre,
-            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 12),
-        Row(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('\$${_fmt.format(gastado)}',
-                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 26)),
-            const Text('gastado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-          ]),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('\$${_fmt.format(total)}',
-                style: const TextStyle(color: AppTheme.textMuted, fontWeight: FontWeight.w600, fontSize: 14)),
-            const Text('presupuesto', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-          ]),
-        ]),
-        const SizedBox(height: 10),
-        // Barra de gasto
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: pctGasto, minHeight: 7,
-            backgroundColor: AppTheme.surfaceAlt,
-            valueColor: AlwaysStoppedAnimation(barColor),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('${(pctGasto * 100).toStringAsFixed(1)}% gastado',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-          Text('Disponible \$${_fmt.format(disponible)}',
-              style: TextStyle(
-                color: disponible < total * 0.1 ? AppTheme.danger : AppTheme.success,
-                fontSize: 10, fontWeight: FontWeight.w600,
-              )),
-        ]),
-        const SizedBox(height: 8),
-        // Barra del período
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: pctPeriodo, minHeight: 4,
-            backgroundColor: AppTheme.surfaceAlt,
-            valueColor: const AlwaysStoppedAnimation(AppTheme.textMuted),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text('${(pctPeriodo * 100).toStringAsFixed(0)}% del período transcurrido',
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-        const SizedBox(height: 10),
-        // Indicador de ritmo
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: paceColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(children: [
-            Icon(paceIcon, color: paceColor, size: 14),
-            const SizedBox(width: 7),
-            Expanded(child: Text(paceText,
-                style: TextStyle(color: paceColor, fontSize: 11, fontWeight: FontWeight.w500))),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  // ── 3. Mini row (Flujo Neto + Tasa Ahorro) ────────────────────────────────
-
-  Widget _buildMiniRow() {
-    return Row(children: [
-      Expanded(child: _buildFlujoCaja()),
-      const SizedBox(width: 10),
-      Expanded(child: _buildTasaAhorro()),
-    ]);
-  }
-
-  Widget _buildFlujoCaja() {
-    if (_loadingVentas || _loadingPresupuesto) return _skeleton(height: 90);
-    final cantVentas = (_resumenVentas?['cantidad'] as int?) ?? 0;
-    final tieneVentas = cantVentas > 0;
-
-    if (tieneVentas) {
-      // Usuario con ventas: mostrar flujo ventas vs gastos
-      final cobrado = (_resumenVentas?['total_cobrado'] as double?) ?? 0;
-      final neto = cobrado - _gastado;
-      final pos = neto >= 0;
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(width: 3, height: 12,
-                decoration: BoxDecoration(color: AppTheme.success, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(width: 6),
-            const Text('FLUJO NETO',
-                style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 1.0, fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 10),
-          Text('${pos ? '+' : '-'}\$${_fmt.format(neto.abs())}',
-              style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 17)),
-          const SizedBox(height: 3),
-          Text(pos ? 'Superávit' : 'Déficit',
-              style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontSize: 11)),
-        ]),
-      );
-    }
-
-    // Asalariado sin ventas: mostrar disponible del período
-    final disponible = (_totalPresupuesto - _gastado);
-    final pos = disponible >= 0;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(width: 3, height: 12,
-              decoration: BoxDecoration(
-                  color: pos ? AppTheme.success : AppTheme.danger,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(width: 6),
-          const Text('DISPONIBLE',
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 1.0, fontWeight: FontWeight.w600)),
-        ]),
-        const SizedBox(height: 10),
-        Text('\$${_fmt.format(disponible.abs())}',
-            style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 17)),
-        const SizedBox(height: 3),
-        Text(pos ? 'Este período' : 'Excedido',
-            style: TextStyle(color: pos ? AppTheme.success : AppTheme.danger, fontSize: 11)),
-      ]),
-    );
-  }
-
-  Widget _buildTasaAhorro() {
-    if (_loadingPresupuesto) return _skeleton(height: 90);
-    final total = _totalPresupuesto;
-    final tasa = total > 0 ? (_totalAhorro / total * 100) : 0.0;
-    final good = tasa >= 20;
-    final ok = tasa >= 10;
-    final color = good ? AppTheme.success : (ok ? AppTheme.primary : AppTheme.danger);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surface, borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 3, height: 12,
-            decoration: BoxDecoration(color: AppTheme.colorAhorro, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(width: 6),
-          const Text('TASA AHORRO',
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 1.0, fontWeight: FontWeight.w600)),
-        ]),
-        const SizedBox(height: 10),
-        Text('${tasa.toStringAsFixed(1)}%',
-            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 17)),
-        const SizedBox(height: 3),
-        Text(good ? '✓ Sobre la meta' : (ok ? '≈ Cerca de la meta' : '↓ Meta: 20%'),
-            style: TextStyle(color: color, fontSize: 11)),
-      ]),
-    );
-  }
-
-  // ── 4. Ahorro y Metas ─────────────────────────────────────────────────────
-
-  Widget _buildAhorroCard() {
-    if (_loadingAhorro) return _skeleton(height: 120);
-    if (_errorAhorro != null) {
-      return _cardWrapper(
-        title: 'AHORRO Y METAS',
-        accentColor: AppTheme.colorAhorro,
-        child: Column(children: [
-          Text('Error al cargar', style: const TextStyle(color: AppTheme.danger, fontSize: 13)),
-          TextButton(onPressed: _cargarAhorro, child: const Text('Reintentar')),
-        ]),
-      );
-    }
-    if (_metaAhorro == null) {
-      return _cardWrapper(
-        title: 'AHORRO Y METAS',
-        accentColor: AppTheme.colorAhorro,
-        onTap: () => Navigator.push(context, MaterialPageRoute(
-          builder: (_) => AhorroMetaScreen(firebaseUid: widget.firebaseUid),
-        )),
-        child: Row(children: [
-          const Text('Sin metas de ahorro activas', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          const Spacer(),
-          Icon(Icons.add_circle_outline, color: AppTheme.colorAhorro, size: 20),
-        ]),
-      );
-    }
-
-    final nombre   = _metaAhorro!['nombre'] ?? _metaAhorro!['descripcion'] ?? '';
-    final metaRaw  = _metaAhorro!['monto_meta_total'] ?? _metaAhorro!['monto_meta'];
-    final meta     = double.tryParse(metaRaw?.toString() ?? '0') ?? 0;
-    final ahorrado = (double.tryParse(_metaAhorro!['monto_ahorrado']?.toString() ?? '0') ?? 0)
-                   + (double.tryParse(_metaAhorro!['total_aportaciones']?.toString() ?? '0') ?? 0);
-    final pct = meta > 0 ? (ahorrado / meta).clamp(0.0, 1.0) : 0.0;
-    final restantes = _todasMetas.length - 1;
-
-    return _cardWrapper(
-      title: 'AHORRO Y METAS',
-      accentColor: AppTheme.colorAhorro,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => AhorroMetaScreen(firebaseUid: widget.firebaseUid),
-      )),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Expanded(child: Text(nombre,
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-              maxLines: 1, overflow: TextOverflow.ellipsis)),
-          Text('${(pct * 100).toStringAsFixed(0)}%',
-              style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.bold, fontSize: 14)),
-        ]),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: pct, minHeight: 8,
-            backgroundColor: AppTheme.surfaceAlt,
-            valueColor: const AlwaysStoppedAnimation(AppTheme.colorAhorro),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('\$${_fmt.format(ahorrado)} ahorrado',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          Text('Meta: \$${_fmt.format(meta)}',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-        ]),
-        if (restantes > 0) ...[
-          const SizedBox(height: 8),
-          Text('+ $restantes meta${restantes != 1 ? 's' : ''} más activa${restantes != 1 ? 's' : ''}',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-        ],
-      ]),
-    );
-  }
-
-  // ── 5. Fondo de seguridad (mini card) ────────────────────────────────────
-
-  Widget _buildFondoSeguridadMiniCard() {
-    if (_loadingFondo) return _skeleton(height: 80);
-    if (_fondo == null) return const SizedBox.shrink();
-
-    final nivel = (_fondo!['nivel_actual'] as num?)?.toInt() ?? 0;
-    final pct   = ((_fondo!['pct_nivel1'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
-    final total = (_fondo!['total_ahorrado_actual'] as num?)?.toDouble() ?? 0;
-    final obj1  = (_fondo!['objetivo_nivel1'] as num?)?.toDouble() ?? 0;
-
-    final nivelLabel = nivel == 0
-        ? 'Sin colchón'
-        : nivel == 1
-            ? '1 mes cubierto'
-            : nivel == 2
-                ? '2 meses cubiertos'
-                : '6 meses cubiertos';
-    final nivelColor = nivel == 0
-        ? AppTheme.danger
-        : nivel == 1
-            ? AppTheme.warning
-            : AppTheme.success;
-
-    return GestureDetector(
-      onTap: _presupuesto != null
-          ? () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => DetallesPresupuesto(
-                  presupuesto: _presupuesto!,
-                  firebaseUid: widget.firebaseUid,
-                ),
-              ))
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
+          )).then((_) => _cargar()),
+          child: Container(
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: nivelColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
             ),
-            child: Icon(Icons.shield_outlined, color: nivelColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('FONDO DE SEGURIDAD',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
-              Text(nivelLabel, style: TextStyle(color: nivelColor, fontSize: 11, fontWeight: FontWeight.w600)),
-            ]),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: pct, minHeight: 5,
-                backgroundColor: AppTheme.surfaceAlt,
-                valueColor: AlwaysStoppedAnimation(nivelColor),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('HOY · $mesNombre ${_now.year}',
+                      style: const TextStyle(color: AppTheme.primary,
+                          fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                ),
+                const Spacer(),
+                const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+              ]),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: _MiniStat('Ingreso', '\$${ingreso.toStringAsFixed(2)}', AppTheme.success)),
+                Expanded(child: _MiniStat('Gastado', '\$${gastos.toStringAsFixed(2)}',
+                    pct > 0.9 ? AppTheme.danger : pct > 0.7 ? AppTheme.warning : AppTheme.textPrimary)),
+                Expanded(child: _MiniStat('Remanente', '\$${remReal.toStringAsFixed(2)}',
+                    remReal >= 0 ? AppTheme.success : AppTheme.danger)),
+              ]),
+              const SizedBox(height: 14),
+              // Barra de uso
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: pct,
+                  minHeight: 10,
+                  color: pct > 0.9 ? AppTheme.danger
+                      : pct > 0.7 ? AppTheme.warning
+                      : AppTheme.success,
+                  backgroundColor: AppTheme.surfaceAlt,
+                ),
               ),
+              const SizedBox(height: 6),
+              Text('${(pct * 100).toStringAsFixed(1)}% del ingreso usado',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              if (ingReal == 0) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.info_outline, color: AppTheme.warning, size: 13),
+                    SizedBox(width: 6),
+                    Text('Ingreso real no registrado — usando estimado',
+                        style: TextStyle(color: AppTheme.warning, fontSize: 11)),
+                  ]),
+                ),
+              ],
+            ]),
+          ),
+        ),
+
+        // ── ALERTAS ───────────────────────────────────────────────────────
+        if (_alertas.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _SectionLabel('ALERTAS', Icons.notifications_active, AppTheme.warning),
+          const SizedBox(height: 8),
+          ..._alertas.take(3).map((a) {
+            final nivel = a['nivel'] as String? ?? 'info';
+            final color = nivel == 'danger' ? AppTheme.danger
+                : nivel == 'warning' ? AppTheme.warning : AppTheme.info;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
+              ),
+              child: Text(a['titulo'] as String? ?? '',
+                  style: TextStyle(color: color, fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            );
+          }),
+        ],
+
+        // ── PRÓXIMOS PAGOS ────────────────────────────────────────────────
+        if (_proximosPagos.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _SectionLabel('PRÓXIMOS PAGOS', Icons.calendar_today, AppTheme.info),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border),
             ),
-            const SizedBox(height: 5),
-            Text(
-              obj1 > 0
-                  ? '\$${_fmt.format(total)} / \$${_fmt.format(obj1)} (nivel 1)'
-                  : '\$${_fmt.format(total)} ahorrado',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+            child: Column(
+              children: _proximosPagos.asMap().entries.map((e) {
+                final i = e.key;
+                final p = e.value as Map<String, dynamic>;
+                final fecha = (p['fecha_evento']?.toString() ?? '').substring(0, 10);
+                final monto = _d(p['monto_esperado']);
+                return Column(children: [
+                  if (i > 0) const Divider(color: AppTheme.border, height: 1),
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                    leading: Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                          color: AppTheme.info.withValues(alpha: 0.1),
+                          shape: BoxShape.circle),
+                      child: const Icon(Icons.payment, color: AppTheme.info, size: 16),
+                    ),
+                    title: Text(p['titulo'] as String? ?? '',
+                        style: const TextStyle(color: AppTheme.textPrimary,
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text(fecha,
+                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    trailing: Text('\$${monto.toStringAsFixed(2)}',
+                        style: const TextStyle(color: AppTheme.info,
+                            fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
+                ]);
+              }).toList(),
             ),
-          ])),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
-        ]),
-      ),
-    );
-  }
+          ),
+        ] else ...[
+          const SizedBox(height: 20),
+          _SectionLabel('PRÓXIMOS PAGOS', Icons.calendar_today, AppTheme.info),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: const Text('Sin pagos pendientes este mes.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+          ),
+        ],
 
-  // ── 6. Deudas compartidas ─────────────────────────────────────────────────
-
-  Widget _buildCompartidoCard() {
-    if (_loadingShared) return _skeleton(height: 90);
-    final activos = _sharedBudgets.where((b) => b['estado'] == 'active').toList();
-    // Ocultar la card si no hay presupuestos compartidos — no aporta valor para el asalariado sin pareja financiera
-    if (activos.isEmpty) return const SizedBox.shrink();
-
-    final balance = _sharedBalanceNeto;
-    final debes = balance > 0.01;
-    final teDeben = balance < -0.01;
-    final color = debes ? AppTheme.danger : (teDeben ? AppTheme.success : AppTheme.textSecondary);
-    final label = debes ? '↑ Debes' : (teDeben ? '↓ Te deben' : '✓ Sin deudas');
-
-    final conBalance = activos
-        .where((b) => (double.tryParse(b['balance_neto']?.toString() ?? '0') ?? 0).abs() > 0.01)
-        .take(3)
-        .toList();
-
-    return _cardWrapper(
-      title: 'DEUDAS COMPARTIDAS',
-      accentColor: AppTheme.info,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => SharedBudgetsListScreen(firebaseUid: widget.firebaseUid),
-      )),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 14)),
-          Text('\$${_fmt.format(balance.abs())}',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 20)),
-        ]),
-        if (conBalance.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Divider(color: AppTheme.border, height: 1),
-          const SizedBox(height: 10),
-          ...conBalance.map((b) {
-            final bal = double.tryParse(b['balance_neto']?.toString() ?? '0') ?? 0;
-            final c = bal > 0 ? AppTheme.danger : AppTheme.success;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(children: [
-                Icon(Icons.fiber_manual_record, color: c, size: 7),
-                const SizedBox(width: 8),
-                Expanded(child: Text(b['nombre'] ?? '',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Text('${bal > 0 ? 'Debes' : 'Te deben'} \$${_fmt.format(bal.abs())}',
-                    style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w500)),
+        // ── METAS DE AHORRO ───────────────────────────────────────────────
+        if (_metas.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _SectionLabel('METAS DE AHORRO', Icons.savings_outlined, AppTheme.colorAhorro),
+          const SizedBox(height: 8),
+          ..._metas.map((m) {
+            final nombre = m['nombre'] as String? ?? '';
+            final meta   = _d(m['monto_objetivo'] ?? m['monto_total']);
+            final actual = _d(m['monto_actual'] ?? m['total_aportado']);
+            final pctM   = meta > 0 ? (actual / meta).clamp(0.0, 1.0) : 0.0;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Text(nombre,
+                      style: const TextStyle(color: AppTheme.textPrimary,
+                          fontSize: 13, fontWeight: FontWeight.w600))),
+                  Text('\$${actual.toStringAsFixed(0)} / \$${meta.toStringAsFixed(0)}',
+                      style: const TextStyle(color: AppTheme.colorAhorro,
+                          fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: pctM,
+                    minHeight: 6,
+                    color: AppTheme.colorAhorro,
+                    backgroundColor: AppTheme.surfaceAlt,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text('${(pctM * 100).toStringAsFixed(0)}% completado',
+                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
             );
           }),
         ],
-      ]),
+
+        const SizedBox(height: 80), // espacio para el FAB
+      ],
     );
   }
 
-  // ── 6. Próximos 7 días ────────────────────────────────────────────────────
-
-  Widget _buildProximosPagosCard() {
-    if (_loadingPagos) return _skeleton(height: 120);
-
-    final now = DateTime.now();
-    final gastos   = _proximosPagos.where((e) => e['tipo'] != 'cobro').toList();
-    final ingresos = _proximosPagos.where((e) => e['tipo'] == 'cobro').toList();
-
-    if (gastos.isEmpty && ingresos.isEmpty) {
-      return _cardWrapper(
-        title: 'PRÓXIMOS 7 DÍAS',
-        accentColor: AppTheme.colorNoFijo,
-        child: Row(children: const [
-          Icon(Icons.check_circle_outline, color: AppTheme.success, size: 18),
-          SizedBox(width: 8),
-          Text('Sin movimientos urgentes esta semana',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-        ]),
-      );
-    }
-
-    return _cardWrapper(
-      title: 'PRÓXIMOS 7 DÍAS',
-      accentColor: AppTheme.colorNoFijo,
-      child: IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // ── Gastos (izquierda) ──────────────────────────────────
-          Expanded(child: _buildSemanaColumna(
-            titulo: 'Gastos',
-            items: gastos,
-            color: AppTheme.danger,
-            now: now,
-          )),
-          // ── Divisor vertical ────────────────────────────────────
-          Container(width: 1, color: AppTheme.border, margin: const EdgeInsets.symmetric(horizontal: 10)),
-          // ── Ingresos (derecha) ──────────────────────────────────
-          Expanded(child: _buildSemanaColumna(
-            titulo: 'Ingresos',
-            items: ingresos,
-            color: AppTheme.success,
-            now: now,
-          )),
-        ]),
+  void _abrirAgregarGasto() async {
+    final res = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AgregarGastoSheet(
+        firebaseUid: widget.firebaseUid,
+        anio: _now.year,
+        mes: _now.month,
       ),
     );
+    if (res == true) _cargar();
   }
 
-  Widget _buildSemanaColumna({
-    required String titulo,
-    required List<dynamic> items,
-    required Color color,
-    required DateTime now,
-  }) {
-    final total = items.fold<double>(
-      0, (s, e) => s + (double.tryParse(e['monto_esperado']?.toString() ?? '0') ?? 0));
+  double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0.0;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(titulo, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
-        Text('\$${_fmt.format(total)}',
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
-      ]),
-      const SizedBox(height: 8),
-      if (items.isEmpty)
-        Text('Sin ${titulo.toLowerCase()}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))
-      else
-        ...items.take(3).map((e) {
-          final titulo2 = e['titulo'] ?? e['descripcion'] ?? '';
-          final monto = double.tryParse(e['monto_esperado']?.toString() ?? '0') ?? 0;
-          DateTime? fecha;
-          try { fecha = DateTime.parse(e['fecha_evento'] as String); } catch (_) {}
-          final dias = fecha != null ? fecha.difference(DateTime(now.year, now.month, now.day)).inDays : null;
-          final urgente = dias != null && dias <= 1;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 7),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Container(
-                  width: 6, height: 6,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(titulo2,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                Row(children: [
-                  Text('\$${_fmt.format(monto)}',
-                      style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 11)),
-                  if (dias != null) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      dias == 0 ? '· Hoy' : (dias == 1 ? '· Mañana' : '· $dias d'),
-                      style: TextStyle(
-                        color: urgente ? AppTheme.danger : AppTheme.textMuted,
-                        fontSize: 10, fontWeight: urgente ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ]),
-              ])),
-            ]),
-          );
-        }),
-    ]);
-  }
-
-  // ── 7. Cobros activos ─────────────────────────────────────────────────────
-
-  Widget _buildVentasCard() {
-    if (_loadingVentas) return _skeleton(height: 80);
-    if (_errorVentas != null) {
-      return _cardWrapper(
-        title: 'COBROS ACTIVOS',
-        accentColor: AppTheme.primary,
-        child: Column(children: [
-          Text('Error al cargar', style: const TextStyle(color: AppTheme.danger, fontSize: 13)),
-          TextButton(onPressed: _cargarVentas, child: const Text('Reintentar')),
-        ]),
-      );
-    }
-
-    final cantidad = _resumenVentas?['cantidad'] as int? ?? 0;
-    final cobrado = (_resumenVentas?['total_cobrado'] as double?) ?? 0;
-
-    if (cantidad == 0) {
-      return _cardWrapper(
-        title: 'COBROS ACTIVOS',
-        accentColor: AppTheme.primary,
-        onTap: () => Navigator.push(context, MaterialPageRoute(
-          builder: (_) => CobrosHome(firebaseUid: widget.firebaseUid),
-        )),
-        child: Row(children: [
-          const Icon(Icons.trending_flat, color: AppTheme.textMuted, size: 18),
-          const SizedBox(width: 8),
-          const Text('Sin cobros activos este mes',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          const Spacer(),
-          Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
-        ]),
-      );
-    }
-
-    return _cardWrapper(
-      title: 'COBROS ACTIVOS',
-      accentColor: AppTheme.primary,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => CobrosHome(firebaseUid: widget.firebaseUid),
-      )),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('$cantidad venta${cantidad != 1 ? 's' : ''} activa${cantidad != 1 ? 's' : ''}',
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
-          const SizedBox(height: 3),
-          const Text('Total cobrado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-        ])),
-        Text('\$${_fmt.format(cobrado)}',
-            style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 20)),
-      ]),
-    );
-  }
-
-  // ── 8. Deudas ─────────────────────────────────────────────────────────────
-
-  Widget _buildDeudasCard() {
-    if (_loadingDeudas) return _skeleton(height: 70);
-    if (_totalDeudas <= 0) return const SizedBox.shrink();
-
-    return _cardWrapper(
-      title: 'DEUDAS PENDIENTES',
-      accentColor: AppTheme.danger,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => DeudasScreen(firebaseUid: widget.firebaseUid),
-      )),
-      child: Row(children: [
-        const Icon(Icons.credit_card_outlined, color: AppTheme.danger, size: 22),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Total deuda activa',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-          const SizedBox(height: 3),
-          Text('\$${_fmt.format(_totalDeudas)}',
-              style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w800, fontSize: 20)),
-        ])),
-        Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
-      ]),
-    );
-  }
-
-  double _d(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0;
-    return 0;
-  }
+  static String _mesLabel(int m) => const [
+    '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ][m];
 }
 
-// ── Insight model ──────────────────────────────────────────────────────────────
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _MiniStat(this.label, this.value, this.color);
 
-class _Insight {
-  final String text;
-  final bool positive;
-  const _Insight(this.text, {required this.positive});
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    Text(label, style: const TextStyle(color: AppTheme.textMuted,
+        fontSize: 10, letterSpacing: 0.4)),
+    const SizedBox(height: 4),
+    Text(value, style: TextStyle(color: color,
+        fontSize: 14, fontWeight: FontWeight.w700)),
+  ]);
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _SectionLabel(this.label, this.icon, this.color);
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    Icon(icon, color: color, size: 14),
+    const SizedBox(width: 6),
+    Text(label, style: TextStyle(color: color,
+        fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+  ]);
 }
