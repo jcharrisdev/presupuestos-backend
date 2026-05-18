@@ -7,7 +7,19 @@
   "headers": [
     {
       "source": "/flutter_service_worker.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }]
+    },
+    {
+      "source": "/main.dart.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }]
+    },
+    {
+      "source": "/flutter_bootstrap.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }]
+    },
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }]
     }
   ]
 }
