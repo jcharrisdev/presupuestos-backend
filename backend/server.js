@@ -421,6 +421,25 @@ pool.getConnection(async (err, conn) => {
   } catch (e) {
     console.error('⚠️ Migración server_logs:', e.message);
   }
+
+  // Fase 2: gastos reutilizables — definiciones y vínculo en registros
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS expense_definitions (
+      id           INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      nombre       VARCHAR(255) NOT NULL,
+      categoria    VARCHAR(100) NOT NULL,
+      tipo_habitual ENUM('fijo','variable','no_presupuestado') DEFAULT 'variable',
+      activo       TINYINT DEFAULT 1,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_ed_uid (firebase_uid),
+      KEY idx_ed_uid_activo (firebase_uid, activo)
+    )`);
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN definition_id INT DEFAULT NULL`).catch(() => {});
+    console.log('✅ Migración expense_definitions OK');
+  } catch (e) {
+    console.error('⚠️ Migración expense_definitions:', e.message);
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -8572,6 +8591,60 @@ app.patch('/user/meses/:anio/:mes/ingreso', async (req, res) => {
 });
 
 // =============================================================================
+// MÓDULO: GASTOS REUTILIZABLES (expense_definitions)
+// Plantillas que evitan reescribir el mismo gasto cada mes.
+// Al registrar un gasto se vincula automáticamente a su definición.
+// =============================================================================
+
+// GET /user/expense-definitions?firebase_uid=
+// Devuelve las definiciones activas del usuario con el último monto usado.
+app.get('/user/expense-definitions', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT ed.*,
+              rg.monto      AS ultimo_monto,
+              rg.anio       AS ultimo_anio,
+              rg.mes        AS ultimo_mes
+       FROM expense_definitions ed
+       LEFT JOIN registros_gasto rg ON rg.definition_id = ed.id
+         AND rg.created_at = (
+           SELECT MAX(r2.created_at) FROM registros_gasto r2
+           WHERE r2.definition_id = ed.id AND r2.firebase_uid = ed.firebase_uid
+         )
+       WHERE ed.firebase_uid = ? AND ed.activo = 1
+       ORDER BY ed.nombre ASC`,
+      [firebase_uid]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/expense-definitions
+// Crea una definición manualmente.
+app.post('/user/expense-definitions', async (req, res) => {
+  const { firebase_uid, nombre, categoria, tipo_habitual = 'variable' } = req.body;
+  if (!firebase_uid || !nombre || !categoria)
+    return res.status(400).json({ error: 'firebase_uid, nombre y categoria requeridos' });
+  try {
+    // Evitar duplicados por nombre+categoria para el mismo usuario
+    const [[existing]] = await db.execute(
+      `SELECT id FROM expense_definitions WHERE firebase_uid = ? AND nombre = ? AND categoria = ? AND activo = 1`,
+      [firebase_uid, nombre.trim(), categoria]
+    );
+    if (existing) return res.json(existing);
+    const [r] = await db.execute(
+      `INSERT INTO expense_definitions (firebase_uid, nombre, categoria, tipo_habitual)
+       VALUES (?, ?, ?, ?)`,
+      [firebase_uid, nombre.trim(), categoria, tipo_habitual]
+    );
+    const [[created]] = await db.execute(`SELECT * FROM expense_definitions WHERE id = ?`, [r.insertId]);
+    res.status(201).json(created);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =============================================================================
 // MÓDULO: REGISTROS DE GASTO
 // Lo que realmente ocurrió en cada mes. Tres tipos:
 //   fijo            → compromiso del perfil que se pagó
@@ -8712,7 +8785,8 @@ app.get('/registros/:anio/:mes', async (req, res) => {
 app.post('/registros', async (req, res) => {
   const {
     firebase_uid, anio, mes, tipo, categoria = 'otro', subcategoria_id,
-    nombre, monto, fecha, pagado = 0, origen_fijo_id, origen_variable_id, notas, en_calendario = 0,
+    nombre, monto, fecha, pagado = 0, origen_fijo_id, origen_variable_id,
+    notas, en_calendario = 0, definition_id: defIdParam,
   } = req.body;
   if (!firebase_uid || !anio || !mes || !tipo || !nombre || monto == null || !fecha)
     return res.status(400).json({ error: 'firebase_uid, anio, mes, tipo, nombre, monto y fecha son requeridos' });
@@ -8725,14 +8799,35 @@ app.post('/registros', async (req, res) => {
     );
     if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado. Genera el estado anual primero.' });
 
+    // Resolver definition_id: usar el provisto, buscar por nombre+categoría, o crear nuevo
+    let definitionId = defIdParam || null;
+    if (!definitionId && tipo !== 'fijo') {
+      const [[existingDef]] = await db.execute(
+        `SELECT id FROM expense_definitions WHERE firebase_uid = ? AND nombre = ? AND categoria = ? AND activo = 1`,
+        [firebase_uid, nombre.trim(), categoria]
+      );
+      if (existingDef) {
+        definitionId = existingDef.id;
+      } else {
+        const [newDef] = await db.execute(
+          `INSERT INTO expense_definitions (firebase_uid, nombre, categoria, tipo_habitual)
+           VALUES (?, ?, ?, ?)`,
+          [firebase_uid, nombre.trim(), categoria, tipo]
+        );
+        definitionId = newDef.insertId;
+      }
+    }
+
     const [r] = await db.execute(
       `INSERT INTO registros_gasto
          (firebase_uid, mes_id, anio, mes, tipo, categoria, subcategoria_id,
-          nombre, monto, fecha, pagado, origen_fijo_id, origen_variable_id, notas, en_calendario)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          nombre, monto, fecha, pagado, origen_fijo_id, origen_variable_id,
+          notas, en_calendario, definition_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [firebase_uid, mesRow.id, anio, mes, tipo, categoria, subcategoria_id || null,
        nombre, monto, fecha, pagado ? 1 : 0, origen_fijo_id || null,
-       origen_variable_id || null, notas || null, en_calendario ? 1 : 0]
+       origen_variable_id || null, notas || null, en_calendario ? 1 : 0,
+       definitionId]
     );
     await _actualizarTotalesMes(mesRow.id, firebase_uid);
 

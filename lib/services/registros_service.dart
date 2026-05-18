@@ -26,6 +26,7 @@ class RegistrosService {
     String? notas,
     int? origenFijoId,
     int? origenVariableId,
+    int? definitionId,
   }) async {
     final res = await ApiClient.post('/registros', {
       'firebase_uid': uid,
@@ -40,6 +41,7 @@ class RegistrosService {
       if (notas != null) 'notas': notas,
       if (origenFijoId != null) 'origen_fijo_id': origenFijoId,
       if (origenVariableId != null) 'origen_variable_id': origenVariableId,
+      if (definitionId != null) 'definition_id': definitionId,
     });
     if (res.statusCode != 201) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
     return jsonDecode(res.body);

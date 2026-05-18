@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../../services/registros_service.dart';
 import '../../services/gastos_variables_service.dart';
+import '../../services/api_client.dart';
 import 'mes_rango_selector.dart';
 import 'categoria_selector.dart';
 
@@ -23,20 +25,24 @@ class AgregarGastoSheet extends StatefulWidget {
 }
 
 class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
-  final _formKey  = GlobalKey<FormState>();
-  final _nombre   = TextEditingController();
-  final _monto    = TextEditingController();
-  final _notas    = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nombre  = TextEditingController();
+  final _monto   = TextEditingController();
+  final _notas   = TextEditingController();
 
-  String _tipo           = 'variable';
-  String _categoria      = 'alimentacion';
+  String  _tipo            = 'variable';
+  String  _categoria       = 'alimentacion';
   String? _categoriaCustom;
   late DateTime _fecha;
-  bool _guardando        = false;
-  bool _guardarComoBase  = false;
-  // Período para gastos variables (solo si guardarComoBase = true)
-  int _mesInicio = 1;
-  int _mesFin    = 12;
+  bool _guardando          = false;
+  bool _guardarComoBase    = false;
+  int  _mesInicio          = 1;
+  int  _mesFin             = 12;
+
+  // Gastos reutilizables
+  List<Map<String, dynamic>> _definiciones = [];
+  bool _loadingDefs = true;
+  int? _defSeleccionada;
 
   static const _tipos = [
     {'value': 'fijo',             'label': 'Gasto fijo',       'icon': Icons.lock_clock,       'color': AppTheme.colorFijo},
@@ -53,12 +59,42 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         : DateTime(widget.anio, widget.mes, 1);
     _mesInicio = widget.mes;
     _mesFin    = 12;
+    _cargarDefiniciones();
   }
 
   @override
   void dispose() {
     _nombre.dispose(); _monto.dispose(); _notas.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarDefiniciones() async {
+    try {
+      final res = await ApiClient.get('/user/expense-definitions?firebase_uid=${widget.firebaseUid}');
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List;
+        if (mounted) setState(() {
+          _definiciones = data.cast<Map<String, dynamic>>();
+          _loadingDefs = false;
+        });
+        return;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _loadingDefs = false);
+  }
+
+  void _seleccionarDefinicion(Map<String, dynamic> def) {
+    final ultimoMonto = def['ultimo_monto'];
+    setState(() {
+      _defSeleccionada = def['id'] as int;
+      _nombre.text     = def['nombre'] as String;
+      _categoria       = def['categoria'] as String;
+      _tipo            = def['tipo_habitual'] as String? ?? 'variable';
+      if (ultimoMonto != null) {
+        _monto.text = double.tryParse(ultimoMonto.toString())?.toStringAsFixed(2) ?? '';
+      }
+      _categoriaCustom = null;
+    });
   }
 
   @override
@@ -80,7 +116,62 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             const SizedBox(height: 16),
             const Text('Agregar gasto',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // ── GASTOS ANTERIORES ─────────────────────────────────────────────
+            if (_loadingDefs)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: LinearProgressIndicator(color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt, minHeight: 2),
+              )
+            else if (_definiciones.isNotEmpty) ...[
+              const Text('GASTOS ANTERIORES',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _definiciones.map((def) {
+                    final sel = _defSeleccionada == def['id'];
+                    final cat = def['categoria'] as String;
+                    final ultimo = def['ultimo_monto'];
+                    return GestureDetector(
+                      onTap: () => _seleccionarDefinicion(def),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: sel ? AppTheme.primary.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: sel ? AppTheme.primary : AppTheme.border,
+                            width: sel ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(def['nombre'] as String,
+                              style: TextStyle(
+                                color: sel ? AppTheme.primary : AppTheme.textPrimary,
+                                fontSize: 12, fontWeight: FontWeight.w600,
+                              )),
+                          if (ultimo != null)
+                            Text(
+                              '\$${double.tryParse(ultimo.toString())?.toStringAsFixed(2) ?? ultimo} · $cat',
+                              style: TextStyle(
+                                color: sel ? AppTheme.primary.withValues(alpha: 0.7) : AppTheme.textMuted,
+                                fontSize: 10,
+                              ),
+                            ),
+                        ]),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: AppTheme.border, height: 1),
+              const SizedBox(height: 16),
+            ],
 
             // ── Tipo ─────────────────────────────────────────────────────────
             const Text('TIPO', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
@@ -89,7 +180,10 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               final sel = _tipo == t['value'];
               final color = t['color'] as Color;
               return Expanded(child: GestureDetector(
-                onTap: () => setState(() => _tipo = t['value'] as String),
+                onTap: () => setState(() {
+                  _tipo = t['value'] as String;
+                  _defSeleccionada = null; // deselect si cambia tipo manualmente
+                }),
                 child: Container(
                   margin: const EdgeInsets.only(right: 6),
                   padding: const EdgeInsets.symmetric(vertical: 10),
@@ -116,6 +210,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               controller: _nombre,
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre del gasto'),
+              onChanged: (_) => setState(() => _defSeleccionada = null),
               validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
             ),
             const SizedBox(height: 12),
@@ -142,13 +237,13 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                    : _tipo == 'no_presupuestado' ? AppTheme.danger
                    : AppTheme.warning,
               onChanged: (cat, custom) => setState(() {
-                _categoria      = cat;
+                _categoria       = cat;
                 _categoriaCustom = custom;
               }),
             ),
             const SizedBox(height: 16),
 
-            // ── Fecha (dentro del mes visualizado) ────────────────────────
+            // ── Fecha ────────────────────────────────────────────────────
             GestureDetector(
               onTap: _seleccionarFecha,
               child: Container(
@@ -175,7 +270,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             ),
             const SizedBox(height: 16),
 
-            // ── Guardar como variable base (solo para variable/no-presup) ─
+            // ── Guardar como variable base ────────────────────────────────
             if (_tipo != 'fijo') ...[
               Container(
                 padding: const EdgeInsets.all(12),
@@ -197,7 +292,6 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                       ),
                     ),
                   ]),
-                  // Período: solo visible si va a guardar como base
                   if (_guardarComoBase) ...[
                     const SizedBox(height: 12),
                     MesRangoSelector(
@@ -246,7 +340,6 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
-    // Si "Otro" sin texto personalizado, pedir que escriban
     if (_categoria == 'otro' && (_categoriaCustom == null || _categoriaCustom!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Escribe el nombre de la categoría personalizada')));
@@ -264,6 +357,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         monto: double.parse(_monto.text),
         fecha: DateFormat('yyyy-MM-dd').format(_fecha),
         notas: _notas.text.isEmpty ? null : _notas.text.trim(),
+        definitionId: _defSeleccionada,
       );
       if (_guardarComoBase && _tipo != 'fijo') {
         await GastosVariablesService.crear(
