@@ -33,6 +33,27 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Fuerza activación inmediata del nuevo service worker en cada deploy -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+      navigator.serviceWorker.ready.then(reg => {
+        reg.update();
+        if (reg.waiting) reg.waiting.postMessage('skip-waiting');
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          if (!newSW) return;
+          newSW.addEventListener('statechange', () => {
+            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+              newSW.postMessage('skip-waiting');
+            }
+          });
+        });
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
