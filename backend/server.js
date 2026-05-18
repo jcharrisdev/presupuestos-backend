@@ -440,6 +440,41 @@ pool.getConnection(async (err, conn) => {
   } catch (e) {
     console.error('⚠️ Migración expense_definitions:', e.message);
   }
+
+  // Migración: presupuestos de eventos (Sprint 7)
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS eventos_presupuesto (
+      id                  INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid        VARCHAR(255) NOT NULL,
+      nombre              VARCHAR(255) NOT NULL,
+      descripcion         TEXT,
+      emoji               VARCHAR(10) DEFAULT NULL,
+      monto_total         DECIMAL(12,2) NOT NULL,
+      anio                YEAR NOT NULL,
+      mes_inicio          TINYINT NOT NULL,
+      mes_fin             TINYINT NOT NULL,
+      cuota_mensual       DECIMAL(12,2) NOT NULL,
+      gastado_real        DECIMAL(12,2) DEFAULT 0.00,
+      estado              ENUM('activo','cerrado','cancelado') DEFAULT 'activo',
+      created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_ep_user (firebase_uid),
+      KEY idx_ep_anio (firebase_uid, anio)
+    )`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS eventos_gastos (
+      id           INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      evento_id    INT NOT NULL,
+      nombre       VARCHAR(255) NOT NULL,
+      monto        DECIMAL(12,2) NOT NULL,
+      fecha        DATE DEFAULT NULL,
+      notas        TEXT,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_eg_evento (evento_id)
+    )`);
+    console.log('✅ Migración eventos_presupuesto OK');
+  } catch (e) {
+    console.error('⚠️ Migración eventos_presupuesto:', e.message);
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -8519,6 +8554,17 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     const totalFijosEstimado = gastosFijosPerfil.reduce((s, g) => s + Number(g.monto_mensual), 0)
                              + totalCuotasDeudas;
 
+    // Eventos presupuestados activos en este mes
+    const [eventosDelMes] = await db.execute(
+      `SELECT ep.*,
+              COALESCE((SELECT SUM(eg.monto) FROM eventos_gastos eg WHERE eg.evento_id = ep.id), 0) AS gastado_real
+       FROM eventos_presupuesto ep
+       WHERE ep.firebase_uid = ? AND ep.anio = ? AND ep.mes_inicio <= ? AND ep.mes_fin >= ?
+         AND ep.estado = 'activo'`,
+      [firebase_uid, anio, mes, mes]
+    );
+    const totalEventosMes = eventosDelMes.reduce((s, e) => s + Number(e.cuota_mensual), 0);
+
     res.json({
       mes: mesRow,
       compromisos_fijos: {
@@ -8534,7 +8580,17 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
           cuotas_restantes: d.num_cuotas_total
             ? Math.max(0, Number(d.num_cuotas_total) - Number(d.num_cuotas_pagadas || 0)) : null,
         })),
-        total_estimado: parseFloat(totalFijosEstimado.toFixed(2)),
+        eventos: eventosDelMes.map(e => ({
+          id: e.id, nombre: e.nombre, emoji: e.emoji,
+          monto_total: Number(e.monto_total),
+          cuota_mensual: Number(e.cuota_mensual),
+          gastado_real: Number(e.gastado_real),
+          mes_inicio: e.mes_inicio, mes_fin: e.mes_fin,
+          pct_avance: e.monto_total > 0
+            ? parseFloat((Number(e.gastado_real) / Number(e.monto_total) * 100).toFixed(1)) : 0,
+        })),
+        total_estimado: parseFloat((totalFijosEstimado + totalEventosMes).toFixed(2)),
+        total_eventos:  parseFloat(totalEventosMes.toFixed(2)),
       },
       resumen: {
         ingreso_estimado:    Number(mesRow.ingreso_estimado),
@@ -9290,6 +9346,162 @@ app.post('/user/cerrar-mes-financiero/:anio/:mes', async (req, res) => {
     );
 
     res.json({ cerrado: true, alertas_generadas: alertas.length, alertas });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =============================================================================
+// MÓDULO: PRESUPUESTOS DE EVENTOS (Sprint 7)
+// =============================================================================
+
+// GET /user/eventos?firebase_uid=&anio=
+app.get('/user/eventos', async (req, res) => {
+  const { firebase_uid, anio } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const year = anio || new Date().getFullYear();
+    const [eventos] = await db.execute(
+      `SELECT ep.*,
+              COALESCE((SELECT SUM(eg.monto) FROM eventos_gastos eg WHERE eg.evento_id = ep.id), 0) AS gastado_real
+       FROM eventos_presupuesto ep
+       WHERE ep.firebase_uid = ? AND ep.anio = ? AND ep.estado != 'cancelado'
+       ORDER BY ep.mes_inicio ASC, ep.created_at ASC`,
+      [firebase_uid, year]
+    );
+    res.json({
+      eventos: eventos.map(e => ({
+        ...e,
+        monto_total:   Number(e.monto_total),
+        cuota_mensual: Number(e.cuota_mensual),
+        gastado_real:  Number(e.gastado_real),
+        num_meses:     e.mes_fin - e.mes_inicio + 1,
+        pct_avance:    e.monto_total > 0
+          ? parseFloat((Number(e.gastado_real) / Number(e.monto_total) * 100).toFixed(1)) : 0,
+      })),
+      total: eventos.length,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/eventos
+app.post('/user/eventos', async (req, res) => {
+  const { firebase_uid, nombre, descripcion, emoji, monto_total,
+          anio, mes_inicio, mes_fin } = req.body;
+  if (!firebase_uid || !nombre || !monto_total || !anio || !mes_inicio || !mes_fin)
+    return res.status(400).json({ error: 'Faltan campos requeridos' });
+  if (Number(mes_inicio) > Number(mes_fin))
+    return res.status(400).json({ error: 'mes_inicio debe ser ≤ mes_fin' });
+  try {
+    const numMeses     = Number(mes_fin) - Number(mes_inicio) + 1;
+    const cuotaMensual = parseFloat((Number(monto_total) / numMeses).toFixed(2));
+    const [result] = await db.execute(
+      `INSERT INTO eventos_presupuesto
+         (firebase_uid, nombre, descripcion, emoji, monto_total, anio, mes_inicio, mes_fin, cuota_mensual)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, nombre, descripcion ?? null, emoji ?? null,
+       monto_total, anio, mes_inicio, mes_fin, cuotaMensual]
+    );
+    _logInfo('/user/eventos', `Evento creado: ${nombre} $${monto_total}`, firebase_uid);
+    res.status(201).json({ id: result.insertId, cuota_mensual: cuotaMensual, num_meses: numMeses });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /user/eventos/:id
+app.put('/user/eventos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, nombre, descripcion, emoji, monto_total,
+          mes_inicio, mes_fin, estado } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[ev]] = await db.execute(
+      `SELECT * FROM eventos_presupuesto WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    if (!ev) return res.status(404).json({ error: 'Evento no encontrado' });
+    const nuevoMesIni  = mes_inicio ?? ev.mes_inicio;
+    const nuevoMesFin  = mes_fin    ?? ev.mes_fin;
+    const nuevoMonto   = monto_total ?? ev.monto_total;
+    const numMeses     = Number(nuevoMesFin) - Number(nuevoMesIni) + 1;
+    const cuotaMensual = parseFloat((Number(nuevoMonto) / numMeses).toFixed(2));
+    await db.execute(
+      `UPDATE eventos_presupuesto
+       SET nombre = ?, descripcion = ?, emoji = ?, monto_total = ?,
+           mes_inicio = ?, mes_fin = ?, cuota_mensual = ?, estado = ?
+       WHERE id = ? AND firebase_uid = ?`,
+      [nombre ?? ev.nombre, descripcion ?? null, emoji ?? null, nuevoMonto,
+       nuevoMesIni, nuevoMesFin, cuotaMensual, estado ?? ev.estado, id, firebase_uid]
+    );
+    res.json({ actualizado: true, cuota_mensual: cuotaMensual });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /user/eventos/:id
+app.delete('/user/eventos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `UPDATE eventos_presupuesto SET estado = 'cancelado' WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]);
+    res.json({ cancelado: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/eventos/:id — detalle con gastos
+app.get('/user/eventos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[ev]] = await db.execute(
+      `SELECT * FROM eventos_presupuesto WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    if (!ev) return res.status(404).json({ error: 'Evento no encontrado' });
+    const [gastos] = await db.execute(
+      `SELECT * FROM eventos_gastos WHERE evento_id = ? ORDER BY fecha DESC, created_at DESC`, [id]);
+    const gastadoReal = gastos.reduce((s, g) => s + Number(g.monto), 0);
+    res.json({
+      evento: {
+        ...ev,
+        monto_total:   Number(ev.monto_total),
+        cuota_mensual: Number(ev.cuota_mensual),
+        gastado_real:  parseFloat(gastadoReal.toFixed(2)),
+        disponible:    parseFloat((Number(ev.monto_total) - gastadoReal).toFixed(2)),
+        num_meses:     ev.mes_fin - ev.mes_inicio + 1,
+        pct_avance:    ev.monto_total > 0
+          ? parseFloat((gastadoReal / Number(ev.monto_total) * 100).toFixed(1)) : 0,
+      },
+      gastos: gastos.map(g => ({ ...g, monto: Number(g.monto) })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/eventos/:id/gastos — registrar gasto contra un evento
+app.post('/user/eventos/:id/gastos', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, nombre, monto, fecha, notas } = req.body;
+  if (!firebase_uid || !nombre || !monto) return res.status(400).json({ error: 'Faltan campos' });
+  try {
+    const [[ev]] = await db.execute(
+      `SELECT * FROM eventos_presupuesto WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
+    if (!ev) return res.status(404).json({ error: 'Evento no encontrado' });
+    const [result] = await db.execute(
+      `INSERT INTO eventos_gastos (firebase_uid, evento_id, nombre, monto, fecha, notas)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, id, nombre, monto, fecha ?? null, notas ?? null]
+    );
+    _logInfo(`/user/eventos/${id}/gastos`, `Gasto evento: ${nombre} $${monto}`, firebase_uid);
+    res.status(201).json({ id: result.insertId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /user/eventos/:id/gastos/:gastoId
+app.delete('/user/eventos/:id/gastos/:gastoId', async (req, res) => {
+  const { id, gastoId } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `DELETE FROM eventos_gastos WHERE id = ? AND evento_id = ? AND firebase_uid = ?`,
+      [gastoId, id, firebase_uid]);
+    res.json({ eliminado: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

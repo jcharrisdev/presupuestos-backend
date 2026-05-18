@@ -6,6 +6,7 @@ import 'perfil_financiero_screen.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 import 'cierre_anio_screen.dart';
 import 'alertas_screen.dart';
+import 'eventos/eventos_screen.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -196,6 +197,25 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         const SizedBox(height: 24),
         const Divider(color: AppTheme.border),
         const SizedBox(height: 12),
+        // Botón Eventos
+        OutlinedButton.icon(
+          icon: const Icon(Icons.celebration_outlined, size: 16),
+          label: Text('Eventos $_anio'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.primary,
+            side: const BorderSide(color: AppTheme.primary),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => EventosScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _anio,
+            )),
+          ).then((_) => _cargar()),
+        ),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
           icon: const Icon(Icons.lock_outline, size: 16),
           label: Text('Cerrar año $_anio / Proyección ${_anio + 1}'),

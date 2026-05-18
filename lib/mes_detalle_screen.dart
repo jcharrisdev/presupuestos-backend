@@ -500,8 +500,9 @@ class _CompromisosSection extends StatelessWidget {
 
     final gastosFijos = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
     final deudas      = (compromisos['deudas']       as List? ?? []).cast<Map<String, dynamic>>();
+    final eventos     = (compromisos['eventos']       as List? ?? []).cast<Map<String, dynamic>>();
 
-    if (gastosFijos.isEmpty && deudas.isEmpty) return const SizedBox.shrink();
+    if (gastosFijos.isEmpty && deudas.isEmpty && eventos.isEmpty) return const SizedBox.shrink();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('COMPROMISOS DEL MES',
@@ -533,6 +534,19 @@ class _CompromisosSection extends StatelessWidget {
           subtitulo: _deudaSubtitulo(d),
           color: AppTheme.danger,
           icon: Icons.account_balance,
+        )),
+        const SizedBox(height: 10),
+      ],
+
+      if (eventos.isNotEmpty) ...[
+        const _SubSeccionLabel('EVENTOS', AppTheme.primary),
+        const SizedBox(height: 6),
+        ...eventos.map((e) => _CompromisoTile(
+          nombre: '${e['emoji'] ?? '🎯'} ${e['nombre'] ?? ''}',
+          monto: _d(e['cuota_mensual']),
+          subtitulo: 'Cuota del evento · ${e['pct_avance']?.toStringAsFixed(0) ?? '0'}% completado',
+          color: AppTheme.primary,
+          icon: Icons.celebration_outlined,
         )),
       ],
     ]);
