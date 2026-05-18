@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'services/registros_service.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
+import 'invoice_scanner/invoice_scanner_screen.dart';
 
 class MesDetalleScreen extends StatefulWidget {
   final String firebaseUid;
@@ -69,6 +70,15 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: Text('${widget.label} ${widget.anio}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner, size: 22),
+            tooltip: 'Escanear factura',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => InvoiceScannerScreen(firebaseUid: widget.firebaseUid),
+            )),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           labelColor: AppTheme.primary,

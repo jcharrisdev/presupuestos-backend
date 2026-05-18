@@ -7,6 +7,7 @@ import 'services/gastos_variables_service.dart';
 import 'deudas/deudas_screen.dart';
 import 'widgets/financiero/mes_rango_selector.dart';
 import 'widgets/financiero/categoria_selector.dart';
+import 'invoice_scanner/invoice_scanner_screen.dart';
 
 /// Pantalla central del perfil financiero global del usuario.
 /// Fuente de verdad de: ingreso, gastos fijos, deudas y gastos variables.
@@ -91,6 +92,13 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
         backgroundColor: AppTheme.surface,
         title: const Text('Mi perfil financiero'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner, size: 22),
+            tooltip: 'Escanear factura',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => InvoiceScannerScreen(firebaseUid: widget.firebaseUid),
+            )),
+          ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),
         ],
         bottom: TabBar(

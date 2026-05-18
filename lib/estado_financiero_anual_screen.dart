@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'mes_detalle_screen.dart';
 import 'perfil_financiero_screen.dart';
+import 'invoice_scanner/invoice_scanner_screen.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -64,6 +65,13 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       appBar: AppBar(
         title: Text('Estado Financiero $_anio'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner, size: 22),
+            tooltip: 'Escanear factura',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => InvoiceScannerScreen(firebaseUid: widget.firebaseUid),
+            )),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: _regenerar,
