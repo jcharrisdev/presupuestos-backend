@@ -100,7 +100,9 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final nombre = _budget?['nombre'] ?? 'Presupuesto compartido';
-    final activo = _budget?['estado'] == 'active';
+    final estado = _budget?['estado'] as String? ?? '';
+    // Operativo = puede recibir gastos (cualquier estado salvo cerrado/pausado)
+    final puedeOperar = estado != 'closed' && estado != 'paused' && estado.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -138,7 +140,11 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     _buildProgressRow(),
                   ],
                   const SizedBox(height: 16),
-                  _buildBotones(activo),
+                  _buildBotones(puedeOperar),
+                  if (_budget?['modo_pool'] != true) ...[
+                    const SizedBox(height: 12),
+                    _buildBalanceCard(),
+                  ],
                   const SizedBox(height: 20),
                   const Padding(
                     padding: EdgeInsets.only(bottom: 12),
@@ -275,6 +281,123 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
     );
   }
 
+  Widget _buildBalanceCard() {
+    final balance = double.tryParse(_budget?['balance_neto']?.toString() ?? '0') ?? 0.0;
+    final otroUid = _otroUid();
+    if (balance == 0.0 && otroUid.isEmpty) return const SizedBox.shrink();
+
+    final debes = balance > 0.01;
+    final teDeben = balance < -0.01;
+    final liquidado = !debes && !teDeben;
+
+    final color = debes ? AppTheme.danger : (teDeben ? AppTheme.success : AppTheme.textSecondary);
+    final label = debes
+        ? 'Debes \$${balance.toStringAsFixed(2)} a ${_shortUid(otroUid)}'
+        : teDeben
+            ? '${_shortUid(otroUid)} te debe \$${(-balance).toStringAsFixed(2)}'
+            : 'Sin deudas pendientes';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: liquidado ? AppTheme.border : color.withValues(alpha: 0.4)),
+      ),
+      child: Row(children: [
+        Icon(
+          liquidado ? Icons.check_circle_outline : Icons.account_balance_wallet_outlined,
+          color: color, size: 20,
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600))),
+        if (!liquidado)
+          TextButton(
+            onPressed: () => _showLiquidarDialog(balance, otroUid),
+            style: TextButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Liquidar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          ),
+      ]),
+    );
+  }
+
+  void _showLiquidarDialog(double balance, String otroUid) {
+    final montoCtrl = TextEditingController(
+      text: balance.abs().toStringAsFixed(2),
+    );
+    final debes = balance > 0;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          debes ? 'Registrar pago que hiciste' : 'Registrar pago que recibiste',
+          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            debes
+                ? 'Registra cuánto le pagaste a ${_shortUid(otroUid)}.'
+                : 'Registra cuánto te pagó ${_shortUid(otroUid)}.',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: montoCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
+              prefixText: '\$ ',
+              prefixStyle: const TextStyle(color: AppTheme.textMuted),
+              filled: true,
+              fillColor: AppTheme.surfaceAlt,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+            onPressed: () async {
+              final monto = double.tryParse(montoCtrl.text);
+              if (monto == null || monto <= 0) return;
+              Navigator.pop(context);
+              final body = <String, dynamic>{
+                'firebase_uid': widget.firebaseUid,
+                'receptor_uid': debes ? otroUid : widget.firebaseUid,
+                'monto': monto,
+                'fecha': DateTime.now().toIso8601String().substring(0, 10),
+              };
+              // Si recibo el pago, el pagador es el otro
+              if (!debes) body['firebase_uid'] = otroUid;
+              // Siempre el que llama es el que registra su propio pago
+              body['firebase_uid'] = widget.firebaseUid;
+              body['receptor_uid'] = debes ? otroUid : widget.firebaseUid;
+              final ok = await SharedBudgetService.createSettlement(widget.budgetId, body);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(ok ? 'Pago registrado' : 'Error al registrar el pago'),
+                  backgroundColor: ok ? AppTheme.success : AppTheme.danger,
+                ));
+                if (ok) _recargar();
+              }
+            },
+            child: const Text('Guardar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    ).whenComplete(() => montoCtrl.dispose());
+  }
+
   Widget _rolChip(String rol) {
     const colors = {
       'creador': AppTheme.primary,
@@ -295,12 +418,12 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
     );
   }
 
-  Widget _buildBotones(bool activo) {
+  Widget _buildBotones(bool puedeOperar) {
     final regla = _budget?['regla_reparto'] as String? ?? '';
     final puedeEditorDivision = _puedeEditar && (regla == 'porcentual' || regla == 'pool_contribucion');
     return Column(children: [
       Row(children: [
-        if (activo && _puedeAgregarGasto) ...[
+        if (puedeOperar && _puedeAgregarGasto) ...[
           Expanded(
             child: OutlinedButton.icon(
               onPressed: _showAgregarGasto,

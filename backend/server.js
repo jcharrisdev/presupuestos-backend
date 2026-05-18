@@ -4501,7 +4501,7 @@ app.post('/shared-budgets', async (req, res) => {
   try {
     const [r] = await conn.execute(
       `INSERT INTO shared_budgets (nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, estado, owner_uid)
-       VALUES (?, ?, ?, ?, 'waiting_for_members', ?)`,
+       VALUES (?, ?, ?, ?, 'active', ?)`,
       [nombre, tipo_periodo || 'mensual', dia_inicio_periodo || 1, regla_reparto || 'equitativo', firebase_uid]
     );
     const budgetId = r.insertId;
@@ -4520,7 +4520,7 @@ app.post('/shared-budgets', async (req, res) => {
     );
     await conn.commit();
     conn.release();
-    res.status(201).json({ id: budgetId, nombre, estado: 'waiting_for_members' });
+    res.status(201).json({ id: budgetId, nombre, estado: 'active' });
   } catch (err) {
     await conn.rollback();
     conn.release();
@@ -4535,13 +4535,29 @@ app.get('/shared-budgets', async (req, res) => {
   try {
     const [rows] = await db.execute(
       `SELECT sb.id, sb.nombre, sb.tipo_periodo, sb.regla_reparto, sb.estado, sb.owner_uid, sb.created_at,
-              m.rol, m.porcentaje
+              m.rol, m.porcentaje,
+              COALESCE((
+                SELECT SUM(ses.monto_responsabilidad)
+                FROM shared_expense_splits ses
+                JOIN shared_expenses se ON se.id = ses.expense_id
+                WHERE se.shared_budget_id = sb.id AND ses.firebase_uid = ? AND ses.pagado = 0 AND se.es_personal = 0
+              ), 0) AS mi_deuda,
+              COALESCE((
+                SELECT SUM(ses.monto_responsabilidad)
+                FROM shared_expense_splits ses
+                JOIN shared_expenses se ON se.id = ses.expense_id
+                WHERE se.shared_budget_id = sb.id AND ses.firebase_uid != ? AND ses.pagado = 0 AND se.pagado_por = ? AND se.es_personal = 0
+              ), 0) AS me_deben
        FROM shared_budgets sb
        JOIN shared_budget_members m ON m.shared_budget_id = sb.id AND m.firebase_uid = ?
        ORDER BY sb.created_at DESC`,
-      [firebase_uid]
+      [firebase_uid, firebase_uid, firebase_uid, firebase_uid]
     );
-    res.json(rows);
+    const rowsConBalance = rows.map(r => ({
+      ...r,
+      balance_neto: Math.round((Number(r.mi_deuda) - Number(r.me_deben)) * 100) / 100,
+    }));
+    res.json(rowsConBalance);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4888,10 +4904,10 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
     const [[budget]] = await conn.execute(
       `SELECT sb.regla_reparto FROM shared_budgets sb
        JOIN shared_budget_members m ON m.shared_budget_id = sb.id AND m.firebase_uid = ?
-       WHERE sb.id = ? AND sb.estado = 'active'`,
+       WHERE sb.id = ? AND sb.estado NOT IN ('closed','paused')`,
       [firebase_uid, id]
     );
-    if (!budget) { await conn.rollback(); conn.release(); return res.status(403).json({ error: 'No autorizado o presupuesto inactivo' }); }
+    if (!budget) { await conn.rollback(); conn.release(); return res.status(403).json({ error: 'No autorizado o presupuesto cerrado' }); }
     const [r] = await conn.execute(
       `INSERT INTO shared_expenses (shared_budget_id, descripcion, monto, pagado_por, regla_override, es_personal, firebase_uid_personal, fecha)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -4910,8 +4926,14 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
           `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
           [expenseId, sp.firebase_uid, sp.monto_responsabilidad]
         );
-        // El pagador ya pagó su parte al crear el gasto — registrar en su estado financiero
-        if (sp.firebase_uid === pagado_por) payerSplitMonto = sp.monto_responsabilidad;
+        if (sp.firebase_uid === pagado_por) {
+          payerSplitMonto = sp.monto_responsabilidad;
+          // El pagador ya pagó — marcar su split como pagado en BD
+          await conn.execute(
+            `UPDATE shared_expense_splits SET pagado=1 WHERE expense_id=? AND firebase_uid=?`,
+            [expenseId, pagado_por]
+          );
+        }
       }
     } else {
       // Gasto personal: el monto completo es del creador
