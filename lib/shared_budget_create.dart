@@ -19,6 +19,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
 
   String _tipoPeriodo = 'mensual';
   String _regla = 'equitativo';
+  String _rolInvitado = 'admin';
   double _pctOwner = 50;
   bool _saving = false;
 
@@ -60,7 +61,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
     final result = await SharedBudgetService.create(body);
     if (!mounted) return;
     if (result != null) {
-      final ok = await SharedBudgetService.invite(result['id'], email, widget.firebaseUid);
+      final ok = await SharedBudgetService.invite(result['id'], email, widget.firebaseUid, rolInvitado: _rolInvitado);
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Presupuesto creado e invitación enviada'), backgroundColor: AppTheme.success,
@@ -140,9 +141,30 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
             style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
           ),
           const SizedBox(height: 20),
-          _label('Email del co-dueño'),
+          _label('Email del participante a invitar'),
           const SizedBox(height: 6),
-          _input(_emailCtrl, 'correo@ejemplo.com', keyboard: TextInputType.emailAddress),
+          _input(_emailCtrl, 'correo@gmail.com', keyboard: TextInputType.emailAddress),
+          const SizedBox(height: 12),
+          _label('Rol del invitado'),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _rolInvitado,
+                isExpanded: true,
+                dropdownColor: AppTheme.surface,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                items: const [
+                  DropdownMenuItem(value: 'admin',        child: Text('Admin — puede invitar y editar')),
+                  DropdownMenuItem(value: 'participante', child: Text('Participante — puede agregar gastos')),
+                  DropdownMenuItem(value: 'lectura',      child: Text('Solo lectura — no puede modificar')),
+                ],
+                onChanged: (v) => setState(() => _rolInvitado = v!),
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           const Text('El invitado verá la invitación cuando abra la sección "Compartido".',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
