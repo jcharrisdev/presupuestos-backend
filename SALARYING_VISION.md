@@ -1,7 +1,7 @@
 # Salarying — Visión completa, flujo y arquitectura funcional
 
 > Documento de referencia para desarrollo. Todo cambio en la app debe estar alineado con esta visión.
-> Última actualización: 2026-05-17
+> Última actualización: 2026-05-18
 
 ---
 
@@ -447,20 +447,26 @@ GET https://presupuestos-backend-h3l6.onrender.com/logs?secret=salarying_logs_20
 - [x] Compromisos del mes (gastos fijos + deudas activas)
 - [x] Deudas (revolving + letras, estrategias, proyecciones)
 - [x] Creación de deudas con dia_pago, dia_pago_2, mes_inicio_pago
+- [x] dia_pago_2 funcional en gastos fijos del perfil (2 eventos/mes en calendario)
 - [x] Categorías personalizadas con "Otro" y guardado para futuro
 - [x] Selector de rango de meses (MesRangoSelector)
-- [x] Calendario con eventos de pagos
-- [x] Alertas automáticas (20% umbral, 3 meses repetición)
+- [x] Calendario con eventos de pagos (sin duplicados al editar)
+- [x] Alertas automáticas — se disparan al registrar/eliminar gastos
+- [x] Alertas visibles en tab Resumen de MesDetalleScreen
+- [x] Ingreso real del mes — PATCH /user/meses/:anio/:mes/ingreso + UI con bottom sheet
+- [x] Dashboard nuevo conectado al modelo financiero anual
+- [x] Scanner QR en AppBar global (EstadoAnual, MesDetalle, Perfil)
+- [x] Gastos reutilizables: expense_definitions + selector en AgregarGastoSheet
 - [x] Logs del servidor con auto-limpieza
-- [x] Deploy web en Vercel
+- [x] Deploy web en Vercel (con skip-waiting + no-cache headers)
 - [x] Backend en Render (Node.js + Express + MySQL Clever Cloud)
+- [x] CHECKLIST_ENTREGABLE.md con verificaciones pre-deploy
 
 ### Pendiente — próximas fases
 
-**Fase 2: Gastos reutilizables**
-- [ ] Tabla `expense_definitions` (plantillas de gastos)
-- [ ] Tabla `expense_instances` (uso mensual)
-- [ ] Selector de gastos existentes en formularios
+**Fase 2: Gastos reutilizables — parcialmente implementado**
+- [x] Tabla `expense_definitions` (plantillas de gastos)
+- [x] Selector de gastos existentes en AgregarGastoSheet
 - [ ] Eliminación controlada (este mes / desde aquí / todos)
 - [ ] Edición controlada (este mes / desde aquí / todos)
 
@@ -469,8 +475,8 @@ GET https://presupuestos-backend-h3l6.onrender.com/logs?secret=salarying_logs_20
 - [ ] Conexión directa con estado financiero personal de cada participante
 - [ ] Notificaciones entre participantes
 
-**Fase 4: Scanner global**
-- [ ] Mover scanner de card a ícono en AppBar global
+**Fase 4: Scanner global — parcialmente implementado**
+- [x] Ícono QR en AppBar de EstadoFinanciero, MesDetalle y Perfil
 - [ ] Conectar factura escaneada a gastos existentes del mes
 - [ ] Guardar productos y precios de facturas
 

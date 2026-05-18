@@ -1,6 +1,6 @@
 ================================================================================
 ARCHIVO DE CONTEXTO — PROYECTO SALARYING
-Última actualización: 2026-05-17 (v4.0 — modelo financiero anual + logs + web)
+Última actualización: 2026-05-18 (v5.0 — sprints 1-4 completados + hotfixes críticos)
 Para uso de Claude Code en nuevas sesiones
 ================================================================================
 
@@ -186,6 +186,17 @@ deudas
   dia_pago INT,            ← día de pago (genera evento calendario)
   dia_pago_2 INT           ← segundo día de pago (quincenas)
 
+--- GASTOS REUTILIZABLES (v5.0) ---
+
+expense_definitions
+  firebase_uid, nombre, categoria,
+  tipo_habitual ENUM('fijo','variable','no_presupuestado') DEFAULT 'variable',
+  activo(0/1)
+
+registros_gasto (columna añadida en v5.0)
+  ... (campos anteriores) ...
+  definition_id INT DEFAULT NULL   ← FK a expense_definitions
+
 --- LOGS DEL SERVIDOR ---
 
 server_logs
@@ -242,6 +253,13 @@ POST   /user/subcategorias
 --- LOGS ---
 GET    /logs?secret=salarying_logs_2025&limit=80&nivel=&uid=
 DELETE /logs?secret=salarying_logs_2025     → limpia logs >7 días
+
+--- GASTOS REUTILIZABLES (v5.0) ---
+GET    /user/expense-definitions?firebase_uid=     → lista con ultimo_monto
+POST   /user/expense-definitions                   → crear/deduplicar definición
+
+--- INGRESO REAL (v5.0) ---
+PATCH  /user/meses/:anio/:mes/ingreso              → {firebase_uid, ingreso_real}
 
 --- ENDPOINTS EXISTENTES (sin cambios) ---
 (Ver sección anterior del contexto para lista completa de /presupuestos,
@@ -315,25 +333,54 @@ SESIÓN 7 (2026-05-15 — v3.0):
   - Deudas 4 tabs (Situación/Estrategias/Simulador/Mi Plan)
   - Shared Budget conectado al perfil
 
-SESIÓN 8 (2026-05-17 — v4.0 — ACTUAL):
+SESIÓN 8 (2026-05-17 — v4.0):
   - REDISEÑO ARQUITECTURAL: modelo financiero anual como núcleo
   - Nuevas tablas: estado_financiero_anual, meses_financieros, registros_gasto,
     analisis_categorias, alertas_financieras, cierres, gastos_variables_base,
     subcategorias, calendario_eventos, server_logs
-  - Nuevas pantallas: EstadoFinancieroAnualScreen, MesDetalleScreen,
-    DebugLogsScreen
-  - Nuevos widgets: AgregarGastoSheet, CategoriaSelector, MesRangoSelector
-  - Deudas mejoradas: es_letra, cuota_fija, num_cuotas, mes_inicio_pago,
-    dia_pago_2 (quincenas)
-  - Variables base con períodos: mes_inicio, mes_fin, aplica_meses
-  - Sistema de logs: server_logs + auto-limpieza 60 min + pantalla debug
-  - Bug críticos corregidos:
-    * calendario_eventos tabla faltante → PUT gastos-fijos fallaba con 500
-    * undefined en bind params → "Bind parameters must not contain undefined"
-    * LIMIT ? en MySQL 5.6 → "Incorrect arguments to mysqld_stmt_execute"
-    * estimados no recalculaban tras cambios de perfil → _recalcularEstimadosAnio
-  - Deploy web: Flutter web en Vercel (build/web en git, vercel.json configurado)
-  - SALARYING_VISION.md creado con visión completa y fases de implementación
+  - Nuevas pantallas: EstadoFinancieroAnualScreen, MesDetalleScreen, DebugLogsScreen
+  - SALARYING_VISION.md creado con visión completa
+
+SESIÓN 9 (2026-05-18 — v5.0 — ACTUAL):
+  AUDITORÍA + SPRINTS 1-4
+
+  Sprint 1 — Bugs críticos:
+  - Fix: _recalcularEstimadosAnio respeta aplica_meses (no * 12 ciegamente)
+  - Fix: PATCH /recalcular tenía cálculo inline duplicado — delegado a la función
+  - Fix: DELETE eventos borra 'pendiente' Y 'vencido' (no dejaba duplicados)
+  - Fix: dia_pago_2 funcional — backend (PUT/POST/generación) + Flutter (form + chip)
+
+  Sprint 2 — Brechas funcionales:
+  - Alertas auto: _generarAlertasMes fire-and-forget en POST/DELETE /registros
+  - Alertas visibles: _AlertaMesCard en tab Resumen de MesDetalleScreen
+  - PATCH /user/meses/:anio/:mes/ingreso — registrar ingreso real del mes
+  - _IngresoRealCard en tab Resumen con bottom sheet para ingresar monto
+  - DashboardScreen reescrito: EstadoAnualService, barra uso, próximos pagos, alertas, metas
+
+  Sprint 3 — Scanner QR global:
+  - Ícono QR en AppBar de EstadoFinancieroAnualScreen, MesDetalleScreen, PerfilFinancieroScreen
+
+  Sprint 4 — Gastos reutilizables:
+  - Tabla expense_definitions (plantillas)
+  - Columna definition_id en registros_gasto
+  - GET/POST /user/expense-definitions
+  - POST /registros auto-vincula/crea definición
+  - AgregarGastoSheet: sección "GASTOS ANTERIORES" con chips pre-llenado
+
+  Hotfixes sesión 9:
+  - "0.00" string MySQL es truthy: Number(campo) || Number(otro) en 4 lugares
+  - meses_financieros no tiene updated_at — removido del PATCH ingreso
+  - web/index.html: script skip-waiting para SW auto-activación en deploys
+  - vercel.json: no-store en main.dart.js, index.html, flutter_bootstrap.js
+  - flutter clean OBLIGATORIO antes de flutter build web (caché incremental)
+  - CHECKLIST_ENTREGABLE.md creado en raíz del proyecto
+
+  Próximos sprints (ver plan en CHECKLIST_ENTREGABLE.md):
+  - Sprint 5: Wizard cierre mensual/anual
+  - Sprint 6: Alertas avanzadas + push notifications
+  - Sprint 7: Presupuestos de eventos
+  - Sprint 8: Roles presupuesto compartido
+  - Sprint 9: Productos y precios (facturas QR)
 
 ================================================================================
 10. CONVENCIONES DEL PROYECTO
@@ -379,6 +426,15 @@ GIT:
   - Meses en meses_financieros deben existir antes de POST /registros
   - actualizarGastoFijo ahora lanza Exception (no retorna bool)
   - crearGastoFijo ahora lanza Exception (no retorna null)
+  - MySQL retorna Decimal como string "0.00" → es TRUTHY en JS
+    Nunca: Number(row.campo || row.otro)
+    Siempre: Number(row.campo) || Number(row.otro)
+  - meses_financieros NO tiene columna updated_at
+  - flutter build web sin flutter clean puede servir código viejo (caché incremental)
+    SIEMPRE: flutter clean && flutter build web --release
+  - Verificar strings del sprint en build/web/main.dart.js antes de subir
+  - El service worker de Vercel tiene skip-waiting en web/index.html (auto-actualiza)
+  - Tabla expense_definitions existe desde v5.0 — definition_id en registros_gasto
 
 ================================================================================
 12. INSTRUCCIÓN PARA NUEVA SESIÓN
