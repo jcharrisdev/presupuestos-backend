@@ -9162,6 +9162,160 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /user/consejero?firebase_uid=&anio=&mes=
+// Motor de análisis financiero: score de salud, insights y enfoque del mes.
+app.get('/user/consejero', async (req, res) => {
+  const { firebase_uid, anio, mes } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const year  = Number(anio) || new Date().getFullYear();
+  const month = Number(mes)  || (new Date().getMonth() + 1);
+  const MESES = ['','enero','febrero','marzo','abril','mayo','junio',
+                 'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  try {
+    const [[income]] = await db.execute(
+      `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    if (!income) return res.json({ sin_perfil: true });
+
+    const ingresoNeto = Number(income.ingreso_neto_mensual);
+
+    const [gastosFijos] = await db.execute(
+      `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
+    const [deudas] = await db.execute(
+      `SELECT * FROM deudas WHERE firebase_uid = ? AND activa = 1 ORDER BY tasa_interes DESC`, [firebase_uid]);
+    const [[mesRow]] = await db.execute(
+      `SELECT * FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, year, month]);
+    const [registros] = mesRow ? await db.execute(
+      `SELECT tipo, categoria, SUM(monto) AS total FROM registros_gasto
+       WHERE firebase_uid = ? AND mes_id = ? GROUP BY tipo, categoria`,
+      [firebase_uid, mesRow.id]) : [[]];
+
+    // ── Métricas base ────────────────────────────────────────────────────────
+    const totalFijosMensual = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    const totalPagosDeuda   = deudas.reduce((s, d) => s + (Number(d.pago_minimo) || Number(d.cuota_fija) || 0), 0);
+    const remanente         = ingresoNeto - totalFijosMensual;
+    const pctFijos          = ingresoNeto > 0 ? totalFijosMensual / ingresoNeto : 0;
+    const pctDeuda          = ingresoNeto > 0 ? totalPagosDeuda / ingresoNeto : 0;
+    const tasaAhorro        = ingresoNeto > 0 ? Math.max(0, remanente) / ingresoNeto : 0;
+
+    const totalRealFijos = registros.filter(r => r.tipo === 'fijo').reduce((s, r) => s + Number(r.total), 0);
+    const tieneRegistros = registros.length > 0;
+
+    // ── Score (0-100) ────────────────────────────────────────────────────────
+    const ptsDTI     = pctDeuda < 0.15 ? 25 : pctDeuda < 0.28 ? 20 : pctDeuda < 0.36 ? 12 : pctDeuda < 0.5 ? 5 : 0;
+    const ptsAhorro  = tasaAhorro > 0.20 ? 25 : tasaAhorro > 0.15 ? 20 : tasaAhorro > 0.10 ? 15 : tasaAhorro > 0.05 ? 8 : tasaAhorro > 0 ? 3 : 0;
+    const ptsFijos   = pctFijos < 0.40 ? 25 : pctFijos < 0.50 ? 20 : pctFijos < 0.60 ? 12 : pctFijos < 0.70 ? 5 : 0;
+    let   ptsControl = 20;
+    if (tieneRegistros && mesRow) {
+      const fijosEst = Number(mesRow.fijos_estimados) || totalFijosMensual;
+      const exceso   = totalRealFijos - fijosEst;
+      ptsControl = exceso <= 0 ? 25 : exceso < fijosEst * 0.05 ? 20 : exceso < fijosEst * 0.15 ? 12 : exceso < fijosEst * 0.3 ? 5 : 0;
+    }
+    const score = ptsDTI + ptsAhorro + ptsFijos + ptsControl;
+
+    // ── Insights ─────────────────────────────────────────────────────────────
+    const insights = [];
+
+    // 1. Remanente (siempre primero — responde "¿me sobra o me falta?")
+    if (remanente >= 0) {
+      insights.push({ tipo: 'positivo', icono: 'savings', titulo: 'Tu remanente mensual',
+        texto: `Te sobran $${remanente.toFixed(2)}/mes ($${(remanente/2).toFixed(2)} por quincena) después de cubrir todos tus compromisos fijos planificados.` });
+    } else {
+      insights.push({ tipo: 'critico', icono: 'warning', titulo: 'Déficit mensual',
+        texto: `Tu planificación muestra un déficit de $${Math.abs(remanente).toFixed(2)}/mes. Tus gastos fijos superan tu ingreso neto. Necesitás reducir algún compromiso.` });
+    }
+
+    // 2. Fijos vs regla 50/30/20
+    const pctFijosPct = Math.round(pctFijos * 100);
+    if (pctFijos > 0.50) {
+      insights.push({ tipo: 'advertencia', icono: 'pie_chart', titulo: `Fijos altos: ${pctFijosPct}% de tu ingreso`,
+        texto: `La regla 50/30/20 recomienda que los gastos fijos no superen el 50% del ingreso neto. Estás en ${pctFijosPct}%. Evalúa qué gasto fijo podés renegociar o eliminar.` });
+    } else {
+      insights.push({ tipo: 'positivo', icono: 'pie_chart', titulo: `Fijos saludables: ${pctFijosPct}% del ingreso`,
+        texto: `Tus gastos fijos están dentro del rango recomendado (máx 50%). Tenés espacio para maniobrar si surge un imprevisto.` });
+    }
+
+    // 3. DTI — si hay deudas
+    if (deudas.length > 0) {
+      const pctDeudaPct = Math.round(pctDeuda * 100);
+      if (pctDeuda > 0.36) {
+        insights.push({ tipo: 'critico', icono: 'credit_card', titulo: `DTI crítico: ${pctDeudaPct}% en deudas`,
+          texto: `El ${pctDeudaPct}% de tu ingreso mensual va directo a pagar deudas. El límite saludable internacionalmente aceptado es 36%. Estás en zona de riesgo — no contraigas más deuda ahora.` });
+      } else if (pctDeuda > 0.15) {
+        insights.push({ tipo: 'advertencia', icono: 'credit_card', titulo: `DTI moderado: ${pctDeudaPct}% en deudas`,
+          texto: `El ${pctDeudaPct}% de tu ingreso va a pagar deudas. No es crítico, pero limita tu capacidad de ahorro. Prioriza liquidar primero la deuda de mayor tasa.` });
+      }
+    }
+
+    // 4. Deuda más cara (tasa más alta)
+    const deudaMasCara = deudas.find(d => Number(d.tasa_interes) > 12);
+    if (deudaMasCara) {
+      const saldo  = Number(deudaMasCara.monto_pendiente) || Number(deudaMasCara.monto_total) || 0;
+      const tasaM  = Number(deudaMasCara.tasa_interes) / 100 / 12;
+      const intMes = saldo > 0 ? saldo * tasaM : 0;
+      insights.push({ tipo: 'advertencia', icono: 'trending_up',
+        titulo: `"${deudaMasCara.nombre}" al ${deudaMasCara.tasa_interes}% TEA`,
+        texto: `Esta deuda es tu enemigo financiero #1.${intMes > 0 ? ` Te cuesta aprox $${intMes.toFixed(2)} en intereses cada mes.` : ''} Pagá más del mínimo cuando puedas — cada dólar extra reduce drásticamente el total de intereses.` });
+    }
+
+    // 5. Proyección de liquidación de deuda con plazo definido
+    const deudaConPlazo = deudas.find(d => Number(d.num_cuotas_total) > 0);
+    if (deudaConPlazo) {
+      const total     = Number(deudaConPlazo.num_cuotas_total);
+      const pagados   = Number(deudaConPlazo.num_pagos_realizados) || 0;
+      const restantes = Math.max(1, total - pagados);
+      const fechaFin  = new Date();
+      fechaFin.setMonth(fechaFin.getMonth() + restantes);
+      const label = fechaFin.toLocaleDateString('es-PA', { month: 'long', year: 'numeric' });
+      insights.push({ tipo: 'info', icono: 'schedule',
+        titulo: `"${deudaConPlazo.nombre}" — libre en ${label}`,
+        texto: `Te quedan ${restantes} cuota${restantes !== 1 ? 's' : ''} de ${total}. Mantené tus pagos puntuales y estarás libre de esta deuda en ${label}.` });
+    }
+
+    // 6. Fondo de emergencia
+    const fondoRec = totalFijosMensual * 3;
+    insights.push({ tipo: 'info', icono: 'shield', titulo: 'Fondo de emergencia recomendado',
+      texto: `Con tus gastos fijos actuales, tu fondo de emergencia debería ser $${fondoRec.toFixed(2)} (3 meses de compromisos). Verificá si tenés esa liquidez disponible en efectivo o cuenta de ahorro.` });
+
+    // ── Enfoque del mes (1 acción concreta) ──────────────────────────────────
+    let enfoque;
+    if (remanente < 0) {
+      enfoque = { icono: 'cut', urgencia: 'alta', titulo: 'Reducí un gasto fijo este mes',
+        texto: `Tenés un déficit de $${Math.abs(remanente).toFixed(2)}/mes. Identificá el compromiso fijo menos esencial y renegocialo o eliminalo. Cada dólar liberado mejora tu salud financiera.` };
+    } else if (deudaMasCara && remanente > 30) {
+      const extra = Math.min(remanente * 0.4, 150).toFixed(2);
+      enfoque = { icono: 'bolt', urgencia: 'media', titulo: `Pagá $${extra} extra a "${deudaMasCara.nombre}"`,
+        texto: `Tenés remanente. Destinar $${extra} extra a esta deuda este mes reduce años de plazo y cientos de dólares en intereses a lo largo del tiempo.` };
+    } else if (tasaAhorro < 0.10 && remanente > 0) {
+      const ahorro = (ingresoNeto * 0.10).toFixed(2);
+      enfoque = { icono: 'savings', urgencia: 'media', titulo: `Reservá $${ahorro} antes de gastar`,
+        texto: `Aplicá el principio de "pagarte primero": separá el 10% ($${ahorro}) de tu ingreso apenas lo recibís, antes de cualquier gasto variable. Lo que queda es lo que podés gastar libremente.` };
+    } else {
+      enfoque = { icono: 'check_circle', urgencia: 'baja', titulo: 'Mantené el rumbo',
+        texto: `Tu planificación financiera es sólida. Seguí registrando tus gastos reales para que el análisis se afine cada mes con datos reales de tu vida.` };
+    }
+
+    res.json({
+      score,
+      score_breakdown: { dti: ptsDTI, ahorro: ptsAhorro, fijos: ptsFijos, control: ptsControl },
+      metricas: {
+        ingreso_neto:                parseFloat(ingresoNeto.toFixed(2)),
+        total_fijos:                 parseFloat(totalFijosMensual.toFixed(2)),
+        total_pagos_deuda:           parseFloat(totalPagosDeuda.toFixed(2)),
+        remanente:                   parseFloat(remanente.toFixed(2)),
+        pct_fijos:                   parseFloat((pctFijos * 100).toFixed(1)),
+        pct_deuda:                   parseFloat((pctDeuda * 100).toFixed(1)),
+        tasa_ahorro_pct:             parseFloat((tasaAhorro * 100).toFixed(1)),
+        fondo_emergencia_recomendado: parseFloat(fondoRec.toFixed(2)),
+        num_deudas:                  deudas.length,
+      },
+      insights: insights.slice(0, 5),
+      enfoque,
+      mes: month, mes_label: MESES[month], anio: year,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /user/meses/:anio/:mes?firebase_uid=
 // Detalle completo de un mes: estimado vs real + registros de gasto.
 app.get('/user/meses/:anio/:mes', async (req, res) => {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
+import 'services/consejero_service.dart';
 import 'mes_detalle_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
@@ -27,6 +28,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   int _alertasCount = 0;
   Map<int, Map<String, dynamic>> _alertasResumen = {};
   String _vista = 'mensual'; // 'mensual' | 'quincenal' | 'anual'
+  Map<String, dynamic>? _consejero;
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -65,9 +67,18 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
             .map((k, v) => MapEntry(int.tryParse(k.toString()) ?? 0, Map<String, dynamic>.from(v as Map)));
         if (mounted) setState(() => _alertasResumen = porMes);
       } catch (_) {}
+      _cargarConsejero();
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
+  }
+
+  Future<void> _cargarConsejero() async {
+    try {
+      final now = DateTime.now();
+      final c = await ConsejeroService.get(widget.firebaseUid, anio: _anio, mes: now.month);
+      if (mounted) setState(() => _consejero = c);
+    } catch (_) {}
   }
 
   @override
@@ -154,6 +165,16 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── Sección Consejero ─────────────────────────────────────────────
+        if (_consejero != null && !(_consejero!['sin_perfil'] as bool? ?? false)) ...[
+          _buildScoreCard(_consejero!),
+          const SizedBox(height: 10),
+          _buildEnfoqueCard(_consejero!),
+          const SizedBox(height: 16),
+        ] else if (_consejero == null) ...[
+          _buildConsejeroSkeleton(),
+          const SizedBox(height: 16),
+        ],
         // Toggle de vista
         Row(children: [
           _VistaChip('Quincenal', 'quincenal', _vista, (v) => setState(() => _vista = v)),
@@ -165,6 +186,11 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         const SizedBox(height: 12),
         _CardAnual(ea: ea, anio: _anio, vista: _vista,
             onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
+        // ── Insights ──────────────────────────────────────────────────────
+        if (_consejero != null && !(_consejero!['sin_perfil'] as bool? ?? false)) ...[
+          _buildInsights(_consejero!),
+          const SizedBox(height: 8),
+        ],
         if (_alertasCount > 0)
           _AlertaBanner(
             count: _alertasCount,
@@ -255,6 +281,159 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         const SizedBox(height: 20),
       ],
     );
+  }
+
+  // ── Consejero helpers ────────────────────────────────────────────────────
+
+  static Color _scoreColor(int s) =>
+      s >= 75 ? AppTheme.success : s >= 50 ? AppTheme.warning : AppTheme.danger;
+
+  static String _scoreLabel(int s) =>
+      s >= 75 ? 'Excelente' : s >= 60 ? 'Buena' : s >= 45 ? 'Regular' : 'Crítica';
+
+  static IconData _iconMap(String name) => switch (name) {
+    'savings'      => Icons.savings,
+    'warning'      => Icons.warning_rounded,
+    'pie_chart'    => Icons.pie_chart_outline,
+    'credit_card'  => Icons.credit_card,
+    'trending_up'  => Icons.trending_up,
+    'schedule'     => Icons.schedule,
+    'shield'       => Icons.shield_outlined,
+    'receipt_long' => Icons.receipt_long,
+    'cut'          => Icons.content_cut,
+    'bolt'         => Icons.bolt,
+    'check_circle' => Icons.check_circle_outline,
+    _              => Icons.info_outline,
+  };
+
+  static Color _tipoColor(String tipo) => switch (tipo) {
+    'positivo'   => AppTheme.success,
+    'advertencia'=> AppTheme.warning,
+    'critico'    => AppTheme.danger,
+    _            => AppTheme.primary,
+  };
+
+  Widget _buildConsejeroSkeleton() => Container(
+    height: 88,
+    decoration: BoxDecoration(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppTheme.border),
+    ),
+    child: const Center(child: SizedBox(
+      width: 20, height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+    )),
+  );
+
+  Widget _buildScoreCard(Map<String, dynamic> c) {
+    final score    = (c['score'] as num).toInt();
+    final color    = _scoreColor(score);
+    final label    = _scoreLabel(score);
+    final m        = c['metricas'] as Map<String, dynamic>;
+    final numDeudas = (m['num_deudas'] as num).toInt();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
+      ),
+      child: Row(children: [
+        // Score circle
+        Container(
+          width: 60, height: 60,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.12),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Center(child: Text('$score',
+              style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800))),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Text('Salud financiera: ', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Fijos: ${m['pct_fijos']}% del ingreso  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+          if (numDeudas > 0)
+            Text('DTI (deuda/ingreso): ${m['pct_deuda']}%',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+        ])),
+      ]),
+    );
+  }
+
+  Widget _buildEnfoqueCard(Map<String, dynamic> c) {
+    final ef      = c['enfoque'] as Map<String, dynamic>;
+    final urgencia = ef['urgencia'] as String;
+    final color   = urgencia == 'alta' ? AppTheme.danger
+                  : urgencia == 'media' ? AppTheme.warning
+                  : AppTheme.success;
+    final icon    = _iconMap(ef['icono'] as String);
+    final mesLabel = (c['mes_label'] as String?) ?? '';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Enfoque de $mesLabel'.toUpperCase(),
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+          const SizedBox(height: 2),
+          Text(ef['titulo'] as String,
+              style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(ef['texto'] as String,
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+        ])),
+      ]),
+    );
+  }
+
+  Widget _buildInsights(Map<String, dynamic> c) {
+    final items = (c['insights'] as List).cast<Map<String, dynamic>>();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Padding(
+        padding: EdgeInsets.only(bottom: 10),
+        child: Text('ANÁLISIS', style: TextStyle(
+            color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
+      ),
+      ...items.map((insight) {
+        final color = _tipoColor(insight['tipo'] as String);
+        final icon  = _iconMap(insight['icono'] as String);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 17),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(insight['titulo'] as String,
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(insight['texto'] as String,
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+            ])),
+          ]),
+        );
+      }),
+    ]);
   }
 
   void _mostrarAyuda(BuildContext context) {
