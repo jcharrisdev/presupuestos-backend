@@ -223,9 +223,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       await EstadoAnualService.generarEstadoAnual(widget.firebaseUid);
       if (!mounted) return;
-      widget.onCompleted?.call();
-      Navigator.pop(context);
-    } catch (_) {
+      Navigator.pop(context);           // pop primero
+      widget.onCompleted?.call();       // callback después del pop
+    } catch (e) {
       _snack('Error al generar el estado. Intenta de nuevo.');
       if (mounted) setState(() => _generando = false);
     }

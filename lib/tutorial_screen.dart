@@ -8,7 +8,8 @@ import 'invoice_scanner/invoice_history_screen.dart';
 
 class TutorialScreen extends StatefulWidget {
   final String firebaseUid;
-  const TutorialScreen({super.key, required this.firebaseUid});
+  final VoidCallback? onDone;
+  const TutorialScreen({super.key, required this.firebaseUid, this.onDone});
 
   static String _key(String uid) => 'tutorial_visto_$uid';
   static bool isSeen(String uid) =>
@@ -101,6 +102,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   void _cerrar() {
     TutorialScreen.markSeen(widget.firebaseUid);
     Navigator.pop(context);
+    widget.onDone?.call();
   }
 
   void _siguiente() {
