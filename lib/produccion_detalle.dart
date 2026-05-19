@@ -14,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
-import 'proyeccion_screen.dart';
 
 /// Detalle de insumos de un presupuesto de producción.
 class ProduccionDetalle extends StatefulWidget {
@@ -288,17 +287,6 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
                 ],
               ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.trending_up, size: 20),
-            tooltip: 'Proyectar precio',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => ProyeccionScreen(
-                invertidoInicial: _total,
-                nombreProduccion: widget.nombre,
-              )),
             ),
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _cargar),

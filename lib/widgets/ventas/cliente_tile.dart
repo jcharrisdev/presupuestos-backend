@@ -6,7 +6,6 @@
 /// Compatibilidad: cobros sin items[] funcionan igual que antes.
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../cliente_estado_cuenta_screen.dart';
 
 class ClienteTile extends StatelessWidget {
   final Map<String, dynamic> cobro;
@@ -80,15 +79,7 @@ class ClienteTile extends StatelessWidget {
               color: cobrado ? AppTheme.textSecondary : AppTheme.textPrimary,
               fontWeight: FontWeight.w600, fontSize: 14,
             ))),
-            GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => ClienteEstadoCuentaScreen(
-                  firebaseUid: firebaseUid,
-                  nombreCliente: cobro['nombre_cliente'] ?? '',
-                ),
-              )),
-              child: const Icon(Icons.account_circle_outlined, color: AppTheme.textMuted, size: 18),
-            ),
+            const Icon(Icons.account_circle_outlined, color: AppTheme.textMuted, size: 18),
           ]),
           const SizedBox(height: 3),
           Row(children: [
