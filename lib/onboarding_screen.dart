@@ -8,11 +8,11 @@ import 'theme/app_theme.dart';
 import 'services/user_profile_service.dart';
 import 'services/estado_anual_service.dart';
 import 'services/deudas_service.dart';
-import 'estado_financiero_anual_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final String firebaseUid;
-  const OnboardingScreen({super.key, required this.firebaseUid});
+  final VoidCallback? onCompleted;
+  const OnboardingScreen({super.key, required this.firebaseUid, this.onCompleted});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -223,9 +223,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       await EstadoAnualService.generarEstadoAnual(widget.firebaseUid);
       if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(
-        builder: (_) => EstadoFinancieroAnualScreen(firebaseUid: widget.firebaseUid),
-      ));
+      widget.onCompleted?.call();
+      Navigator.pop(context);
     } catch (_) {
       _snack('Error al generar el estado. Intenta de nuevo.');
       if (mounted) setState(() => _generando = false);
@@ -506,6 +505,8 @@ class _Paso2Gastos extends StatefulWidget {
 }
 
 class _Paso2GastosState extends State<_Paso2Gastos> {
+  bool _compartidos = false;
+
   // ── CSV import ──────────────────────────────────────────────────────
 
   void _descargarPlantilla() {
@@ -765,6 +766,51 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
         ),
         const SizedBox(height: 10),
         _InfoBox('Las deudas (tarjetas, préstamos) las agregarás en el siguiente paso. Aquí solo servicios y compromisos del hogar.'),
+        const SizedBox(height: 12),
+
+        // ── Pregunta gastos compartidos ───────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _compartidos ? AppTheme.info.withValues(alpha: 0.5) : AppTheme.border),
+          ),
+          child: Row(children: [
+            const Icon(Icons.group_outlined, color: AppTheme.textSecondary, size: 18),
+            const SizedBox(width: 10),
+            const Expanded(child: Text(
+              '¿La mayoría de tus gastos son compartidos con alguien?',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+            )),
+            Switch(
+              value: _compartidos,
+              activeColor: AppTheme.info,
+              onChanged: (v) => setState(() => _compartidos = v),
+            ),
+          ]),
+        ),
+        if (_compartidos) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.3)),
+            ),
+            child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.info_outline, color: AppTheme.info, size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text(
+                'Para gastos compartidos usa "Presupuesto Compartido" en el menú principal. '
+                'Ahí defines quién paga qué y la app calcula el balance automáticamente.\n'
+                'Si igual tienes gastos personales fijos (celular, seguro, etc.) agrégalos aquí.',
+                style: TextStyle(color: AppTheme.info, fontSize: 12, height: 1.4),
+              )),
+            ]),
+          ),
+        ],
         const SizedBox(height: 20),
 
         // ── Importar CSV ─────────────────────────────────────────────────

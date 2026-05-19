@@ -37,6 +37,7 @@ class _MainMenuState extends State<MainMenu> {
   bool _modoNegocio = false;
   bool _loadingSettings = true;
   bool _togglingNegocio = false;
+  bool _mostrarBanner = false;
 
   @override
   void initState() {
@@ -59,7 +60,12 @@ class _MainMenuState extends State<MainMenu> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             Navigator.push(context, MaterialPageRoute(
-              builder: (_) => OnboardingScreen(firebaseUid: widget.firebaseUid),
+              builder: (_) => OnboardingScreen(
+                firebaseUid: widget.firebaseUid,
+                onCompleted: () {
+                  if (mounted) setState(() => _mostrarBanner = true);
+                },
+              ),
             ));
           }
         });
@@ -136,6 +142,14 @@ class _MainMenuState extends State<MainMenu> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── BANNER PRIMERA VISITA ─────────────────────────────────────
+              if (_mostrarBanner)
+                _BannerBienvenida(
+                  firebaseUid: firebaseUid,
+                  onDismiss: () => setState(() => _mostrarBanner = false),
+                ),
+              if (_mostrarBanner) const SizedBox(height: 20),
+
               // ── HEADER USUARIO ────────────────────────────────────────────
               Row(children: [
                 CircleAvatar(
@@ -413,4 +427,109 @@ class _NavCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Banner de orientación — primera visita tras onboarding ────────────────────
+
+class _BannerBienvenida extends StatelessWidget {
+  final String firebaseUid;
+  final VoidCallback onDismiss;
+  const _BannerBienvenida({required this.firebaseUid, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.rocket_launch_outlined, color: AppTheme.primary, size: 18),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('¡Tu perfil financiero está listo!',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+          ),
+          GestureDetector(
+            onTap: onDismiss,
+            child: const Icon(Icons.close, color: AppTheme.textMuted, size: 18),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        const Text('¿Por dónde empezar?',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        const SizedBox(height: 12),
+        Row(children: [
+          _AccionChip(
+            icon: Icons.bar_chart_rounded,
+            label: 'Ver mi estado',
+            color: AppTheme.primary,
+            onTap: () {
+              onDismiss();
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => EstadoFinancieroAnualScreen(firebaseUid: firebaseUid),
+              ));
+            },
+          ),
+          const SizedBox(width: 8),
+          _AccionChip(
+            icon: Icons.group_outlined,
+            label: 'Presupuesto\nCompartido',
+            color: AppTheme.info,
+            onTap: () {
+              onDismiss();
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => SharedBudgetsListScreen(firebaseUid: firebaseUid),
+              ));
+            },
+          ),
+          const SizedBox(width: 8),
+          _AccionChip(
+            icon: Icons.qr_code_scanner,
+            label: 'Escanear\nfactura',
+            color: AppTheme.success,
+            onTap: () {
+              onDismiss();
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => InvoiceHistoryScreen(firebaseUid: firebaseUid),
+              ));
+            },
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _AccionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _AccionChip({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    ),
+  );
 }
