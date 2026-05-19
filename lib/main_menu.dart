@@ -7,6 +7,8 @@ import 'ventas_landing_screen.dart';
 import 'shared_budgets_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/user_settings_service.dart';
+import 'services/user_profile_service.dart';
+import 'onboarding_screen.dart';
 import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
@@ -43,11 +45,26 @@ class _MainMenuState extends State<MainMenu> {
   }
 
   Future<void> _cargarSettings() async {
-    final s = await UserSettingsService.get(widget.firebaseUid);
-    if (mounted) setState(() {
-      _modoNegocio = (s['modo_negocio'] as int? ?? 0) == 1;
-      _loadingSettings = false;
-    });
+    final uid = widget.firebaseUid;
+    final (s, income) = await (
+      UserSettingsService.get(uid),
+      UserProfileService.getIncome(uid),
+    ).wait;
+    if (mounted) {
+      setState(() {
+        _modoNegocio = (s['modo_negocio'] as int? ?? 0) == 1;
+        _loadingSettings = false;
+      });
+      if (income == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => OnboardingScreen(firebaseUid: widget.firebaseUid),
+            ));
+          }
+        });
+      }
+    }
   }
 
   Future<void> _toggleNegocio(bool valor) async {
