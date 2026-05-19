@@ -1373,8 +1373,8 @@ app.delete('/user/data', async (req, res) => {
       await db.execute(`DELETE FROM cobros_clientes WHERE venta_id = ?`, [v.id]);
     }
     await db.execute(`DELETE FROM ventas WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM productos WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM servicios WHERE firebase_uid = ?`, [firebase_uid]);
+    try { await db.execute(`DELETE FROM productos WHERE firebase_uid = ?`, [firebase_uid]); } catch(_) {}
+    try { await db.execute(`DELETE FROM servicios WHERE firebase_uid = ?`, [firebase_uid]); } catch(_) {}
 
     // ── Calendario y configuración ────────────────────────────────────────
     await db.execute(`DELETE FROM calendario_eventos WHERE firebase_uid = ?`, [firebase_uid]);
