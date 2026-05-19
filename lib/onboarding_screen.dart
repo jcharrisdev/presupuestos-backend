@@ -40,17 +40,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final _fmt = NumberFormat('#,##0.00', 'en_US');
 
+  // tipoBackend = ENUM válido en user_gastos_fijos
+  // clasificacionBackend = ENUM('esencial','importante','flexible')
   static const _sugerencias = [
-    {'nombre': 'Alquiler',     'icon': Icons.home_outlined,           'tipo': 'esencial'},
-    {'nombre': 'Carro',        'icon': Icons.directions_car_outlined,  'tipo': 'esencial'},
-    {'nombre': 'Electricidad', 'icon': Icons.bolt_outlined,            'tipo': 'esencial'},
-    {'nombre': 'Agua',         'icon': Icons.water_drop_outlined,      'tipo': 'esencial'},
-    {'nombre': 'Internet',     'icon': Icons.wifi_outlined,            'tipo': 'esencial'},
-    {'nombre': 'Celular',      'icon': Icons.phone_android_outlined,   'tipo': 'esencial'},
-    {'nombre': 'Seguro',       'icon': Icons.health_and_safety_outlined,'tipo': 'esencial'},
-    {'nombre': 'Alimentación', 'icon': Icons.restaurant_outlined,      'tipo': 'esencial'},
-    {'nombre': 'Streaming',    'icon': Icons.tv_outlined,              'tipo': 'no_esencial'},
-    {'nombre': 'Gimnasio',     'icon': Icons.fitness_center_outlined,  'tipo': 'no_esencial'},
+    {'nombre': 'Alquiler',     'icon': Icons.home_outlined,            'tipoBackend': 'vivienda',     'clasificacion': 'esencial'},
+    {'nombre': 'Carro',        'icon': Icons.directions_car_outlined,  'tipoBackend': 'transporte',   'clasificacion': 'esencial'},
+    {'nombre': 'Electricidad', 'icon': Icons.bolt_outlined,            'tipoBackend': 'servicios',    'clasificacion': 'esencial'},
+    {'nombre': 'Agua',         'icon': Icons.water_drop_outlined,      'tipoBackend': 'servicios',    'clasificacion': 'esencial'},
+    {'nombre': 'Internet',     'icon': Icons.wifi_outlined,            'tipoBackend': 'servicios',    'clasificacion': 'esencial'},
+    {'nombre': 'Celular',      'icon': Icons.phone_android_outlined,   'tipoBackend': 'servicios',    'clasificacion': 'esencial'},
+    {'nombre': 'Seguro',       'icon': Icons.health_and_safety_outlined,'tipoBackend': 'salud',       'clasificacion': 'esencial'},
+    {'nombre': 'Alimentación', 'icon': Icons.restaurant_outlined,      'tipoBackend': 'alimentacion', 'clasificacion': 'esencial'},
+    {'nombre': 'Streaming',    'icon': Icons.tv_outlined,              'tipoBackend': 'otro',         'clasificacion': 'flexible'},
+    {'nombre': 'Gimnasio',     'icon': Icons.fitness_center_outlined,  'tipoBackend': 'salud',        'clasificacion': 'flexible'},
   ];
 
   static const _tiposDeuda = [
@@ -133,20 +135,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (mounted) setState(() => _guardandoIncome = false);
   }
 
-  Future<void> _agregarGastoFijo(String nombre, double monto, String tipo) async {
+  // Mapea la clasificación UI a ENUM válido en user_gastos_fijos
+  static String _clasificacionDB(String uiClasificacion) {
+    switch (uiClasificacion) {
+      case 'esencial':    return 'esencial';
+      case 'flexible':    return 'flexible';
+      default:            return 'importante';
+    }
+  }
+
+  Future<void> _agregarGastoFijo(String nombre, double monto,
+      {String tipoBackend = 'otro', String clasificacion = 'esencial'}) async {
     setState(() => _guardandoGastos = true);
     try {
       await UserProfileService.crearGastoFijo(widget.firebaseUid, {
-        'descripcion': nombre,
+        'descripcion':  nombre,
         'monto_mensual': monto,
-        'tipo': 'fijo',
-        'clasificacion': tipo,
-        'frecuencia': 'fijo',
-        'activo': 1,
+        'tipo':          tipoBackend,
+        'clasificacion': _clasificacionDB(clasificacion),
+        'frecuencia':   'fijo',
+        'activo':        1,
       });
-      setState(() => _gastosFijos.add({'nombre': nombre, 'monto': monto, 'tipo': tipo}));
-    } catch (_) {
-      _snack('Error al guardar gasto');
+      setState(() => _gastosFijos.add({
+        'nombre': nombre,
+        'monto':  monto,
+        'clasificacion': clasificacion,
+      }));
+    } catch (e) {
+      _snack('Error al guardar: $e');
     }
     if (mounted) setState(() => _guardandoGastos = false);
   }
@@ -453,7 +469,7 @@ class _Paso2Gastos extends StatefulWidget {
   final double totalFijos;
   final NumberFormat fmt;
   final bool guardando;
-  final Future<void> Function(String nombre, double monto, String tipo) onAgregarGasto;
+  final Future<void> Function(String nombre, double monto, {String tipoBackend, String clasificacion}) onAgregarGasto;
   final VoidCallback onContinuar;
   const _Paso2Gastos({
     required this.gastosFijos, required this.sugerencias, required this.totalFijos,
@@ -465,9 +481,19 @@ class _Paso2Gastos extends StatefulWidget {
 }
 
 class _Paso2GastosState extends State<_Paso2Gastos> {
-  void _abrirFormGasto(String nombre, String tipoPre) {
-    final montoCtrl  = TextEditingController();
-    String tipo = tipoPre;
+  // Chips usan valores DB-válidos para clasificacion ENUM('esencial','importante','flexible')
+  static String _explicacion(String clasificacion) {
+    switch (clasificacion) {
+      case 'esencial':   return 'No puedes eliminarlo sin impactar tu vida diaria: alquiler, servicios, comida.';
+      case 'flexible':   return 'Puedes reducirlo si aprietas: streaming, salidas, suscripciones.';
+      case 'importante': return 'Importante pero ajustable: cuota de ahorro, educación, extras.';
+      default: return '';
+    }
+  }
+
+  void _abrirFormGasto(String nombre, String tipoBackend, String clasificacionIni) {
+    final montoCtrl = TextEditingController();
+    String clasificacion = clasificacionIni;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -477,6 +503,21 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
           title: Text('$nombre — monto mensual',
               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Resumen de lo ya agregado
+            if (widget.gastosFijos.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Ya agregados:', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  const SizedBox(height: 4),
+                  ...widget.gastosFijos.map((g) => Text(
+                    '• ${g['nombre']}  B/. ${(g['monto'] as double).toStringAsFixed(2)}',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                  )),
+                ]),
+              ),
             TextField(
               controller: montoCtrl,
               autofocus: true,
@@ -489,21 +530,16 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 hintStyle: TextStyle(color: AppTheme.textMuted),
               ),
             ),
-            const SizedBox(height: 14),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Categoría', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-            ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
             Row(children: [
-              _TipoGastoChip('Esencial',    'esencial',    tipo, (v) => setDlg(() => tipo = v)),
+              _TipoGastoChip('Esencial',   'esencial',   clasificacion, (v) => setDlg(() => clasificacion = v)),
               const SizedBox(width: 6),
-              _TipoGastoChip('Opcional',    'no_esencial', tipo, (v) => setDlg(() => tipo = v)),
+              _TipoGastoChip('Opcional',   'flexible',   clasificacion, (v) => setDlg(() => clasificacion = v)),
               const SizedBox(width: 6),
-              _TipoGastoChip('Ahorro',      'ahorro',      tipo, (v) => setDlg(() => tipo = v)),
+              _TipoGastoChip('Importante', 'importante', clasificacion, (v) => setDlg(() => clasificacion = v)),
             ]),
-            const SizedBox(height: 8),
-            _InfoBox(_tipoGastoExplicacion(tipo), small: true),
+            const SizedBox(height: 6),
+            _InfoBox(_explicacion(clasificacion), small: true),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
@@ -513,7 +549,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 final monto = double.tryParse(montoCtrl.text.replaceAll(',', ''));
                 if (monto == null || monto <= 0) return;
                 Navigator.pop(ctx);
-                await widget.onAgregarGasto(nombre, monto, tipo);
+                await widget.onAgregarGasto(nombre, monto, tipoBackend: tipoBackend, clasificacion: clasificacion);
               },
               child: const Text('Agregar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
@@ -526,7 +562,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
   void _abrirFormPersonalizado() {
     final nombreCtrl = TextEditingController();
     final montoCtrl  = TextEditingController();
-    String tipo = 'esencial';
+    String clasificacion = 'esencial';
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -536,6 +572,20 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
           title: const Text('Otro gasto fijo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (widget.gastosFijos.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Ya agregados:', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  const SizedBox(height: 4),
+                  ...widget.gastosFijos.map((g) => Text(
+                    '• ${g['nombre']}  B/. ${(g['monto'] as double).toStringAsFixed(2)}',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                  )),
+                ]),
+              ),
             TextField(
               controller: nombreCtrl,
               style: const TextStyle(color: AppTheme.textPrimary),
@@ -555,13 +605,13 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 hintStyle: TextStyle(color: AppTheme.textMuted),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Row(children: [
-              _TipoGastoChip('Esencial',  'esencial',    tipo, (v) => setDlg(() => tipo = v)),
+              _TipoGastoChip('Esencial',   'esencial',   clasificacion, (v) => setDlg(() => clasificacion = v)),
               const SizedBox(width: 6),
-              _TipoGastoChip('Opcional',  'no_esencial', tipo, (v) => setDlg(() => tipo = v)),
+              _TipoGastoChip('Opcional',   'flexible',   clasificacion, (v) => setDlg(() => clasificacion = v)),
               const SizedBox(width: 6),
-              _TipoGastoChip('Ahorro',    'ahorro',      tipo, (v) => setDlg(() => tipo = v)),
+              _TipoGastoChip('Importante', 'importante', clasificacion, (v) => setDlg(() => clasificacion = v)),
             ]),
           ]),
           actions: [
@@ -573,7 +623,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 final monto  = double.tryParse(montoCtrl.text.replaceAll(',', ''));
                 if (nombre.isEmpty || monto == null || monto <= 0) return;
                 Navigator.pop(ctx);
-                await widget.onAgregarGasto(nombre, monto, tipo);
+                await widget.onAgregarGasto(nombre, monto, tipoBackend: 'otro', clasificacion: clasificacion);
               },
               child: const Text('Agregar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
@@ -581,15 +631,6 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
         ),
       ),
     ).whenComplete(() { nombreCtrl.dispose(); montoCtrl.dispose(); });
-  }
-
-  static String _tipoGastoExplicacion(String tipo) {
-    switch (tipo) {
-      case 'esencial':    return 'No puedes eliminarlo sin impactar tu vida diaria: alquiler, servicios, alimentación.';
-      case 'no_esencial': return 'Puedes reducirlo si aprietas: streaming, salidas, suscripciones.';
-      case 'ahorro':      return 'Dinero que reservas cada mes para una meta o fondo de emergencia.';
-      default: return '';
-    }
   }
 
   @override
@@ -617,12 +658,13 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
         const SizedBox(height: 10),
         Wrap(spacing: 8, runSpacing: 8, children: [
           ...widget.sugerencias.map((s) {
-            final nombre = s['nombre'] as String;
-            final icon   = s['icon'] as IconData;
-            final tipo   = s['tipo'] as String;
-            final ya     = agregados.contains(nombre);
+            final nombre       = s['nombre'] as String;
+            final icon         = s['icon'] as IconData;
+            final tipoBackend  = s['tipoBackend'] as String;
+            final clasificacion = s['clasificacion'] as String;
+            final ya           = agregados.contains(nombre);
             return GestureDetector(
-              onTap: ya ? null : () => _abrirFormGasto(nombre, tipo),
+              onTap: ya ? null : () => _abrirFormGasto(nombre, tipoBackend, clasificacion),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
