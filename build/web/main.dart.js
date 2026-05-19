@@ -117547,8 +117547,9 @@ $0(){var s=this
 return s.a.afs(s.b,s.c,s.d)},
 $S:0}
 A.aQl.prototype={
-$1(a){var s=null,r=J.G(a)
-return new A.ab(B.h0,A.L(A.a([B.By,B.aH,A.ad(A.d(A.aX(r.h(a,"nombre")),s,s,s,s,B.ci,s,s,s),1),new A.a7U(A.aX(r.h(a,"tipo")),s),B.aH,A.d("B/. "+this.a.a.f.bj(A.ce(r.h(a,"monto"))),s,s,s,s,B.d9,s,s,s)],t.p),B.r,B.o,B.p),s)},
+$1(a){var s=null,r=J.G(a),q=A.ad(A.d(A.aX(r.h(a,"nombre")),s,s,s,s,B.ci,s,s,s),1),p=r.h(a,"clasificacion")
+if(p==null)p=r.h(a,"tipo")
+return new A.ab(B.h0,A.L(A.a([B.By,B.aH,q,new A.a7U(A.aX(p==null?"esencial":p),s),B.aH,A.d("B/. "+this.a.a.f.bj(A.ce(r.h(a,"monto"))),s,s,s,s,B.d9,s,s,s)],t.p),B.r,B.o,B.p),s)},
 $S:154}
 A.Ni.prototype={
 T(){return new A.Nj()},
@@ -117739,11 +117740,11 @@ C(a){var s,r,q,p,o=null,n=this.c
 switch(n){case"esencial":s=B.y
 n="esencial"
 break
-case"no_esencial":s=B.a7
+case"flexible":case"no_esencial":s=B.a7
 n="opcional"
 break
-case"ahorro":s=B.ao
-n="ahorro"
+case"importante":case"ahorro":s=B.ao
+n="importante"
 break
 default:s=B.V}r=s.be(0.12)
 q=A.z(4)

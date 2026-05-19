@@ -713,7 +713,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
               const SizedBox(width: 8),
               Expanded(child: Text(g['nombre'] as String,
                   style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
-              _TipoBadge(g['tipo'] as String),
+              _TipoBadge((g['clasificacion'] ?? g['tipo'] ?? 'esencial') as String),
               const SizedBox(width: 8),
               Text('B/. ${widget.fmt.format(g['monto'] as double)}',
                   style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
@@ -1310,9 +1310,11 @@ class _TipoBadge extends StatelessWidget {
     Color color;
     String label;
     switch (tipo) {
-      case 'esencial':    color = AppTheme.success; label = 'esencial'; break;
-      case 'no_esencial': color = AppTheme.warning;  label = 'opcional'; break;
-      case 'ahorro':      color = AppTheme.info;     label = 'ahorro';   break;
+      case 'esencial':    color = AppTheme.success; label = 'esencial';   break;
+      case 'flexible':
+      case 'no_esencial': color = AppTheme.warning;  label = 'opcional';   break;
+      case 'importante':
+      case 'ahorro':      color = AppTheme.info;     label = 'importante'; break;
       default:            color = AppTheme.textMuted; label = tipo;
     }
     return Container(
