@@ -35,6 +35,16 @@ class UserProfileService {
     } catch (_) { return {'gastos': [], 'total_mensual': 0}; }
   }
 
+  static Future<int> crearGastosFijosBulk(String uid, List<Map<String, dynamic>> gastos) async {
+    final res = await ApiClient.post('/user/gastos-fijos/bulk', {
+      'firebase_uid': uid,
+      'gastos': gastos,
+    });
+    if (res.statusCode == 201) return json.decode(res.body)['creados'] as int? ?? 0;
+    final errorMsg = json.decode(res.body)['error'] ?? 'Error ${res.statusCode}';
+    throw Exception(errorMsg);
+  }
+
   static Future<Map<String, dynamic>> crearGastoFijo(String uid, Map<String, dynamic> body) async {
     final res = await ApiClient.post('/user/gastos-fijos', {'firebase_uid': uid, ...body});
     if (res.statusCode == 201) return json.decode(res.body) as Map<String, dynamic>;

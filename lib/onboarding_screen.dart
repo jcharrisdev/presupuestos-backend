@@ -1,4 +1,7 @@
 import 'dart:math' as math;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'theme/app_theme.dart';
@@ -167,6 +170,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (mounted) setState(() => _guardandoGastos = false);
   }
 
+  Future<void> _importarCsvBulk(List<Map<String, dynamic>> gastos) async {
+    setState(() => _guardandoGastos = true);
+    try {
+      await UserProfileService.crearGastosFijosBulk(widget.firebaseUid, gastos);
+      setState(() {
+        for (final g in gastos) {
+          _gastosFijos.add({
+            'nombre':        g['descripcion'] as String,
+            'monto':         (g['monto_mensual'] as num).toDouble(),
+            'clasificacion': g['clasificacion'] as String? ?? 'esencial',
+          });
+        }
+      });
+      _snack('${gastos.length} gastos importados correctamente');
+    } catch (e) {
+      _snack('Error al importar: $e');
+    }
+    if (mounted) setState(() => _guardandoGastos = false);
+  }
+
   Future<void> _agregarDeuda(
       String nombre, String tipo, double montoTotal, double tasaAnual, int plazoMeses) async {
     setState(() => _guardandoDeuda = true);
@@ -270,13 +293,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onSkip:      _irSiguiente,
                 ),
                 _Paso2Gastos(
-                  gastosFijos:     _gastosFijos,
-                  sugerencias:     _sugerencias,
-                  totalFijos:      _totalFijos,
-                  fmt:             _fmt,
-                  guardando:       _guardandoGastos,
-                  onAgregarGasto:  _agregarGastoFijo,
-                  onContinuar:     _irSiguiente,
+                  gastosFijos:      _gastosFijos,
+                  sugerencias:      _sugerencias,
+                  totalFijos:       _totalFijos,
+                  fmt:              _fmt,
+                  guardando:        _guardandoGastos,
+                  onAgregarGasto:   _agregarGastoFijo,
+                  onImportarBulk:   _importarCsvBulk,
+                  onContinuar:      _irSiguiente,
                 ),
                 _Paso3Deudas(
                   deudas:          _deudas,
@@ -470,17 +494,107 @@ class _Paso2Gastos extends StatefulWidget {
   final NumberFormat fmt;
   final bool guardando;
   final Future<void> Function(String nombre, double monto, {String tipoBackend, String clasificacion}) onAgregarGasto;
+  final Future<void> Function(List<Map<String, dynamic>> gastos) onImportarBulk;
   final VoidCallback onContinuar;
   const _Paso2Gastos({
     required this.gastosFijos, required this.sugerencias, required this.totalFijos,
     required this.fmt, required this.guardando,
-    required this.onAgregarGasto, required this.onContinuar,
+    required this.onAgregarGasto, required this.onImportarBulk, required this.onContinuar,
   });
   @override
   State<_Paso2Gastos> createState() => _Paso2GastosState();
 }
 
 class _Paso2GastosState extends State<_Paso2Gastos> {
+  // ── CSV import ──────────────────────────────────────────────────────
+
+  void _descargarPlantilla() {
+    const contenido =
+        'Descripcion,Monto\n'
+        'Alquiler,500\n'
+        'Electricidad,80\n'
+        'Internet,45\n'
+        'Celular,30\n';
+    final bytes = utf8.encode(contenido);
+    final blob = html.Blob([bytes], 'text/csv');
+    final url  = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'plantilla_gastos.csv')
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  void _importarCsv() {
+    final input = html.FileUploadInputElement()..accept = '.csv,text/csv';
+    input.click();
+    input.onChange.listen((_) {
+      final file = input.files?.first;
+      if (file == null) return;
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Solo se aceptan archivos .csv — exporta tu Excel como CSV primero.'),
+        ));
+        return;
+      }
+      final reader = html.FileReader();
+      reader.readAsText(file);
+      reader.onLoad.listen((_) => _mostrarRevision(reader.result as String));
+    });
+  }
+
+  static List<String> _splitLineCsv(String line) {
+    final result = <String>[];
+    var inQuotes = false;
+    final current = StringBuffer();
+    for (var i = 0; i < line.length; i++) {
+      final c = line[i];
+      if (c == '"') {
+        inQuotes = !inQuotes;
+      } else if (c == ',' && !inQuotes) {
+        result.add(current.toString().trim());
+        current.clear();
+      } else {
+        current.write(c);
+      }
+    }
+    result.add(current.toString().trim());
+    return result;
+  }
+
+  void _mostrarRevision(String raw) {
+    final lines = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim().split('\n');
+    if (lines.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El archivo no tiene datos. Usa la plantilla.')));
+      return;
+    }
+    final rows = <Map<String, dynamic>>[];
+    for (final line in lines.skip(1)) {
+      if (line.trim().isEmpty) continue;
+      final cols = _splitLineCsv(line);
+      if (cols.length < 2) continue;
+      final desc  = cols[0].replaceAll('"', '').trim();
+      final monto = double.tryParse(cols[1].replaceAll('"', '').replaceAll(',', '.').trim());
+      if (desc.isEmpty || monto == null || monto <= 0) continue;
+      rows.add({'descripcion': desc, 'monto_mensual': monto, 'clasificacion': 'esencial'});
+    }
+    if (rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se encontraron filas válidas en el archivo.')));
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (_) => _RevisionCsvDialog(
+        rows: rows,
+        onConfirmar: (gastos) async {
+          Navigator.pop(context);
+          await widget.onImportarBulk(gastos);
+        },
+      ),
+    );
+  }
+
   // Chips usan valores DB-válidos para clasificacion ENUM('esencial','importante','flexible')
   static String _explicacion(String clasificacion) {
     switch (clasificacion) {
@@ -653,7 +767,42 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
         _InfoBox('Las deudas (tarjetas, préstamos) las agregarás en el siguiente paso. Aquí solo servicios y compromisos del hogar.'),
         const SizedBox(height: 20),
 
-        const Text('Toca los que apliquen:',
+        // ── Importar CSV ─────────────────────────────────────────────────
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.upload_file_outlined, size: 16),
+              label: const Text('Importar CSV', style: TextStyle(fontSize: 13)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+                side: const BorderSide(color: AppTheme.primary),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _importarCsv,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.download_outlined, size: 16),
+              label: const Text('Plantilla', style: TextStyle(fontSize: 13)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textSecondary,
+                side: const BorderSide(color: AppTheme.border),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _descargarPlantilla,
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        const Text('Solo archivos .csv — exporta tu Excel como CSV primero.',
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+        const SizedBox(height: 20),
+
+        const Text('O agrega manualmente:',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -1133,6 +1282,163 @@ class _ResRow extends StatelessWidget {
 }
 
 // ── SHARED WIDGETS ────────────────────────────────────────────────────────────
+
+// ── Diálogo de revisión CSV ───────────────────────────────────────────────────
+
+class _RevisionCsvDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> rows;
+  final Future<void> Function(List<Map<String, dynamic>>) onConfirmar;
+  const _RevisionCsvDialog({required this.rows, required this.onConfirmar});
+  @override
+  State<_RevisionCsvDialog> createState() => _RevisionCsvDialogState();
+}
+
+class _RevisionCsvDialogState extends State<_RevisionCsvDialog> {
+  late final List<Map<String, dynamic>> _rows;
+  bool _guardando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rows = widget.rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
+  double get _total => _rows.fold(0.0, (s, r) => s + (r['monto_mensual'] as num).toDouble());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(children: [
+        const Icon(Icons.checklist_outlined, color: AppTheme.primary, size: 20),
+        const SizedBox(width: 8),
+        Text('Revisar importación (${_rows.length})',
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+      ]),
+      content: SizedBox(
+        width: 480,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Row(children: [
+            SizedBox(width: 28),
+            Expanded(flex: 3, child: Text('Descripción', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600))),
+            Expanded(flex: 2, child: Text('Monto', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600))),
+            Expanded(flex: 2, child: Text('Tipo', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600))),
+          ]),
+          const Divider(color: AppTheme.border, height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _rows.length,
+              itemBuilder: (_, i) {
+                final r = _rows[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(children: [
+                    // Eliminar fila
+                    GestureDetector(
+                      onTap: () => setState(() => _rows.removeAt(i)),
+                      child: const Icon(Icons.remove_circle_outline, color: AppTheme.textMuted, size: 16),
+                    ),
+                    const SizedBox(width: 6),
+                    // Descripción (editable)
+                    Expanded(flex: 3, child: TextFormField(
+                      initialValue: r['descripcion'] as String,
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                      decoration: const InputDecoration(
+                        isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        filled: true, fillColor: AppTheme.surfaceAlt,
+                        border: OutlineInputBorder(borderSide: BorderSide.none),
+                      ),
+                      onChanged: (v) => _rows[i]['descripcion'] = v,
+                    )),
+                    const SizedBox(width: 6),
+                    // Monto (editable)
+                    Expanded(flex: 2, child: TextFormField(
+                      initialValue: (r['monto_mensual'] as num).toStringAsFixed(2),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                      decoration: const InputDecoration(
+                        isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        filled: true, fillColor: AppTheme.surfaceAlt,
+                        border: OutlineInputBorder(borderSide: BorderSide.none),
+                        prefixText: 'B/.',
+                        prefixStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      ),
+                      onChanged: (v) {
+                        final d = double.tryParse(v);
+                        if (d != null) setState(() => _rows[i]['monto_mensual'] = d);
+                      },
+                    )),
+                    const SizedBox(width: 6),
+                    // Clasificación
+                    Expanded(flex: 2, child: _ClasifDropdown(
+                      value: r['clasificacion'] as String,
+                      onChanged: (v) => setState(() => _rows[i]['clasificacion'] = v),
+                    )),
+                  ]),
+                );
+              },
+            ),
+          ),
+          const Divider(color: AppTheme.border, height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('${_rows.length} gastos · Total mensual',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('B/. ${_total.toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+          ]),
+        ]),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          icon: _guardando
+              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+              : const Icon(Icons.check, size: 16, color: Colors.black),
+          label: Text(_guardando ? 'Guardando...' : 'Importar ${_rows.length} gastos',
+              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: _guardando || _rows.isEmpty ? null : () async {
+            setState(() => _guardando = true);
+            await widget.onConfirmar(_rows);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ClasifDropdown extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _ClasifDropdown({required this.value, required this.onChanged});
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<String>(
+    value: value,
+    isDense: true,
+    decoration: const InputDecoration(
+      isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      filled: true, fillColor: AppTheme.surfaceAlt,
+      border: OutlineInputBorder(borderSide: BorderSide.none),
+    ),
+    dropdownColor: AppTheme.surface,
+    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 11),
+    items: const [
+      DropdownMenuItem(value: 'esencial',   child: Text('Esencial')),
+      DropdownMenuItem(value: 'importante', child: Text('Importante')),
+      DropdownMenuItem(value: 'flexible',   child: Text('Opcional')),
+    ],
+    onChanged: (v) { if (v != null) onChanged(v); },
+  );
+}
 
 class _InfoBox extends StatelessWidget {
   final String text;

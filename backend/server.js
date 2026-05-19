@@ -1149,6 +1149,34 @@ app.post('/user/gastos-fijos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /user/gastos-fijos/bulk — importación masiva desde CSV
+app.post('/user/gastos-fijos/bulk', async (req, res) => {
+  const { firebase_uid, gastos } = req.body;
+  if (!firebase_uid || !Array.isArray(gastos) || gastos.length === 0)
+    return res.status(400).json({ error: 'firebase_uid y gastos[] requeridos' });
+  try {
+    let creados = 0;
+    for (const g of gastos) {
+      const { descripcion, monto_mensual, tipo = 'otro', clasificacion = 'esencial' } = g;
+      if (!descripcion || monto_mensual == null || Number(monto_mensual) <= 0) continue;
+      const tiposValidos = ['vivienda','transporte','deuda','servicios','educacion','salud','alimentacion','otro'];
+      const clasifValidas = ['esencial','importante','flexible'];
+      await db.execute(
+        `INSERT INTO user_gastos_fijos
+           (firebase_uid, descripcion, monto_mensual, tipo, clasificacion, frecuencia, activo)
+         VALUES (?, ?, ?, ?, ?, 'fijo', 1)`,
+        [firebase_uid, descripcion, Number(monto_mensual),
+         tiposValidos.includes(tipo) ? tipo : 'otro',
+         clasifValidas.includes(clasificacion) ? clasificacion : 'esencial']
+      );
+      creados++;
+    }
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    res.status(201).json({ creados });
+    _logInfo('/user/gastos-fijos/bulk', `${creados} gastos importados por CSV`, firebase_uid);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // PUT /user/gastos-fijos/:id
 // Sincroniza cambios con la tabla deudas si existe deuda_id
 app.put('/user/gastos-fijos/:id', async (req, res) => {
