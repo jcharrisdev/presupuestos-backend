@@ -59,27 +59,28 @@ class _MainMenuState extends State<MainMenu> {
 
     // ── Flujo de primera vez ──────────────────────────────────────────
     // Orden: Tutorial → Onboarding → App libre
+    // Si income == null: siempre tutorial (usuario nuevo o que reinició datos)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!TutorialScreen.isSeen(uid)) {
-        // Primera vez absoluta: tutorial primero, luego onboarding si falta income
+      if (income == null) {
+        // Sin income = sin configurar → tutorial siempre, luego onboarding
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => TutorialScreen(
             firebaseUid: uid,
-            onDone: income == null ? () {
+            onDone: () {
               if (mounted) Navigator.push(context, MaterialPageRoute(
                 builder: (_) => OnboardingScreen(firebaseUid: uid),
               ));
-            } : null,
+            },
           ),
         ));
-      } else if (income == null) {
-        // Ya vio el tutorial pero nunca configuró income (regresó sin terminar)
+      } else if (!TutorialScreen.isSeen(uid)) {
+        // Tiene income pero nunca vio el tutorial (usuario existente pre-feature)
         Navigator.push(context, MaterialPageRoute(
-          builder: (_) => OnboardingScreen(firebaseUid: uid),
+          builder: (_) => TutorialScreen(firebaseUid: uid),
         ));
       }
-      // else: usuario normal — nada que mostrar
+      // else: usuario normal configurado — nada que mostrar
     });
   }
 
