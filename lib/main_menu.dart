@@ -16,6 +16,7 @@ import 'deudas/deudas_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'estado_financiero_anual_screen.dart';
 import 'debug_logs_screen.dart';
+import 'tutorial_screen.dart';
 
 class MainMenu extends StatefulWidget {
   final String firebaseUid;
@@ -63,7 +64,11 @@ class _MainMenuState extends State<MainMenu> {
               builder: (_) => OnboardingScreen(
                 firebaseUid: widget.firebaseUid,
                 onCompleted: () {
-                  if (mounted) setState(() => _mostrarBanner = true);
+                  if (mounted) {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => TutorialScreen(firebaseUid: widget.firebaseUid),
+                    ));
+                  }
                 },
               ),
             ));
