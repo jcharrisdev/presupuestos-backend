@@ -1316,25 +1316,22 @@ app.delete('/user/data', async (req, res) => {
 
     // ── Deudas y ahorros ──────────────────────────────────────────────────
     await db.execute(`DELETE FROM deudas WHERE firebase_uid = ?`, [firebase_uid]);
-    const [metasRows] = await db.execute(`SELECT id FROM metas_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
-    for (const m of metasRows) {
-      await db.execute(`DELETE FROM aportaciones_ahorro WHERE meta_id = ?`, [m.id]);
-    }
-    await db.execute(`DELETE FROM metas_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM aportaciones_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
 
     // ── Presupuestos compartidos ──────────────────────────────────────────
-    const [sbRows] = await db.execute(`SELECT id FROM shared_budgets WHERE created_by = ?`, [firebase_uid]);
+    const [sbRows] = await db.execute(`SELECT id FROM shared_budgets WHERE owner_uid = ?`, [firebase_uid]);
     for (const sb of sbRows) {
-      const [seRows] = await db.execute(`SELECT id FROM shared_expenses WHERE budget_id = ?`, [sb.id]);
+      const [seRows] = await db.execute(`SELECT id FROM shared_expenses WHERE shared_budget_id = ?`, [sb.id]);
       for (const se of seRows) {
         await db.execute(`DELETE FROM shared_expense_splits WHERE expense_id = ?`, [se.id]);
       }
-      await db.execute(`DELETE FROM shared_expenses WHERE budget_id = ?`, [sb.id]);
-      await db.execute(`DELETE FROM shared_budget_members WHERE budget_id = ?`, [sb.id]);
-      await db.execute(`DELETE FROM shared_budget_invitations WHERE budget_id = ?`, [sb.id]);
-      await db.execute(`DELETE FROM shared_budget_settlements WHERE budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_expenses WHERE shared_budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_budget_members WHERE shared_budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_budget_invitations WHERE shared_budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_settlements WHERE shared_budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_budget_activity_logs WHERE shared_budget_id = ?`, [sb.id]);
     }
-    await db.execute(`DELETE FROM shared_budgets WHERE created_by = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM shared_budgets WHERE owner_uid = ?`, [firebase_uid]);
     // Eliminar también membresías en presupuestos ajenos
     await db.execute(`DELETE FROM shared_budget_members WHERE firebase_uid = ?`, [firebase_uid]);
 
