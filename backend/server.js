@@ -1342,7 +1342,7 @@ app.delete('/user/data', async (req, res) => {
     // ── Ventas ────────────────────────────────────────────────────────────
     const [ventasRows] = await db.execute(`SELECT id FROM ventas WHERE firebase_uid = ?`, [firebase_uid]);
     for (const v of ventasRows) {
-      await db.execute(`DELETE FROM cobros WHERE venta_id = ?`, [v.id]);
+      await db.execute(`DELETE FROM cobros_clientes WHERE venta_id = ?`, [v.id]);
     }
     await db.execute(`DELETE FROM ventas WHERE firebase_uid = ?`, [firebase_uid]);
     await db.execute(`DELETE FROM productos WHERE firebase_uid = ?`, [firebase_uid]);
