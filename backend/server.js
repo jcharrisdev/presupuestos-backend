@@ -1295,24 +1295,7 @@ app.delete('/user/data', async (req, res) => {
   const { firebase_uid } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Obtener todos los presupuesto IDs del usuario
-    const [presupuestos] = await db.execute(
-      `SELECT id FROM presupuestos WHERE firebase_uid = ?`, [firebase_uid]
-    );
-    for (const p of presupuestos) {
-      await db.execute(`DELETE FROM movimientos WHERE presupuesto_id = ?`, [p.id]);
-      await db.execute(`DELETE FROM periodos WHERE presupuesto_id = ?`, [p.id]);
-      await db.execute(`DELETE FROM gastos WHERE presupuesto_id = ?`, [p.id]);
-      await db.execute(`DELETE FROM calendario_eventos WHERE firebase_uid = ? AND presupuesto_id = ?`, [firebase_uid, p.id]);
-    }
-    await db.execute(`DELETE FROM presupuestos WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM budget_income WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM user_gastos_fijos WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM deudas WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM aportaciones_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM gustitos WHERE user_id = ?`, [firebase_uid]);
-    // Nuevo modelo financiero anual
+    // ── Estado financiero anual (modelo actual) ───────────────────────────
     const [efas] = await db.execute(`SELECT id FROM estado_financiero_anual WHERE firebase_uid = ?`, [firebase_uid]);
     for (const efa of efas) {
       const [mfRows] = await db.execute(`SELECT id FROM meses_financieros WHERE estado_anual_id = ?`, [efa.id]);
@@ -1325,13 +1308,56 @@ app.delete('/user/data', async (req, res) => {
       await db.execute(`DELETE FROM cierres_anuales WHERE firebase_uid = ? AND anio = (SELECT anio FROM estado_financiero_anual WHERE id = ?)`, [firebase_uid, efa.id]);
     }
     await db.execute(`DELETE FROM estado_financiero_anual WHERE firebase_uid = ?`, [firebase_uid]);
+
+    // ── Perfil financiero ─────────────────────────────────────────────────
+    await db.execute(`DELETE FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM user_gastos_fijos WHERE firebase_uid = ?`, [firebase_uid]);
     await db.execute(`DELETE FROM gastos_variables_base WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM subcategorias WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM alertas_financieras WHERE firebase_uid = ?`, [firebase_uid]);
-    await db.execute(`DELETE FROM gastos_globales WHERE firebase_uid = ?`, [firebase_uid]);
+
+    // ── Deudas y ahorros ──────────────────────────────────────────────────
+    await db.execute(`DELETE FROM deudas WHERE firebase_uid = ?`, [firebase_uid]);
+    const [metasRows] = await db.execute(`SELECT id FROM metas_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
+    for (const m of metasRows) {
+      await db.execute(`DELETE FROM aportaciones_ahorro WHERE meta_id = ?`, [m.id]);
+    }
+    await db.execute(`DELETE FROM metas_ahorro WHERE firebase_uid = ?`, [firebase_uid]);
+
+    // ── Presupuestos compartidos ──────────────────────────────────────────
+    const [sbRows] = await db.execute(`SELECT id FROM shared_budgets WHERE created_by = ?`, [firebase_uid]);
+    for (const sb of sbRows) {
+      const [seRows] = await db.execute(`SELECT id FROM shared_expenses WHERE budget_id = ?`, [sb.id]);
+      for (const se of seRows) {
+        await db.execute(`DELETE FROM shared_expense_splits WHERE expense_id = ?`, [se.id]);
+      }
+      await db.execute(`DELETE FROM shared_expenses WHERE budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_budget_members WHERE budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_budget_invitations WHERE budget_id = ?`, [sb.id]);
+      await db.execute(`DELETE FROM shared_budget_settlements WHERE budget_id = ?`, [sb.id]);
+    }
+    await db.execute(`DELETE FROM shared_budgets WHERE created_by = ?`, [firebase_uid]);
+    // Eliminar también membresías en presupuestos ajenos
+    await db.execute(`DELETE FROM shared_budget_members WHERE firebase_uid = ?`, [firebase_uid]);
+
+    // ── Facturas QR y catálogo ────────────────────────────────────────────
+    await db.execute(`DELETE FROM scanned_invoices WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM productos_catalogo WHERE firebase_uid = ?`, [firebase_uid]);
+
+    // ── Ventas ────────────────────────────────────────────────────────────
+    const [ventasRows] = await db.execute(`SELECT id FROM ventas WHERE firebase_uid = ?`, [firebase_uid]);
+    for (const v of ventasRows) {
+      await db.execute(`DELETE FROM cobros WHERE venta_id = ?`, [v.id]);
+    }
+    await db.execute(`DELETE FROM ventas WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM productos WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM servicios WHERE firebase_uid = ?`, [firebase_uid]);
+
+    // ── Calendario y configuración ────────────────────────────────────────
+    await db.execute(`DELETE FROM calendario_eventos WHERE firebase_uid = ?`, [firebase_uid]);
+    await db.execute(`DELETE FROM user_settings WHERE firebase_uid = ?`, [firebase_uid]);
+
     res.json({ success: true, message: 'Todos los datos del usuario eliminados' });
   } catch (e) {
-    console.error(e);
+    console.error('[DELETE /user/data]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
