@@ -36,6 +36,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _idx = 0;
+  final Set<int> _initializedTabs = {0};
   bool _modoNegocio = false;
   bool _loadingSettings = true;
   bool _togglingNegocio = false;
@@ -129,13 +130,17 @@ class _HomeShellState extends State<HomeShell> {
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _idx, children: screens),
+      body: IndexedStack(
+        index: _idx,
+        children: List.generate(screens.length, (i) =>
+          _initializedTabs.contains(i) ? screens[i] : const SizedBox.shrink()),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _idx,
         backgroundColor: AppTheme.surface,
         indicatorColor: AppTheme.primary.withValues(alpha: 0.15),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (i) => setState(() => _idx = i),
+        onDestinationSelected: (i) => setState(() { _idx = i; _initializedTabs.add(i); }),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined),

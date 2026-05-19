@@ -400,8 +400,8 @@ class _TabGastos extends StatelessWidget {
 
     // IDs de registros que ya tienen origen_id vinculado a un gasto fijo
     final registradosIds = registros
-        .where((r) => r['gasto_fijo_id'] != null)
-        .map((r) => r['gasto_fijo_id'] as int)
+        .where((r) => r['origen_fijo_id'] != null)
+        .map((r) => r['origen_fijo_id'] as int)
         .toSet();
 
     return ListView(

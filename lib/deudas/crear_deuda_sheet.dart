@@ -240,6 +240,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             const SizedBox(height: 12),
             TextField(
               controller: _pendienteCtrl,
+              onChanged: (_) => setState(() {}),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(

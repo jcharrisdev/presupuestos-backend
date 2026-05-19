@@ -4,7 +4,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'theme/app_theme.dart';
 import 'login_screen.dart';
-import 'main_menu.dart';
 import 'home_shell.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
