@@ -9134,7 +9134,7 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
     const totalFijosReales = meses.reduce((s, m) => s + Number(m.fijos_reales), 0);
     const totalVarReales   = meses.reduce((s, m) => s + Number(m.variables_reales), 0);
     const totalNoPres      = meses.reduce((s, m) => s + Number(m.no_presupuestados_reales), 0);
-    const totalIngReal     = meses.reduce((s, m) => s + Number(m.ingreso_real) || Number(m.ingreso_estimado), 0);
+    const totalIngReal     = meses.reduce((s, m) => s + (Number(m.ingreso_real) || Number(m.ingreso_estimado)), 0);
 
     const MESES_LABEL = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     res.json({
