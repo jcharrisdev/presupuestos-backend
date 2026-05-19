@@ -25,6 +25,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   bool _mesesExpanded = false;
   int _alertasCount = 0;
   Map<int, Map<String, dynamic>> _alertasResumen = {};
+  String _vista = 'mensual'; // 'mensual' | 'quincenal' | 'anual'
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -143,10 +144,21 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   Widget _buildBody() {
     final ea = _data!['estado_anual'] as Map<String, dynamic>;
     final meses = (_data!['meses'] as List).cast<Map<String, dynamic>>();
+    final mesFactor = _vista == 'quincenal' ? 0.5 : 1.0;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _CardAnual(ea: ea, anio: _anio, onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
+        // Toggle de vista
+        Row(children: [
+          _VistaChip('Quincenal', 'quincenal', _vista, (v) => setState(() => _vista = v)),
+          const SizedBox(width: 8),
+          _VistaChip('Mensual',   'mensual',   _vista, (v) => setState(() => _vista = v)),
+          const SizedBox(width: 8),
+          _VistaChip('Anual',     'anual',     _vista, (v) => setState(() => _vista = v)),
+        ]),
+        const SizedBox(height: 12),
+        _CardAnual(ea: ea, anio: _anio, vista: _vista,
+            onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
         if (_alertasCount > 0)
           _AlertaBanner(
             count: _alertasCount,
@@ -178,6 +190,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
                 mes: i + 1,
                 label: _mesesLabel[i + 1],
                 data: m,
+                factor: mesFactor,
                 alertasBadge: _alertasResumen[i + 1],
                 onTap: () => Navigator.push(
                   context,
@@ -251,23 +264,53 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
 
 // ── CARD ANUAL ─────────────────────────────────────────────────────────────
 
+class _VistaChip extends StatelessWidget {
+  final String label, valor, selected;
+  final ValueChanged<String> onTap;
+  const _VistaChip(this.label, this.valor, this.selected, this.onTap);
+  @override
+  Widget build(BuildContext context) {
+    final sel = selected == valor;
+    return GestureDetector(
+      onTap: () => onTap(valor),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: sel ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: sel ? AppTheme.primary : AppTheme.border, width: sel ? 1.5 : 1),
+        ),
+        child: Text(label, style: TextStyle(
+          color: sel ? AppTheme.primary : AppTheme.textSecondary,
+          fontSize: 12, fontWeight: sel ? FontWeight.w700 : FontWeight.normal,
+        )),
+      ),
+    );
+  }
+}
+
 class _CardAnual extends StatelessWidget {
   final Map<String, dynamic> ea;
   final int anio;
+  final String vista;
   final VoidCallback onTap;
-  const _CardAnual({required this.ea, required this.anio, required this.onTap});
+  const _CardAnual({required this.ea, required this.anio, required this.vista, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final ingresoEst  = _d(ea['ingreso_anual_estimado']);
-    final fijosEst    = _d(ea['gastos_fijos_anuales']);
-    final varEst      = _d(ea['gastos_variables_anuales']);
-    final remEst      = _d(ea['remanente_anual_estimado']);
-    final ingresoReal = _d(ea['ingreso_anual_real']);
-    final fijosReal   = _d(ea['gastos_fijos_reales']);
-    final varReal     = _d(ea['gastos_variables_reales']);
-    final noPres      = _d(ea['compras_no_presup_reales']);
-    final remReal     = _d(ea['remanente_anual_real']);
+    final factor = vista == 'anual' ? 1.0 : vista == 'mensual' ? 1 / 12 : 1 / 24;
+    final label  = vista == 'anual' ? 'Anual' : vista == 'mensual' ? 'Mensual' : 'Quincenal';
+
+    final ingresoEst  = _d(ea['ingreso_anual_estimado'])  * factor;
+    final fijosEst    = _d(ea['gastos_fijos_anuales'])    * factor;
+    final varEst      = _d(ea['gastos_variables_anuales'])* factor;
+    final remEst      = _d(ea['remanente_anual_estimado']) * factor;
+    final ingresoReal = _d(ea['ingreso_anual_real'])       * factor;
+    final fijosReal   = _d(ea['gastos_fijos_reales'])     * factor;
+    final varReal     = _d(ea['gastos_variables_reales'])  * factor;
+    final noPres      = _d(ea['compras_no_presup_reales']) * factor;
+    final remReal     = _d(ea['remanente_anual_real'])     * factor;
     final tieneReal   = ingresoReal > 0 || fijosReal > 0;
 
     return GestureDetector(
@@ -292,11 +335,11 @@ class _CardAnual extends StatelessWidget {
           const SizedBox(height: 20),
           Row(children: [
             const Expanded(flex: 1, child: SizedBox()),
-            Expanded(child: _Col('Estimado', color: AppTheme.textSecondary)),
-            Expanded(child: _Col('Real', color: AppTheme.primary)),
+            Expanded(child: _Col('Est. $label', color: AppTheme.textSecondary)),
+            Expanded(child: _Col('Real $label', color: AppTheme.primary)),
           ]),
           const SizedBox(height: 10),
-          _Fila('Ingreso anual', ingresoEst, tieneReal ? ingresoReal : null, AppTheme.success),
+          _Fila('Ingreso', ingresoEst, tieneReal ? ingresoReal : null, AppTheme.success),
           _Fila('Gastos fijos', fijosEst, tieneReal ? fijosReal : null, AppTheme.danger),
           _Fila('Gastos variables', varEst, tieneReal ? varReal : null, AppTheme.warning),
           if (tieneReal) _Fila('No presupuestados', 0, noPres, AppTheme.danger),
@@ -355,15 +398,16 @@ class _MesCard extends StatelessWidget {
   final int mes;
   final String label;
   final Map<String, dynamic>? data;
+  final double factor;
   final Map<String, dynamic>? alertasBadge;
   final VoidCallback onTap;
-  const _MesCard({required this.mes, required this.label, this.data, this.alertasBadge, required this.onTap});
+  const _MesCard({required this.mes, required this.label, this.data, this.factor = 1.0, this.alertasBadge, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final estado   = data?['estado'] as String? ?? 'futuro';
-    final remReal  = data != null ? _d(data!['remanente_real']) : null;
-    final remEst   = data != null ? _d(data!['remanente_estimado']) : null;
+    final remReal  = data != null ? _d(data!['remanente_real'])  * factor : null;
+    final remEst   = data != null ? _d(data!['remanente_estimado']) * factor : null;
     final tieneReal = data != null &&
         (_d(data!['fijos_reales']) > 0 ||
          _d(data!['variables_reales']) > 0 ||
