@@ -321,6 +321,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   fmt:           _fmt,
                   generando:     _generando,
                   onGenerar:     _generarEstado,
+                  onIrAPaso1:    () => _pageCtrl.animateToPage(0,
+                      duration: const Duration(milliseconds: 350), curve: Curves.easeInOut),
                 ),
               ],
             ),
@@ -1197,15 +1199,50 @@ class _Paso4Resumen extends StatelessWidget {
   final NumberFormat fmt;
   final bool generando;
   final VoidCallback onGenerar;
+  final VoidCallback onIrAPaso1;
   const _Paso4Resumen({
     required this.ingresoNeto, required this.totalFijos, required this.totalDeudas,
     required this.remanente, required this.cantGastos, required this.cantDeudas,
     required this.fmt, required this.generando, required this.onGenerar,
+    required this.onIrAPaso1,
   });
 
   @override
   Widget build(BuildContext context) {
+    final sinIngreso = ingresoNeto <= 0;
     final remColor = remanente >= 0 ? AppTheme.success : AppTheme.danger;
+    if (sinIngreso) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 56),
+          const SizedBox(height: 20),
+          const Text('Falta tu ingreso',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          const Text(
+            'Para generar tu estado financiero necesitas registrar cuánto ganas.\n\nVuelve al Paso 1 y completa tu ingreso.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.6),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_back, color: Colors.black, size: 18),
+              label: const Text('Ir al Paso 1 — Registrar ingreso',
+                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: onIrAPaso1,
+            ),
+          ),
+        ]),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -74,6 +74,15 @@ class _MainMenuState extends State<MainMenu> {
             ));
           }
         });
+      } else if (!TutorialScreen.isSeen(uid)) {
+        // Usuario con income pero que recargó antes de ver el tutorial
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => TutorialScreen(firebaseUid: uid),
+            ));
+          }
+        });
       }
     }
   }

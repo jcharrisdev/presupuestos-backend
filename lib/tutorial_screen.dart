@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'theme/app_theme.dart';
 import 'estado_financiero_anual_screen.dart';
 import 'perfil_financiero_screen.dart';
@@ -8,6 +9,12 @@ import 'invoice_scanner/invoice_history_screen.dart';
 class TutorialScreen extends StatefulWidget {
   final String firebaseUid;
   const TutorialScreen({super.key, required this.firebaseUid});
+
+  static String _key(String uid) => 'tutorial_visto_$uid';
+  static bool isSeen(String uid) =>
+      Hive.box('salarying_cache').get(_key(uid), defaultValue: false) as bool;
+  static void markSeen(String uid) =>
+      Hive.box('salarying_cache').put(_key(uid), true);
 
   @override
   State<TutorialScreen> createState() => _TutorialScreenState();
@@ -91,17 +98,22 @@ class _TutorialScreenState extends State<TutorialScreen> {
     ),
   ];
 
+  void _cerrar() {
+    TutorialScreen.markSeen(widget.firebaseUid);
+    Navigator.pop(context);
+  }
+
   void _siguiente() {
     if (_paso < _pasos.length - 1) {
       _ctrl.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
       setState(() => _paso++);
     } else {
-      Navigator.pop(context);
+      _cerrar();
     }
   }
 
   void _navegarAccion(int idx) {
-    Navigator.pop(context);
+    _cerrar();
     Widget? dest;
     switch (idx) {
       case 1: dest = EstadoFinancieroAnualScreen(firebaseUid: widget.firebaseUid); break;
@@ -143,7 +155,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 ))),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: _cerrar,
                 style: TextButton.styleFrom(foregroundColor: AppTheme.textMuted),
                 child: const Text('Saltar', style: TextStyle(fontSize: 13)),
               ),
