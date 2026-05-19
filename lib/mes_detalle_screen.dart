@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'services/registros_service.dart';
 import 'services/productos_catalogo_service.dart';
+import 'widgets/ayuda_sheet.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
@@ -73,6 +74,28 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
       appBar: AppBar(
         title: Text('${widget.label} ${widget.anio}'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => AyudaSheet.show(context,
+              titulo: 'Detalle del Mes',
+              subtitulo: 'Todo lo que pasó (o planificaste) en este mes.',
+              items: const [
+                AyudaItem(Icons.receipt_outlined, 'Tab Gastos',
+                    'Muestra tus compromisos planificados (gastos fijos y deudas) y los gastos reales que registraste. Pendiente = aún no registrado.'),
+                AyudaItem(Icons.bar_chart_rounded, 'Tab Resumen',
+                    'Compara lo que planeabas gastar vs lo que gastaste realmente. Verde = bajo control, Rojo = te pasaste.'),
+                AyudaItem(Icons.lightbulb_outline, 'Tab Análisis',
+                    'Recomendaciones basadas en tus últimos meses. Sugiere ajustar tu presupuesto si hay desviaciones constantes.'),
+                AyudaItem(Icons.add_circle_outline, 'Botón +',
+                    'Registra un gasto real: nombre, monto, categoría. Esto actualiza tu "real" mensual.'),
+                AyudaItem(Icons.qr_code_scanner, 'Escanear factura',
+                    'Escanea el QR de un recibo DGI. La app extrae los datos y los asigna al mes automáticamente.'),
+                AyudaItem(Icons.check_circle_outline, 'Marcar pagado',
+                    'Toca un gasto para marcarlo como pagado. No afecta el monto real, solo el control visual.'),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner, size: 22),
             tooltip: 'Escanear factura',

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
@@ -36,7 +37,8 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
   final _nombreCtrl      = TextEditingController();
   final _totalCtrl       = TextEditingController();
   final _pendienteCtrl   = TextEditingController();
-  final _tasaCtrl        = TextEditingController();
+  final _tasaCtrl        = TextEditingController(); // % anual (TEA)
+  final _plazoCtrl       = TextEditingController(); // meses
   final _pagoMinCtrl     = TextEditingController();
   final _cuotaFijaCtrl   = TextEditingController();
   final _numCuotasCtrl   = TextEditingController();
@@ -70,11 +72,37 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
     _totalCtrl.dispose();
     _pendienteCtrl.dispose();
     _tasaCtrl.dispose();
+    _plazoCtrl.dispose();
     _pagoMinCtrl.dispose();
     _cuotaFijaCtrl.dispose();
     _numCuotasCtrl.dispose();
     _acreedorCtrl.dispose();
     super.dispose();
+  }
+
+  static double _pmt(double saldo, double tasaAnual, int plazo) {
+    if (saldo <= 0 || plazo <= 0) return 0;
+    if (tasaAnual <= 0) return saldo / plazo;
+    final r = tasaAnual / 100 / 12;
+    final factor = math.pow(1 + r, plazo);
+    return saldo * r * factor / (factor - 1);
+  }
+
+  double get _cuotaCalculada {
+    final saldo = double.tryParse(_pendienteCtrl.text.replaceAll(',', '')) ?? 0;
+    final tasa  = double.tryParse(_tasaCtrl.text.replaceAll(',', '')) ?? 0;
+    final plazo = int.tryParse(_plazoCtrl.text) ?? 0;
+    return _pmt(saldo, tasa, plazo);
+  }
+
+  String _tasaHint(String tipo) {
+    switch (tipo) {
+      case 'tarjeta_credito': return 'Tarjetas en Panamá: 18–36%. Revisa tu estado de cuenta.';
+      case 'prestamo':        return 'Préstamos personales: 6–18%. Busca la TEA en tu contrato.';
+      case 'hipoteca':        return 'Hipotecas: 4–8% anual. Está en tu escritura o contrato.';
+      case 'auto':            return 'Préstamos de auto: 4–10%. En el contrato de financiamiento.';
+      default:                return 'Busca la Tasa Efectiva Anual (TEA) en tu contrato o estado.';
+    }
   }
 
   @override
@@ -220,20 +248,98 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             const SizedBox(height: 12),
 
             if (!_esLetra) ...[
-              TextField(
-                controller: _tasaCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
-                    suffixText: '%/mes', labelText: 'Tasa de interés (opcional)'),
+              // ── Tasa anual ──────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('INTERÉS Y PLAZO',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _tasaCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: AppTheme.textPrimary),
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          suffixText: '% anual',
+                          labelText: 'Tasa de interés (TEA)',
+                          hintText: 'Ej: 24',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _plazoCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        style: const TextStyle(color: AppTheme.textPrimary),
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          suffixText: 'meses',
+                          labelText: 'Plazo',
+                          hintText: 'Ej: 36',
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    const Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 13),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(_tasaHint(_tipo),
+                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
+                  ]),
+                  // ── Cuota calculada ────────────────────────────────────
+                  if (_cuotaCalculada > 0) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.calculate_outlined, color: AppTheme.primary, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Cuota mensual calculada',
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                          Text('\$ ${_cuotaCalculada.toStringAsFixed(2)}',
+                              style: const TextStyle(color: AppTheme.primary,
+                                  fontSize: 17, fontWeight: FontWeight.w700)),
+                        ])),
+                        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Text('Total: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0)).toStringAsFixed(2)}',
+                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                          Text('Intereses: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0) - (double.tryParse(_pendienteCtrl.text.replaceAll(',', '')) ?? 0)).toStringAsFixed(2)}',
+                              style: const TextStyle(color: AppTheme.warning, fontSize: 10)),
+                        ]),
+                      ]),
+                    ),
+                  ],
+                ]),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _pagoMinCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
-                    prefixText: '\$ ', labelText: 'Pago mínimo mensual (opcional)'),
+                decoration: InputDecoration(
+                  prefixText: '\$ ',
+                  labelText: 'Pago mínimo mensual',
+                  hintText: _cuotaCalculada > 0
+                      ? _cuotaCalculada.toStringAsFixed(2)
+                      : 'Si ya conoces tu cuota exacta',
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -421,10 +527,19 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
         final acreedor = _acreedorCtrl.text.trim();
         if (acreedor.isNotEmpty) body['nombre_acreedor'] = acreedor;
       } else {
-        final tasa = double.tryParse(_tasaCtrl.text);
+        final tasa  = double.tryParse(_tasaCtrl.text);
+        final plazo = int.tryParse(_plazoCtrl.text) ?? 0;
         if (tasa != null && tasa > 0) body['tasa_interes'] = tasa;
-        final pagoMin = double.tryParse(_pagoMinCtrl.text);
-        if (pagoMin != null && pagoMin > 0) body['pago_minimo'] = pagoMin;
+        // pago_minimo: manual > calculado PMT
+        final pagoMinManual = double.tryParse(_pagoMinCtrl.text);
+        final cuotaPmt = (tasa != null && tasa > 0 && plazo > 0)
+            ? _pmt(pendiente, tasa, plazo)
+            : 0.0;
+        final pagoFinal = pagoMinManual != null && pagoMinManual > 0
+            ? pagoMinManual
+            : (cuotaPmt > 0 ? cuotaPmt : null);
+        if (pagoFinal != null) body['pago_minimo'] = double.parse(pagoFinal.toStringAsFixed(2));
+        if (plazo > 0) body['num_cuotas_total'] = plazo;
       }
 
       if (_diaPago != null) body['dia_pago'] = _diaPago;

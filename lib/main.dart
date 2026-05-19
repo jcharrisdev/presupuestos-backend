@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'theme/app_theme.dart';
 import 'login_screen.dart';
 import 'main_menu.dart';
+import 'home_shell.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/cache_service.dart';
@@ -62,8 +63,8 @@ class _AuthGate extends StatelessWidget {
         }
         final account = snapshot.data;
         if (account != null) {
-          return MainMenu(
-            firebaseUid: account.email,
+          return HomeShell(
+            firebaseUid: account.email!,
             displayName: account.displayName,
             photoUrl: account.photoUrl,
           );

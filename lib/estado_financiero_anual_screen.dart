@@ -7,6 +7,7 @@ import 'invoice_scanner/invoice_scanner_screen.dart';
 import 'cierre_anio_screen.dart';
 import 'alertas_screen.dart';
 import 'eventos/eventos_screen.dart';
+import 'widgets/ayuda_sheet.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -76,6 +77,11 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       appBar: AppBar(
         title: Text('Estado Financiero $_anio'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => _mostrarAyuda(context),
+          ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner, size: 22),
             tooltip: 'Escanear factura',
@@ -247,6 +253,25 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           ).then((_) => _cargar()),
         ),
         const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  void _mostrarAyuda(BuildContext context) {
+    AyudaSheet.show(context,
+      titulo: 'Estado Financiero Anual',
+      subtitulo: 'Tu panorama financiero completo del año.',
+      items: const [
+        AyudaItem(Icons.bar_chart_rounded, 'Estimado vs Real',
+            'Estimado = lo que planificaste. Real = lo que realmente entraste y gastaste según tus registros.'),
+        AyudaItem(Icons.calendar_today_outlined, 'Los 12 meses',
+            'Toca "Ver los 12 meses" para ver cada mes. Verde = remanente positivo, Rojo = gastaste más de lo que entraste.'),
+        AyudaItem(Icons.toggle_on_outlined, 'Toggle Quincenal / Mensual / Anual',
+            'Cambia la vista para ver cuánto representa cada quincena, mes o el año completo.'),
+        AyudaItem(Icons.refresh, 'Recalcular',
+            'Si cambias tu perfil financiero (ingreso o gastos fijos), toca aquí para actualizar todos los meses.'),
+        AyudaItem(Icons.info_outline, 'Real mensual 0 o bajo',
+            'El "real" solo refleja lo que registraste manualmente o escaneaste. Si no has registrado gastos, el real estará vacío.'),
       ],
     );
   }

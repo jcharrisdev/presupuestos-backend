@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/deudas_service.dart';
+import '../widgets/ayuda_sheet.dart';
 import 'crear_deuda_sheet.dart';
 import 'abono_deuda_sheet.dart';
 
@@ -152,6 +153,28 @@ class _DeudasScreenState extends State<DeudasScreen>
       appBar: AppBar(
         title: const Text('Mis Deudas'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Ayuda',
+            onPressed: () => AyudaSheet.show(context,
+              titulo: 'Mis Deudas',
+              subtitulo: 'Controla tarjetas, préstamos y letras en un solo lugar.',
+              items: const [
+                AyudaItem(Icons.credit_card, 'Monto total vs pendiente',
+                    'Total = lo que debías originalmente. Pendiente = lo que te falta pagar hoy.'),
+                AyudaItem(Icons.percent, 'Tasa de interés (TEA)',
+                    'Tasa Efectiva Anual. La encuentras en tu estado de cuenta o contrato. Ej: tarjeta Visa BAC = ~24% anual.'),
+                AyudaItem(Icons.calculate_outlined, 'Cuota calculada',
+                    'Al ingresar tasa + plazo + saldo, la app calcula tu cuota con la fórmula financiera estándar (PMT).'),
+                AyudaItem(Icons.bar_chart_rounded, 'Estrategia avalanche',
+                    'Paga primero la deuda con mayor tasa de interés. Ahorra más dinero a largo plazo.'),
+                AyudaItem(Icons.bolt_outlined, 'Estrategia snowball',
+                    'Paga primero la deuda más pequeña. Genera motivación al eliminar deudas rápido.'),
+                AyudaItem(Icons.account_balance_wallet_outlined, 'Afecta el estado financiero',
+                    'La cuota mensual de cada deuda se suma a tus gastos fijos estimados automáticamente.'),
+              ],
+            ),
+          ),
           IconButton(
             icon: Icon(
                 _incluirSaldadas

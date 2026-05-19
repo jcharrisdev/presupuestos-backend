@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'main_menu.dart';
+import 'home_shell.dart';
 import 'services/auth_service.dart';
 
 /// Pantalla de inicio de sesión — solo Google/Gmail.
@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => MainMenu(
+        builder: (_) => HomeShell(
           firebaseUid: email.trim().toLowerCase(),
           displayName: displayName,
           photoUrl: null,
