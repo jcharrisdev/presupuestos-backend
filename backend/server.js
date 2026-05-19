@@ -544,6 +544,20 @@ pool.getConnection(async (err, conn) => {
       console.error('⚠️ Migración Sprint 9 productos:', e.message);
     }
   }
+
+  // Migración: configuración de usuario (modo_negocio, futuras preferencias)
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS user_settings (
+      firebase_uid  VARCHAR(255) PRIMARY KEY,
+      modo_negocio  TINYINT     NOT NULL DEFAULT 0,
+      updated_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`);
+    console.log('✅ Migración user_settings OK');
+  } catch (e) {
+    if (!e.message.includes('already exists')) {
+      console.error('⚠️ Migración user_settings:', e.message);
+    }
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -6102,6 +6116,38 @@ app.patch('/user/productos-catalogo/:id', async (req, res) => {
     if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
     await db.execute(`UPDATE productos_catalogo SET categoria = ? WHERE id = ?`, [categoria ?? null, id]);
     res.json({ message: 'Categoría actualizada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /user/settings — configuración del usuario
+app.get('/user/settings', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[row]] = await db.execute(
+      `SELECT modo_negocio FROM user_settings WHERE firebase_uid = ?`, [firebase_uid]
+    );
+    res.json({ modo_negocio: row ? Number(row.modo_negocio) : 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /user/settings — actualizar configuración del usuario
+app.patch('/user/settings', async (req, res) => {
+  const { firebase_uid, modo_negocio } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(
+      `INSERT INTO user_settings (firebase_uid, modo_negocio)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE modo_negocio = VALUES(modo_negocio)`,
+      [firebase_uid, modo_negocio ? 1 : 0]
+    );
+    _logInfo('/user/settings', `modo_negocio → ${modo_negocio ? 1 : 0}`, firebase_uid);
+    res.json({ modo_negocio: modo_negocio ? 1 : 0 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

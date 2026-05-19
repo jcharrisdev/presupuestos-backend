@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'ventas_landing_screen.dart';
 import 'shared_budgets_list_screen.dart';
 import 'services/auth_service.dart';
+import 'services/user_settings_service.dart';
 import 'dashboard_screen.dart';
 import 'widgets/widgets.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
@@ -14,7 +15,7 @@ import 'perfil_financiero_screen.dart';
 import 'estado_financiero_anual_screen.dart';
 import 'debug_logs_screen.dart';
 
-class MainMenu extends StatelessWidget {
+class MainMenu extends StatefulWidget {
   final String firebaseUid;
   final String? displayName;
   final String? photoUrl;
@@ -25,6 +26,38 @@ class MainMenu extends StatelessWidget {
     this.displayName,
     this.photoUrl,
   }) : super(key: key);
+
+  @override
+  State<MainMenu> createState() => _MainMenuState();
+}
+
+class _MainMenuState extends State<MainMenu> {
+  bool _modoNegocio = false;
+  bool _loadingSettings = true;
+  bool _togglingNegocio = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarSettings();
+  }
+
+  Future<void> _cargarSettings() async {
+    final s = await UserSettingsService.get(widget.firebaseUid);
+    if (mounted) setState(() {
+      _modoNegocio = (s['modo_negocio'] as int? ?? 0) == 1;
+      _loadingSettings = false;
+    });
+  }
+
+  Future<void> _toggleNegocio(bool valor) async {
+    setState(() => _togglingNegocio = true);
+    final ok = await UserSettingsService.setModoNegocio(widget.firebaseUid, valor);
+    if (mounted) setState(() {
+      if (ok) _modoNegocio = valor;
+      _togglingNegocio = false;
+    });
+  }
 
   Future<void> _logout(BuildContext context) async {
     await AuthService.signOut();
@@ -37,7 +70,9 @@ class MainMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = displayName ?? firebaseUid;
+    final firebaseUid = widget.firebaseUid;
+    final name = widget.displayName ?? firebaseUid;
+    final photoUrl = widget.photoUrl;
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return Scaffold(
@@ -89,7 +124,7 @@ class MainMenu extends StatelessWidget {
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: AppTheme.primary.withOpacity(0.15),
-                  backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+                  backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
                   child: photoUrl == null
                       ? Text(initial,
                           style: const TextStyle(
@@ -188,15 +223,16 @@ class MainMenu extends StatelessWidget {
                 )),
               ),
               const SizedBox(height: 12),
-              _NavCard(
-                icon: Icons.storefront_outlined,
-                title: 'Ventas',
-                subtitle: 'Venta de productos y ofrecimiento de servicios',
-                color: AppTheme.success,
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => VentasLandingScreen(firebaseUid: firebaseUid),
-                )),
-              ),
+              if (_modoNegocio)
+                _NavCard(
+                  icon: Icons.storefront_outlined,
+                  title: 'Ventas',
+                  subtitle: 'Venta de productos y ofrecimiento de servicios',
+                  color: AppTheme.success,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => VentasLandingScreen(firebaseUid: firebaseUid),
+                  )),
+                ),
               const SizedBox(height: 12),
               _NavCard(
                 icon: Icons.qr_code_scanner,
@@ -206,6 +242,52 @@ class MainMenu extends StatelessWidget {
                 onTap: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => InvoiceHistoryScreen(firebaseUid: firebaseUid),
                 )),
+              ),
+
+              const SizedBox(height: 32),
+              const SectionHeader('MODO DE USO'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _modoNegocio ? AppTheme.success.withValues(alpha: 0.4) : AppTheme.border,
+                  ),
+                ),
+                child: Row(children: [
+                  Icon(
+                    _modoNegocio ? Icons.storefront_outlined : Icons.person_outline,
+                    color: _modoNegocio ? AppTheme.success : AppTheme.textSecondary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(
+                      _modoNegocio ? 'Modo Negocio activo' : 'Solo finanzas personales',
+                      style: TextStyle(
+                        color: _modoNegocio ? AppTheme.success : AppTheme.textPrimary,
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      _modoNegocio
+                          ? 'Ventas y servicios habilitados'
+                          : '¿Tienes un negocio? Actívalo aquí',
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                    ),
+                  ])),
+                  _togglingNegocio || _loadingSettings
+                      ? const SizedBox(width: 36, height: 20,
+                          child: Center(child: SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.success))))
+                      : Switch(
+                          value: _modoNegocio,
+                          activeColor: AppTheme.success,
+                          onChanged: _toggleNegocio,
+                        ),
+                ]),
               ),
 
               const SizedBox(height: 32),
