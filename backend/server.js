@@ -7721,6 +7721,7 @@ app.post('/deudas', async (req, res) => {
     );
     const [[created]] = await db.execute(`SELECT * FROM deudas WHERE id = ?`, [result.insertId]);
     res.status(201).json(_enriquecerDeuda(created));
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
     _logInfo('/deudas', `Deuda creada: "${nombre}" ${es_letra ? 'letra' : tipo} - pendiente $${Number(monto_pendiente).toFixed(2)}`, firebase_uid);
   } catch (error) {
     console.error(error);

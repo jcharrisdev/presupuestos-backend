@@ -370,23 +370,143 @@ class _TabGastos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final registros = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
-    if (registros.isEmpty) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.receipt_long, color: AppTheme.textMuted, size: 48),
-          const SizedBox(height: 12),
-          const Text('Sin gastos registrados', style: TextStyle(color: AppTheme.textSecondary)),
-          const SizedBox(height: 8),
-          const Text('Presiona + para agregar', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+    final registros    = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final compromisos  = data['compromisos_fijos'] as Map<String, dynamic>? ?? {};
+    final gastosFijos  = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
+    final deudas       = (compromisos['deudas'] as List? ?? []).cast<Map<String, dynamic>>();
+
+    // IDs de registros que ya tienen origen_id vinculado a un gasto fijo
+    final registradosIds = registros
+        .where((r) => r['gasto_fijo_id'] != null)
+        .map((r) => r['gasto_fijo_id'] as int)
+        .toSet();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      children: [
+        // ── COMPROMISOS FIJOS DEL MES ──────────────────────────────────
+        if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
+          _SeccionLabel('COMPROMISOS DEL MES',
+              '${gastosFijos.length + deudas.length} ítems planificados'),
+          ...gastosFijos.map((g) {
+            final pagado = registradosIds.contains(g['id'] as int? ?? -1);
+            return _PlanTile(
+              nombre: g['nombre'] as String? ?? '',
+              monto: (g['monto'] as num).toDouble(),
+              tipo: g['tipo'] as String? ?? 'otro',
+              pagado: pagado,
+              esPago: false,
+            );
+          }),
+          ...deudas.map((d) => _PlanTile(
+            nombre: d['nombre'] as String? ?? '',
+            monto: (d['cuota'] as num? ?? 0).toDouble(),
+            tipo: 'deuda',
+            pagado: false,
+            esPago: true,
+            cuotasRestantes: d['cuotas_restantes'] as int?,
+          )),
+          const Divider(color: AppTheme.border, height: 24),
+        ],
+
+        // ── REGISTROS REALES ───────────────────────────────────────────
+        if (registros.isNotEmpty) ...[
+          _SeccionLabel('GASTOS REGISTRADOS', '${registros.length} transacciones'),
+          ...registros.map((r) => _RegistroTile(reg: r, uid: uid, onChanged: onChanged)),
+        ] else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: const Row(children: [
+              Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
+              SizedBox(width: 10),
+              Expanded(child: Text(
+                'Aún no registraste gastos reales. Presiona + para agregar o escanea una factura QR.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
+              )),
+            ]),
+          ),
+      ],
+    );
+  }
+}
+
+class _SeccionLabel extends StatelessWidget {
+  final String titulo;
+  final String subtitulo;
+  const _SeccionLabel(this.titulo, this.subtitulo);
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(children: [
+      Expanded(child: Text(titulo,
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11,
+              fontWeight: FontWeight.w600, letterSpacing: 0.6))),
+      Text(subtitulo, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+    ]),
+  );
+}
+
+class _PlanTile extends StatelessWidget {
+  final String nombre;
+  final double monto;
+  final String tipo;
+  final bool pagado;
+  final bool esPago;
+  final int? cuotasRestantes;
+  const _PlanTile({
+    required this.nombre, required this.monto, required this.tipo,
+    required this.pagado, required this.esPago,
+    this.cuotasRestantes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = tipo == 'deuda' ? AppTheme.danger
+        : tipo == 'vivienda' ? AppTheme.colorFijo
+        : AppTheme.colorFijo;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: pagado ? AppTheme.success.withOpacity(0.06) : AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: pagado ? AppTheme.success.withOpacity(0.3) : AppTheme.border,
+        ),
+      ),
+      child: Row(children: [
+        Icon(
+          pagado ? Icons.check_circle : (esPago ? Icons.credit_card_outlined : Icons.receipt_outlined),
+          color: pagado ? AppTheme.success : color,
+          size: 18,
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(nombre, style: TextStyle(
+            color: pagado ? AppTheme.textSecondary : AppTheme.textPrimary,
+            fontSize: 13, fontWeight: FontWeight.w600,
+          )),
+          if (cuotasRestantes != null)
+            Text('$cuotasRestantes cuotas restantes',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('\$${monto.toStringAsFixed(2)}',
+              style: TextStyle(
+                color: pagado ? AppTheme.textSecondary : color,
+                fontWeight: FontWeight.w700, fontSize: 13,
+              )),
+          if (pagado)
+            const Text('Registrado', style: TextStyle(color: AppTheme.success, fontSize: 9)),
+          if (!pagado)
+            const Text('Pendiente', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
         ]),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: registros.length,
-      separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
-      itemBuilder: (_, i) => _RegistroTile(reg: registros[i], uid: uid, onChanged: onChanged),
+      ]),
     );
   }
 }

@@ -10,7 +10,9 @@ class DeudasService {
 
   static Future<Map<String, dynamic>> crear(Map<String, dynamic> body) async {
     final res = await ApiClient.post('/deudas', body);
-    return jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 201) return jsonDecode(res.body) as Map<String, dynamic>;
+    final err = jsonDecode(res.body)['error'] ?? 'Error ${res.statusCode}';
+    throw Exception(err);
   }
 
   static Future<Map<String, dynamic>> editar(int id, Map<String, dynamic> body) async {
