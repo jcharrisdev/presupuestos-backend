@@ -984,7 +984,8 @@ class _QuincenaCard extends StatelessWidget {
     final ingQ       = _d(data['ingreso_quincenal']);
     final gastado    = _d(data['total_gastado']);
     final disponible = _d(data['disponible']);
-    final registros  = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final registros    = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final compromisos  = (data['compromisos_quincenal'] as List? ?? []).cast<Map<String, dynamic>>();
     final dispColor  = disponible > ingQ * 0.2 ? AppTheme.success
                      : disponible > 0           ? AppTheme.warning
                      : AppTheme.danger;
@@ -1050,6 +1051,27 @@ class _QuincenaCard extends StatelessWidget {
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
           ]),
         ),
+        if (compromisos.isNotEmpty) ...[
+          const Divider(color: AppTheme.border, height: 20),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: const Text('COMPROMISOS DEL MES',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8, fontWeight: FontWeight.w700)),
+          ),
+          ...compromisos.map((c) => ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            leading: Icon(
+              (c['tipo'] as String? ?? '') == 'fijo' ? Icons.lock_outline : Icons.repeat_outlined,
+              size: 15,
+              color: (c['tipo'] as String? ?? '') == 'fijo' ? AppTheme.colorFijo : AppTheme.warning,
+            ),
+            title: Text(c['nombre'] as String? ?? '—',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            trailing: Text('\$${_d(c['monto']).toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+          )),
+        ],
         if (registros.isNotEmpty) ...[
           const Divider(color: AppTheme.border, height: 20),
           Padding(
@@ -1089,12 +1111,12 @@ class _QuincenaCard extends StatelessWidget {
               child: Text('+${registros.length - 5} más',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ),
-        ] else
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+        ] else if (compromisos.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 14),
             child: Text(
-              'Sin gastos registrados en esta quincena aún.',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              'Sin compromisos ni gastos en esta quincena aún.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
             ),
           ),
         const SizedBox(height: 6),
