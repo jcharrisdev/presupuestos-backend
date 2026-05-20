@@ -178,4 +178,107 @@ class PdfService {
       ),
     ],
   );
+
+  static Future<Uint8List> generarPdfMes(
+    Map<String, dynamic> data,
+    String labelMes,
+    int anio,
+  ) async {
+    final doc = pw.Document();
+    final now = DateTime.now();
+    final fmtDate = '${now.day.toString().padLeft(2,'0')}/${now.month.toString().padLeft(2,'0')}/${now.year}';
+    final r   = (data['resumen'] as Map<String, dynamic>? ?? {});
+    final reg = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final compromisos = (data['compromisos_fijos'] as Map<String, dynamic>? ?? {});
+    final gastosFijos = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
+    final deudas      = (compromisos['deudas']       as List? ?? []).cast<Map<String, dynamic>>();
+
+    pw.Widget _fila(String label, double est, double real, {bool bold = false}) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Row(children: [
+        pw.Expanded(flex: 3, child: pw.Text(label, style: bold ? _h2 : _body)),
+        pw.Expanded(child: pw.Text('\$${est.toStringAsFixed(2)}', style: bold ? _h2 : _body, textAlign: pw.TextAlign.right)),
+        pw.Expanded(child: pw.Text('\$${real.toStringAsFixed(2)}',
+            style: (bold ? _h2 : _body).copyWith(color: real > est ? PdfColors.red700 : PdfColors.green700),
+            textAlign: pw.TextAlign.right)),
+      ]),
+    );
+
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.letter,
+      margin: const pw.EdgeInsets.all(40),
+      header: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('Salarying', style: _h1.copyWith(color: PdfColors.amber700)),
+          pw.Text('$labelMes $anio', style: _h2),
+        ]),
+        pw.Text('Estado financiero mensual · Generado: $fmtDate', style: _bodySmall),
+        pw.Divider(color: PdfColors.grey300),
+        pw.SizedBox(height: 4),
+      ]),
+      footer: (_) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('Generado con Salarying · salarying.app', style: _bodySmall),
+      ),
+      build: (_) => [
+        // BALANCE
+        pw.Text('BALANCE DEL MES', style: _h2.copyWith(color: PdfColors.grey500, fontSize: 10)),
+        pw.SizedBox(height: 6),
+        pw.Row(children: [
+          pw.Expanded(flex: 3, child: pw.Text('Concepto', style: _bodySmall)),
+          pw.Expanded(child: pw.Text('Planificado', style: _bodySmall, textAlign: pw.TextAlign.right)),
+          pw.Expanded(child: pw.Text('Real', style: _bodySmall, textAlign: pw.TextAlign.right)),
+        ]),
+        pw.Divider(color: PdfColors.grey200),
+        _fila('Ingreso', _d(r['ingreso_estimado']), _d(r['ingreso_real'])),
+        _fila('Gastos fijos', _d(r['fijos_estimados']), _d(r['fijos_reales'])),
+        _fila('Gastos variables', _d(r['variables_estimados']), _d(r['variables_reales'])),
+        pw.Divider(color: PdfColors.grey300),
+        _fila('Te sobró', _d(r['remanente_estimado']), _d(r['remanente_real']), bold: true),
+        pw.SizedBox(height: 20),
+
+        // COMPROMISOS FIJOS
+        if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
+          pw.Text('COMPROMISOS FIJOS DEL MES', style: _h2.copyWith(color: PdfColors.grey500, fontSize: 10)),
+          pw.SizedBox(height: 6),
+          ...gastosFijos.map((g) => pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 2),
+            child: pw.Row(children: [
+              pw.Expanded(child: pw.Text(g['nombre']?.toString() ?? '—', style: _body)),
+              pw.Text('\$${_d(g['monto_mensual']).toStringAsFixed(2)}', style: _body),
+            ]),
+          )),
+          ...deudas.map((d) => pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 2),
+            child: pw.Row(children: [
+              pw.Expanded(child: pw.Text('${d['nombre']} (deuda)', style: _body)),
+              pw.Text('\$${_d(d['cuota']).toStringAsFixed(2)}', style: _body),
+            ]),
+          )),
+          pw.SizedBox(height: 20),
+        ],
+
+        // GASTOS REGISTRADOS
+        if (reg.isNotEmpty) ...[
+          pw.Text('GASTOS REGISTRADOS (${reg.length})', style: _h2.copyWith(color: PdfColors.grey500, fontSize: 10)),
+          pw.SizedBox(height: 6),
+          pw.Row(children: [
+            pw.Expanded(flex: 3, child: pw.Text('Descripción', style: _bodySmall)),
+            pw.Expanded(child: pw.Text('Categoría', style: _bodySmall)),
+            pw.Expanded(child: pw.Text('Monto', style: _bodySmall, textAlign: pw.TextAlign.right)),
+          ]),
+          pw.Divider(color: PdfColors.grey200),
+          ...reg.map((g) => pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 2),
+            child: pw.Row(children: [
+              pw.Expanded(flex: 3, child: pw.Text(g['nombre']?.toString() ?? '—', style: _body)),
+              pw.Expanded(child: pw.Text(g['categoria']?.toString() ?? '', style: _bodySmall)),
+              pw.Expanded(child: pw.Text('\$${_d(g['monto']).toStringAsFixed(2)}', style: _body, textAlign: pw.TextAlign.right)),
+            ]),
+          )),
+        ],
+      ],
+    ));
+    return doc.save();
+  }
 }

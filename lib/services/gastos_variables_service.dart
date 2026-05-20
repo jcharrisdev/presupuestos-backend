@@ -36,6 +36,15 @@ class GastosVariablesService {
     return jsonDecode(res.body);
   }
 
+  static Future<Map<String, dynamic>> crearBulk(String uid, List<Map<String, dynamic>> variables) async {
+    final res = await ApiClient.post('/user/gastos-variables-base/bulk', {
+      'firebase_uid': uid,
+      'variables': variables,
+    });
+    if (res.statusCode != 201) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
+    return jsonDecode(res.body);
+  }
+
   static Future<Map<String, dynamic>> editar(String uid, int id, Map<String, dynamic> data) async {
     final res = await ApiClient.put('/user/gastos-variables-base/$id', {'firebase_uid': uid, ...data});
     if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');

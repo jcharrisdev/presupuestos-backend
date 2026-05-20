@@ -558,6 +558,42 @@ pool.getConnection(async (err, conn) => {
       console.error('⚠️ Migración user_settings:', e.message);
     }
   }
+
+  // Migración: activos del usuario (para patrimonio neto)
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS activos (
+      id           INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      nombre       VARCHAR(255) NOT NULL,
+      tipo         ENUM('inmueble','vehiculo','cuenta_banco','inversiones','efectivo','otro') DEFAULT 'otro',
+      valor        DECIMAL(14,2) NOT NULL DEFAULT 0,
+      descripcion  TEXT,
+      activo       TINYINT DEFAULT 1,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY idx_activos_uid (firebase_uid)
+    )`);
+    console.log('✅ Migración activos OK');
+  } catch (e) { if (!e.message.includes('already exists')) console.error('⚠️ activos:', e.message); }
+
+  // Migración: objetivos financieros a largo plazo
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS objetivos_financieros (
+      id           INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      nombre       VARCHAR(255) NOT NULL,
+      descripcion  TEXT,
+      monto_meta   DECIMAL(14,2) NOT NULL,
+      monto_actual DECIMAL(14,2) DEFAULT 0,
+      fecha_limite DATE,
+      tipo         ENUM('ahorro','compra','emergencia','inversion','otro') DEFAULT 'otro',
+      activo       TINYINT DEFAULT 1,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY idx_obj_uid (firebase_uid)
+    )`);
+    console.log('✅ Migración objetivos_financieros OK');
+  } catch (e) { if (!e.message.includes('already exists')) console.error('⚠️ objetivos:', e.message); }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -8968,6 +9004,288 @@ app.delete('/user/gastos-variables-base/:id', async (req, res) => {
     res.json({ success: true });
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
     _logInfo(`/user/gastos-variables-base/${id}`, `Variable base eliminada (id=${id})`, firebase_uid);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/gastos-variables-base/bulk
+app.post('/user/gastos-variables-base/bulk', async (req, res) => {
+  const { firebase_uid, variables } = req.body;
+  if (!firebase_uid || !Array.isArray(variables))
+    return res.status(400).json({ error: 'firebase_uid y variables[] requeridos' });
+  try {
+    const ids = [];
+    for (const v of variables) {
+      const [r] = await db.execute(
+        `INSERT INTO gastos_variables_base (firebase_uid, nombre, categoria, monto_estimado, frecuencia, activo)
+         VALUES (?, ?, ?, ?, 'mensual', 1)`,
+        [firebase_uid, v.nombre, v.categoria, Number(v.monto_estimado)]
+      );
+      ids.push(r.insertId);
+    }
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    res.status(201).json({ ids, count: ids.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/comparativa?firebase_uid=&anio=&mes=
+// Tendencia 12 meses + comparativa vs mes anterior
+app.get('/user/comparativa', async (req, res) => {
+  const { firebase_uid, anio, mes } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const year  = Number(anio) || new Date().getFullYear();
+  const month = Number(mes)  || (new Date().getMonth() + 1);
+  const MESES_L = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  try {
+    const [meses12] = await db.execute(
+      `SELECT mes, ingreso_estimado, fijos_estimados, variables_estimados, remanente_estimado,
+              fijos_reales, variables_reales, no_presupuestados_reales, remanente_real, estado
+       FROM meses_financieros WHERE firebase_uid = ? AND anio = ? ORDER BY mes ASC`,
+      [firebase_uid, year]
+    );
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear  = month === 1 ? year - 1 : year;
+    const [[mesAnterior]] = await db.execute(
+      `SELECT mes, fijos_reales, variables_reales, no_presupuestados_reales, remanente_real,
+              fijos_estimados, variables_estimados, remanente_estimado
+       FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, prevYear, prevMonth]
+    );
+    const actual = meses12.find(m => m.mes === month);
+    res.json({
+      tendencia: meses12.map(m => ({
+        mes: m.mes, label: MESES_L[m.mes],
+        remanente_est:  parseFloat(Number(m.remanente_estimado).toFixed(2)),
+        remanente_real: Number(m.remanente_real) ? parseFloat(Number(m.remanente_real).toFixed(2)) : null,
+        total_gasto:    parseFloat((Number(m.fijos_reales) + Number(m.variables_reales) + Number(m.no_presupuestados_reales)).toFixed(2)),
+        es_activo: m.estado === 'activo',
+      })),
+      actual: actual ? {
+        label: MESES_L[month],
+        fijos:     parseFloat((Number(actual.fijos_reales)     || Number(actual.fijos_estimados)).toFixed(2)),
+        variables: parseFloat((Number(actual.variables_reales) || Number(actual.variables_estimados)).toFixed(2)),
+        remanente: parseFloat((Number(actual.remanente_real)   || Number(actual.remanente_estimado)).toFixed(2)),
+        es_estimado: !Number(actual.remanente_real),
+      } : null,
+      anterior: mesAnterior ? {
+        label: MESES_L[prevMonth],
+        fijos:     parseFloat((Number(mesAnterior.fijos_reales)     || Number(mesAnterior.fijos_estimados)).toFixed(2)),
+        variables: parseFloat((Number(mesAnterior.variables_reales) || Number(mesAnterior.variables_estimados)).toFixed(2)),
+        remanente: parseFloat((Number(mesAnterior.remanente_real)   || Number(mesAnterior.remanente_estimado)).toFixed(2)),
+      } : null,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/quincena/:anio/:mes/:num?firebase_uid= (num=1 o num=2)
+app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
+  const { anio, mes, num } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const esQ1 = Number(num) === 1;
+  try {
+    const [[mesRow]] = await db.execute(
+      `SELECT * FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, anio, mes]);
+    if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado' });
+    const dateFilter = esQ1 ? 'DAY(rg.fecha) <= 15' : 'DAY(rg.fecha) > 15';
+    const [registros] = await db.execute(
+      `SELECT rg.* FROM registros_gasto rg
+       WHERE rg.firebase_uid = ? AND rg.mes_id = ? AND ${dateFilter} ORDER BY rg.fecha DESC`,
+      [firebase_uid, mesRow.id]);
+    const ingresoQ   = Number(mesRow.ingreso_estimado) / 2;
+    const totalFijos = registros.filter(r => r.tipo === 'fijo').reduce((s, r) => s + Number(r.monto), 0);
+    const totalVar   = registros.filter(r => r.tipo === 'variable').reduce((s, r) => s + Number(r.monto), 0);
+    const totalNoPres= registros.filter(r => r.tipo === 'no_presupuestado').reduce((s, r) => s + Number(r.monto), 0);
+    const totalGasto = totalFijos + totalVar + totalNoPres;
+    const [compromisos] = await db.execute(
+      `SELECT nombre, monto_mensual FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
+      [firebase_uid]);
+    res.json({
+      quincena: Number(num),
+      dias: esQ1 ? '1–15' : '16–fin',
+      ingreso_quincenal: parseFloat(ingresoQ.toFixed(2)),
+      total_gastado:     parseFloat(totalGasto.toFixed(2)),
+      disponible:        parseFloat((ingresoQ - totalGasto).toFixed(2)),
+      fijos: parseFloat(totalFijos.toFixed(2)),
+      variables: parseFloat(totalVar.toFixed(2)),
+      no_presupuestados: parseFloat(totalNoPres.toFixed(2)),
+      registros,
+      compromisos_quincenal: compromisos.map(c => ({
+        nombre: c.nombre, monto: parseFloat((Number(c.monto_mensual) / 2).toFixed(2)),
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PATRIMONIO NETO ──────────────────────────────────────────────────────────
+app.get('/user/patrimonio', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [activos] = await db.execute(
+      `SELECT * FROM activos WHERE firebase_uid = ? AND activo = 1 ORDER BY valor DESC`, [firebase_uid]);
+    const [deudas] = await db.execute(
+      `SELECT nombre, tipo, monto_pendiente, monto_total FROM deudas WHERE firebase_uid = ? AND activa = 1`,
+      [firebase_uid]);
+    const totalActivos = activos.reduce((s, a) => s + Number(a.valor), 0);
+    const totalPasivos = deudas.reduce((s, d) => s + (Number(d.monto_pendiente) || Number(d.monto_total)), 0);
+    res.json({
+      activos, deudas,
+      total_activos:   parseFloat(totalActivos.toFixed(2)),
+      total_pasivos:   parseFloat(totalPasivos.toFixed(2)),
+      patrimonio_neto: parseFloat((totalActivos - totalPasivos).toFixed(2)),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/user/activos', async (req, res) => {
+  const { firebase_uid, nombre, tipo, valor, descripcion } = req.body;
+  if (!firebase_uid || !nombre || valor === undefined) return res.status(400).json({ error: 'firebase_uid, nombre y valor requeridos' });
+  try {
+    const [r] = await db.execute(
+      `INSERT INTO activos (firebase_uid, nombre, tipo, valor, descripcion) VALUES (?, ?, ?, ?, ?)`,
+      [firebase_uid, nombre, tipo || 'otro', Number(valor), descripcion || null]);
+    res.status(201).json({ id: r.insertId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/user/activos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, nombre, tipo, valor, descripcion } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(`UPDATE activos SET nombre=?, tipo=?, valor=?, descripcion=? WHERE id=? AND firebase_uid=?`,
+      [nombre, tipo, Number(valor), descripcion, id, firebase_uid]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/user/activos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(`UPDATE activos SET activo=0 WHERE id=? AND firebase_uid=?`, [id, firebase_uid]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── OBJETIVOS FINANCIEROS ─────────────────────────────────────────────────────
+app.get('/user/objetivos', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT *, DATEDIFF(fecha_limite, CURDATE()) AS dias_restantes FROM objetivos_financieros
+       WHERE firebase_uid = ? AND activo = 1 ORDER BY fecha_limite ASC`, [firebase_uid]);
+    res.json(rows.map(o => {
+      const diasR  = Math.max(0, Number(o.dias_restantes) || 365);
+      const mesesR = Math.max(1, Math.ceil(diasR / 30));
+      const falta  = Math.max(0, Number(o.monto_meta) - Number(o.monto_actual));
+      return {
+        ...o,
+        monto_meta:      parseFloat(Number(o.monto_meta).toFixed(2)),
+        monto_actual:    parseFloat(Number(o.monto_actual).toFixed(2)),
+        falta:           parseFloat(falta.toFixed(2)),
+        pct_avance:      Number(o.monto_meta) > 0 ? parseFloat((Number(o.monto_actual)/Number(o.monto_meta)*100).toFixed(1)) : 0,
+        cuota_mensual:   parseFloat((falta / mesesR).toFixed(2)),
+        dias_restantes:  diasR, meses_restantes: mesesR,
+      };
+    }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/user/objetivos', async (req, res) => {
+  const { firebase_uid, nombre, descripcion, monto_meta, fecha_limite, tipo } = req.body;
+  if (!firebase_uid || !nombre || !monto_meta) return res.status(400).json({ error: 'firebase_uid, nombre y monto_meta requeridos' });
+  try {
+    const [r] = await db.execute(
+      `INSERT INTO objetivos_financieros (firebase_uid, nombre, descripcion, monto_meta, fecha_limite, tipo)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, nombre, descripcion || null, monto_meta, fecha_limite || null, tipo || 'otro']);
+    res.status(201).json({ id: r.insertId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.patch('/user/objetivos/:id/abonar', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, monto } = req.body;
+  if (!firebase_uid || !monto) return res.status(400).json({ error: 'firebase_uid y monto requeridos' });
+  try {
+    await db.execute(
+      `UPDATE objetivos_financieros SET monto_actual = monto_actual + ? WHERE id = ? AND firebase_uid = ?`,
+      [Number(monto), id, firebase_uid]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/user/objetivos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await db.execute(`UPDATE objetivos_financieros SET activo=0 WHERE id=? AND firebase_uid=?`, [id, firebase_uid]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── CONSEJERO IA (Claude Haiku) ───────────────────────────────────────────────
+// GET /user/consejero-ia?firebase_uid=&anio=&mes=
+// Requiere ANTHROPIC_API_KEY en variables de entorno de Render.
+app.get('/user/consejero-ia', async (req, res) => {
+  const { firebase_uid, anio, mes } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.json({ disponible: false, razon: 'sin_api_key' });
+  const year  = Number(anio) || new Date().getFullYear();
+  const month = Number(mes)  || (new Date().getMonth() + 1);
+  const MESES = ['','enero','febrero','marzo','abril','mayo','junio',
+                 'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  try {
+    const [[income]] = await db.execute(
+      `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    if (!income) return res.json({ disponible: false, razon: 'sin_perfil' });
+    const [gastosFijos] = await db.execute(
+      `SELECT nombre, monto_mensual FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
+    const [deudas] = await db.execute(
+      `SELECT nombre, tasa_interes, monto_pendiente, monto_total, pago_minimo, cuota_fija, num_cuotas_total, num_pagos_realizados
+       FROM deudas WHERE firebase_uid = ? AND activa = 1 ORDER BY tasa_interes DESC`, [firebase_uid]);
+    const [variablesBase] = await db.execute(
+      `SELECT nombre, categoria, monto_estimado FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
+    const [[mesRow]] = await db.execute(
+      `SELECT fijos_reales, variables_reales, remanente_real, remanente_estimado FROM meses_financieros
+       WHERE firebase_uid = ? AND anio = ? AND mes = ?`, [firebase_uid, year, month]);
+
+    const ingresoNeto = Number(income.ingreso_neto_mensual);
+    const totalFijos  = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    const totalVar    = variablesBase.reduce((s, v) => s + Number(v.monto_estimado), 0);
+    const remanente   = ingresoNeto - totalFijos - totalVar;
+
+    const prompt = `Eres un asesor financiero personal experto y directo, especializado en Panamá. No uses lenguaje corporativo — habla como un amigo que sabe de finanzas.
+
+SITUACIÓN FINANCIERA — ${MESES[month].toUpperCase()} ${year}:
+Ingreso neto: $${ingresoNeto.toFixed(2)}/mes
+Gastos fijos: $${totalFijos.toFixed(2)} (${Math.round(totalFijos/ingresoNeto*100)}% del ingreso): ${gastosFijos.slice(0,5).map(g=>`${g.nombre}:$${Number(g.monto_mensual).toFixed(0)}`).join(', ')}
+Variables estimadas: $${totalVar.toFixed(2)}
+Remanente estimado: $${remanente.toFixed(2)}${mesRow && Number(mesRow.fijos_reales) > 0 ? `\nGastos reales este mes: fijos $${Number(mesRow.fijos_reales).toFixed(2)}, variables $${Number(mesRow.variables_reales).toFixed(2)}` : ''}
+Deudas (${deudas.length}): ${deudas.length > 0 ? deudas.slice(0,4).map(d=>`${d.nombre} ${d.tasa_interes}% TEA saldo $${Number(d.monto_pendiente||d.monto_total).toFixed(0)} cuota $${Number(d.pago_minimo||d.cuota_fija||0).toFixed(0)}/mes`).join(' | ') : 'ninguna'}
+
+Da tu análisis en máximo 180 palabras:
+1. Una frase de diagnóstico honesto (bueno o malo, con número clave)
+2. El problema financiero #1 con acción concreta y monto exacto
+3. Dos recomendaciones adicionales priorizadas
+4. Una motivación breve y genuina
+
+Sin bullets, párrafos cortos, español panameño natural.`;
+
+    const { default: fetch } = await import('node-fetch');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+        messages: [{ role: 'user', content: prompt }] }),
+    });
+    if (!response.ok) return res.json({ disponible: false, razon: 'error_api' });
+    const data = await response.json();
+    res.json({
+      disponible: true,
+      analisis: data.content?.[0]?.text || '',
+      mes: month, mes_label: MESES[month], anio: year,
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

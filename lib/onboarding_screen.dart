@@ -8,6 +8,7 @@ import 'theme/app_theme.dart';
 import 'services/user_profile_service.dart';
 import 'services/estado_anual_service.dart';
 import 'services/deudas_service.dart';
+import 'services/gastos_variables_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final String firebaseUid;
@@ -38,7 +39,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<Map<String, dynamic>> _deudas = [];
   bool _guardandoDeuda = false;
 
-  // ── Paso 4: Generar ──────────────────────────────────────────────────
+  // ── Paso 4: Gastos variables estimados ───────────────────────────────
+  // monto por índice de categoría (0-7), modificable por el usuario
+  final Map<int, double> _variableMontos = {0:300,1:100,2:80,3:60,4:50,5:40,6:30,7:50};
+  final Set<int> _variablesActivas = {0,1,2,3,4,5,6,7};
+  bool _guardandoVariables = false;
+
+  static const _categoriasVariable = [
+    {'nombre': 'Supermercado',        'categoria': 'alimentacion', 'icon': Icons.shopping_cart_outlined},
+    {'nombre': 'Restaurantes',        'categoria': 'alimentacion', 'icon': Icons.restaurant_outlined},
+    {'nombre': 'Gasolina / transporte','categoria': 'transporte',  'icon': Icons.local_gas_station_outlined},
+    {'nombre': 'Entretenimiento',     'categoria': 'entretenimiento','icon': Icons.movie_outlined},
+    {'nombre': 'Ropa / personal',     'categoria': 'personal',     'icon': Icons.checkroom_outlined},
+    {'nombre': 'Salud / farmacia',    'categoria': 'salud',        'icon': Icons.local_pharmacy_outlined},
+    {'nombre': 'Educación',           'categoria': 'educacion',    'icon': Icons.school_outlined},
+    {'nombre': 'Otras compras',       'categoria': 'otro',         'icon': Icons.shopping_bag_outlined},
+  ];
+
+  // ── Paso 5: Generar ──────────────────────────────────────────────────
   bool _generando = false;
 
   final _fmt = NumberFormat('#,##0.00', 'en_US');
@@ -86,9 +104,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return double.tryParse(_netoCtrl.text.replaceAll(',', '')) ?? 0;
   }
 
-  double get _totalFijos => _gastosFijos.fold(0.0, (s, g) => s + (g['monto'] as double));
-  double get _totalDeudas => _deudas.fold(0.0, (s, d) => s + (d['cuota'] as double));
-  double get _remanente   => _ingresoNeto - _totalFijos - _totalDeudas;
+  double get _totalFijos     => _gastosFijos.fold(0.0, (s, g) => s + (g['monto'] as double));
+  double get _totalDeudas    => _deudas.fold(0.0, (s, d) => s + (d['cuota'] as double));
+  double get _totalVariables => _variablesActivas.fold(0.0,
+      (s, i) => s + (_variableMontos[i] ?? 0));
+  double get _remanente => _ingresoNeto - _totalFijos - _totalDeudas - _totalVariables;
 
   static double _pmt(double principal, double tasaAnual, int plazoMeses) {
     if (principal <= 0 || plazoMeses <= 0) return 0;
@@ -218,6 +238,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (mounted) setState(() => _guardandoDeuda = false);
   }
 
+  Future<void> _guardarVariables() async {
+    setState(() => _guardandoVariables = true);
+    final lista = _variablesActivas
+        .where((i) => (_variableMontos[i] ?? 0) > 0)
+        .map((i) => {
+              'nombre':         _categoriasVariable[i]['nombre'] as String,
+              'categoria':      _categoriasVariable[i]['categoria'] as String,
+              'monto_estimado': _variableMontos[i] ?? 0,
+            })
+        .toList();
+    try {
+      if (lista.isNotEmpty) {
+        await GastosVariablesService.crearBulk(widget.firebaseUid, lista);
+      }
+      _irSiguiente();
+    } catch (_) {
+      _irSiguiente(); // no bloquear si falla — se puede configurar después
+    }
+    if (mounted) setState(() => _guardandoVariables = false);
+  }
+
   Future<void> _generarEstado() async {
     setState(() => _generando = true);
     try {
@@ -244,14 +285,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Column(children: [
-          // Barra de progreso (4 pasos)
+          // Barra de progreso (5 pasos)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-            child: Row(children: List.generate(4, (i) => Expanded(
+            child: Row(children: List.generate(5, (i) => Expanded(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 height: 4,
-                margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
+                margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
                 decoration: BoxDecoration(
                   color: i <= _paso ? AppTheme.primary : AppTheme.surfaceAlt,
                   borderRadius: BorderRadius.circular(2),
@@ -311,13 +352,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onAgregarDeuda:  _agregarDeuda,
                   onContinuar:     _irSiguiente,
                 ),
-                _Paso4Resumen(
+                _Paso4Variables(
+                  montos:          _variableMontos,
+                  activas:         _variablesActivas,
+                  categorias:      _categoriasVariable,
+                  totalVariables:  _totalVariables,
+                  guardando:       _guardandoVariables,
+                  fmt:             _fmt,
+                  onToggle:        (i, v) => setState(() => v ? _variablesActivas.add(i) : _variablesActivas.remove(i)),
+                  onMontoChanged:  (i, v) => setState(() => _variableMontos[i] = v),
+                  onContinuar:     _guardarVariables,
+                ),
+                _Paso5Resumen(
                   ingresoNeto:   _ingresoNeto,
                   totalFijos:    _totalFijos,
                   totalDeudas:   _totalDeudas,
+                  totalVariables:_totalVariables,
                   remanente:     _remanente,
                   cantGastos:    _gastosFijos.length,
                   cantDeudas:    _deudas.length,
+                  cantVariables: _variablesActivas.length,
                   fmt:           _fmt,
                   generando:     _generando,
                   onGenerar:     _generarEstado,
@@ -1187,22 +1241,154 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
   }
 }
 
-// ── PASO 4: RESUMEN ───────────────────────────────────────────────────────────
+// ── PASO 4: GASTOS VARIABLES ─────────────────────────────────────────────────
 
-class _Paso4Resumen extends StatelessWidget {
+class _Paso4Variables extends StatelessWidget {
+  final Map<int, double> montos;
+  final Set<int> activas;
+  final List<Map<String, dynamic>> categorias;
+  final double totalVariables;
+  final bool guardando;
+  final NumberFormat fmt;
+  final void Function(int, bool) onToggle;
+  final void Function(int, double) onMontoChanged;
+  final VoidCallback onContinuar;
+
+  const _Paso4Variables({
+    required this.montos, required this.activas, required this.categorias,
+    required this.totalVariables, required this.guardando, required this.fmt,
+    required this.onToggle, required this.onMontoChanged, required this.onContinuar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Paso 4 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        const SizedBox(height: 8),
+        const Text('¿Cuánto gastas al mes?',
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        const Text('Estos son gastos variables — lo que gastas en comida, ocio, etc. Ponle un estimado y ajusta cuando quieras.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        const SizedBox(height: 20),
+
+        ...List.generate(categorias.length, (i) {
+          final cat    = categorias[i];
+          final activa = activas.contains(i);
+          final monto  = montos[i] ?? 0.0;
+          final ctrl   = TextEditingController(text: monto > 0 ? monto.toStringAsFixed(0) : '');
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: activa ? AppTheme.surface : AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: activa ? AppTheme.border : AppTheme.surfaceAlt),
+              ),
+              child: Row(children: [
+                Icon(cat['icon'] as IconData,
+                    color: activa ? AppTheme.primary : AppTheme.textMuted, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(cat['nombre'] as String,
+                      style: TextStyle(
+                          color: activa ? AppTheme.textPrimary : AppTheme.textMuted,
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+                if (activa) ...[
+                  const Text('\$', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 64,
+                    child: TextField(
+                      controller: ctrl,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                        border: UnderlineInputBorder(),
+                      ),
+                      onChanged: (v) => onMontoChanged(i, double.tryParse(v) ?? 0),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Switch(
+                  value: activa,
+                  onChanged: (v) => onToggle(i, v),
+                  activeColor: AppTheme.primary,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ]),
+            ),
+          );
+        }),
+
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            const Text('Total variables estimado',
+                style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+            Text('\$${fmt.format(totalVariables)}/mes',
+                style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
+          ]),
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: guardando ? null : onContinuar,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: guardando
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : const Text('Continuar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: TextButton(
+            onPressed: onContinuar,
+            child: const Text('Saltar por ahora', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── PASO 5: RESUMEN ───────────────────────────────────────────────────────────
+
+class _Paso5Resumen extends StatelessWidget {
   final double ingresoNeto;
   final double totalFijos;
   final double totalDeudas;
+  final double totalVariables;
   final double remanente;
   final int cantGastos;
   final int cantDeudas;
+  final int cantVariables;
   final NumberFormat fmt;
   final bool generando;
   final VoidCallback onGenerar;
   final VoidCallback onIrAPaso1;
-  const _Paso4Resumen({
+  const _Paso5Resumen({
     required this.ingresoNeto, required this.totalFijos, required this.totalDeudas,
-    required this.remanente, required this.cantGastos, required this.cantDeudas,
+    required this.totalVariables, required this.remanente,
+    required this.cantGastos, required this.cantDeudas, required this.cantVariables,
     required this.fmt, required this.generando, required this.onGenerar,
     required this.onIrAPaso1,
   });
@@ -1246,7 +1432,7 @@ class _Paso4Resumen extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Paso 4 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        const Text('Paso 5 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
         const Text('Tu perfil financiero',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
@@ -1273,9 +1459,14 @@ class _Paso4Resumen extends StatelessWidget {
               _ResRow('Cuotas de deudas ($cantDeudas)',
                   '− B/. ${fmt.format(totalDeudas)}', AppTheme.danger),
             ],
+            if (cantVariables > 0) ...[
+              const SizedBox(height: 6),
+              _ResRow('Variables estimadas ($cantVariables)',
+                  '− B/. ${fmt.format(totalVariables)}', AppTheme.warning),
+            ],
             const Divider(color: AppTheme.border, height: 20),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Disponible estimado',
+              const Text('Te sobra al mes',
                   style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
               Text('B/. ${fmt.format(remanente)}',
                   style: TextStyle(color: remColor, fontWeight: FontWeight.w800, fontSize: 24)),

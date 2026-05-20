@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
+import 'services/api_client.dart';
 import 'services/estado_anual_service.dart';
+import 'services/pdf_service.dart';
 import 'services/registros_service.dart';
 import 'services/productos_catalogo_service.dart';
 import 'widgets/ayuda_sheet.dart';
@@ -36,7 +40,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
     _cargar();
   }
 
@@ -97,6 +101,11 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 22),
+            tooltip: 'Exportar PDF',
+            onPressed: _exportarPdf,
+          ),
+          IconButton(
             icon: const Icon(Icons.qr_code_scanner, size: 22),
             tooltip: 'Escanear factura',
             onPressed: () => Navigator.push(context, MaterialPageRoute(
@@ -112,6 +121,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
           tabs: const [
             Tab(text: 'Resumen'),
             Tab(text: 'Gastos'),
+            Tab(text: 'Quincenas'),
             Tab(text: 'Análisis'),
           ],
         ),
@@ -143,11 +153,28 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                         uid: widget.firebaseUid,
                         onChanged: _cargar,
                       ),
+                      _TabQuincenas(
+                        uid: widget.firebaseUid,
+                        anio: widget.anio,
+                        mes: widget.mes,
+                      ),
                       _TabAnalisis(data: _data!, uid: widget.firebaseUid),
                     ],
                   ),
                 ),
     );
+  }
+
+  Future<void> _exportarPdf() async {
+    if (_data == null) return;
+    try {
+      final pdf = await PdfService.generarPdfMes(_data!, widget.label, widget.anio);
+      await Printing.layoutPdf(onLayout: (_) async => pdf,
+          name: 'Salarying_${widget.label}_${widget.anio}.pdf');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al generar PDF: $e')));
+    }
   }
 
   void _abrirAgregarGasto() async {
@@ -200,27 +227,81 @@ class _TabResumen extends StatelessWidget {
     final remReal = _d(r['remanente_real']);
     final sano    = r['presupuesto_sano'] as bool? ?? true;
 
+    // Disponible libre = ingreso - todo lo gastado real
+    final ingresoRef   = ingReal > 0 ? ingReal : ingEst;
+    final yaGastado    = fijosReal + varReal + noPres;
+    final disponible   = ingresoRef - yaGastado;
+    final hayReal      = fijosReal > 0 || varReal > 0;
+    final dispColor    = disponible > ingresoRef * 0.20 ? AppTheme.success
+                       : disponible > 0                 ? AppTheme.warning
+                       : AppTheme.danger;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Banner de estado
+        // ── DISPONIBLE LIBRE ─────────────────────────────────────────────
         Container(
-          padding: const EdgeInsets.all(16),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
           decoration: BoxDecoration(
-            color: sano ? AppTheme.success.withOpacity(0.08) : AppTheme.danger.withOpacity(0.08),
+            color: dispColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: dispColor.withValues(alpha: 0.35), width: 1.5),
+          ),
+          child: Column(children: [
+            Text(
+              hayReal ? 'Te queda disponible' : 'Estimado disponible',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '\$${disponible.toStringAsFixed(2)}',
+              style: TextStyle(color: dispColor, fontSize: 38, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hayReal
+                  ? 'de \$${ingresoRef.toStringAsFixed(2)} · ya gastaste \$${yaGastado.toStringAsFixed(2)}'
+                  : 'basado en tu planificación — registra gastos para ver el real',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            // Mini barra de consumo
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ingresoRef > 0 ? (yaGastado / ingresoRef).clamp(0.0, 1.0) : 0,
+                minHeight: 6,
+                backgroundColor: AppTheme.border,
+                valueColor: AlwaysStoppedAnimation(dispColor),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              ingresoRef > 0 ? 'Usaste el ${(yaGastado / ingresoRef * 100).toStringAsFixed(0)}% de tu ingreso' : '',
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+
+        // Banner sano / en déficit
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: sano ? AppTheme.success.withValues(alpha: 0.08) : AppTheme.danger.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: sano ? AppTheme.success.withOpacity(0.3) : AppTheme.danger.withOpacity(0.3)),
+            border: Border.all(color: sano ? AppTheme.success.withValues(alpha: 0.3) : AppTheme.danger.withValues(alpha: 0.3)),
           ),
           child: Row(children: [
             Icon(sano ? Icons.check_circle : Icons.warning_amber_rounded,
-                color: sano ? AppTheme.success : AppTheme.danger, size: 22),
+                color: sano ? AppTheme.success : AppTheme.danger, size: 20),
             const SizedBox(width: 10),
             Expanded(child: Text(
-              sano ? 'Mes bajo control' : 'Gasto mayor al ingreso',
-              style: TextStyle(
-                color: sano ? AppTheme.success : AppTheme.danger,
-                fontWeight: FontWeight.w700, fontSize: 14,
-              ),
+              sano ? 'Mes bajo control' : 'Gastos superan el ingreso',
+              style: TextStyle(color: sano ? AppTheme.success : AppTheme.danger,
+                  fontWeight: FontWeight.w700, fontSize: 13),
             )),
           ]),
         ),
@@ -240,14 +321,14 @@ class _TabResumen extends StatelessWidget {
 
         const SizedBox(height: 20),
 
-        // Tabla estimado vs real
-        _seccion('BALANCE DEL MES'),
+        // Tabla planificado vs real
+        _seccion('LO QUE PLANIFICASTE VS LO QUE GASTASTE'),
         _FilaComparativa('Ingreso', ingEst, ingReal, AppTheme.success),
         _FilaComparativa('Gastos fijos', fijosEst, fijosReal, AppTheme.colorFijo),
         _FilaComparativa('Gastos variables', varEst, varReal, AppTheme.warning),
         if (noPres > 0) _FilaComparativa('No presupuestados', 0, noPres, AppTheme.danger),
         const Divider(color: AppTheme.border, height: 24),
-        _FilaComparativa('Remanente', remEst, remReal,
+        _FilaComparativa('Te sobra', remEst, remReal,
             remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
         const SizedBox(height: 24),
 
@@ -774,7 +855,210 @@ class _CompromisoTile extends StatelessWidget {
   }
 }
 
-// ── TAB 3: ANÁLISIS ──────────────────────────────────────────────────────
+// ── TAB 3: QUINCENAS ─────────────────────────────────────────────────────────
+
+class _TabQuincenas extends StatefulWidget {
+  final String uid;
+  final int anio;
+  final int mes;
+  const _TabQuincenas({required this.uid, required this.anio, required this.mes});
+  @override
+  State<_TabQuincenas> createState() => _TabQuincenasState();
+}
+
+class _TabQuincenasState extends State<_TabQuincenas> {
+  Map<String, dynamic>? _q1;
+  Map<String, dynamic>? _q2;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    setState(() => _loading = true);
+    try {
+      final base = '/user/quincena/${widget.anio}/${widget.mes}';
+      final r1 = await ApiClient.get('$base/1?firebase_uid=${widget.uid}');
+      final r2 = await ApiClient.get('$base/2?firebase_uid=${widget.uid}');
+      if (mounted) setState(() {
+        if (r1.statusCode == 200) _q1 = jsonDecode(r1.body);
+        if (r2.statusCode == 200) _q2 = jsonDecode(r2.body);
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    final now = DateTime.now();
+    final esActual = widget.anio == now.year && widget.mes == now.month;
+    final esQ1 = esActual && now.day <= 15;
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _infoBanner(esActual, esQ1),
+          const SizedBox(height: 16),
+          if (_q1 != null) _QuincenaCard(data: _q1!, activa: esActual && esQ1),
+          const SizedBox(height: 12),
+          if (_q2 != null) _QuincenaCard(data: _q2!, activa: esActual && !esQ1),
+          const SizedBox(height: 20),
+          const Text(
+            'Los gastos se asignan a cada quincena según la fecha en que los registraste.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoBanner(bool esActual, bool esQ1) {
+    if (!esActual) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.info_outline, color: AppTheme.primary, size: 16),
+        const SizedBox(width: 8),
+        Expanded(child: Text(
+          'Estás en la ${esQ1 ? "primera" : "segunda"} quincena (días ${esQ1 ? "1–15" : "16–fin"}).',
+          style: const TextStyle(color: AppTheme.primary, fontSize: 12),
+        )),
+      ]),
+    );
+  }
+}
+
+class _QuincenaCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final bool activa;
+  const _QuincenaCard({required this.data, required this.activa});
+
+  double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final q          = (data['quincena'] as num).toInt();
+    final dias       = data['dias'] as String? ?? '';
+    final ingQ       = _d(data['ingreso_quincenal']);
+    final gastado    = _d(data['total_gastado']);
+    final disponible = _d(data['disponible']);
+    final registros  = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final dispColor  = disponible > ingQ * 0.2 ? AppTheme.success
+                     : disponible > 0           ? AppTheme.warning
+                     : AppTheme.danger;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: activa ? AppTheme.primary : AppTheme.border,
+          width: activa ? 1.5 : 1,
+        ),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: Row(children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text('Quincena $q', style: TextStyle(
+                  color: activa ? AppTheme.primary : AppTheme.textPrimary,
+                  fontSize: 15, fontWeight: FontWeight.w700)),
+                if (activa) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(4)),
+                    child: const Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ]),
+              Text('Días $dias', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            ]),
+            const Spacer(),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('\$${disponible.toStringAsFixed(2)}',
+                  style: TextStyle(color: dispColor, fontSize: 22, fontWeight: FontWeight.w800)),
+              const Text('disponible', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        // Barra
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ingQ > 0 ? (gastado / ingQ).clamp(0.0, 1.0) : 0,
+              minHeight: 6,
+              backgroundColor: AppTheme.border,
+              valueColor: AlwaysStoppedAnimation(dispColor),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Ingreso: \$${ingQ.toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+            Text('Gastado: \$${gastado.toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+          ]),
+        ),
+        if (registros.isNotEmpty) ...[
+          const Divider(color: AppTheme.border, height: 20),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Text('${registros.length} gastos registrados',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
+          ),
+          ...registros.take(5).map((r) => ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            title: Text(r['nombre'] as String? ?? '—',
+                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+            subtitle: Text(r['categoria'] as String? ?? '',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            trailing: Text('\$${_d(r['monto']).toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+          )),
+          if (registros.length > 5)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, bottom: 8),
+              child: Text('+${registros.length - 5} más',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            ),
+        ] else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+            child: Text(
+              'Sin gastos registrados en esta quincena aún.',
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          ),
+        const SizedBox(height: 6),
+      ]),
+    );
+  }
+}
+
+// ── TAB 4: ANÁLISIS ──────────────────────────────────────────────────────
 
 class _TabAnalisis extends StatefulWidget {
   final Map<String, dynamic> data;

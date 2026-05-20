@@ -16,7 +16,10 @@ import 'calendario.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
 import 'dashboard_screen.dart';
 import 'ventas_landing_screen.dart';
+import 'patrimonio_screen.dart';
+import 'objetivos_screen.dart';
 import 'widgets/widgets.dart';
+import 'widgets/financiero/agregar_gasto_sheet.dart';
 
 class HomeShell extends StatefulWidget {
   final String firebaseUid;
@@ -94,6 +97,24 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  Future<void> _abrirRegistroRapido(BuildContext context, DateTime now) async {
+    final res = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AgregarGastoSheet(
+        firebaseUid: widget.firebaseUid,
+        anio: now.year,
+        mes: now.month,
+      ),
+    );
+    if (res == true && _initializedTabs.contains(1)) {
+      // Forzar recarga del tab Mes si está inicializado
+      setState(() { _initializedTabs.remove(1); });
+      Future.microtask(() => setState(() { _initializedTabs.add(1); }));
+    }
+  }
+
   Future<void> _logout() async {
     await AuthService.signOut();
     if (!mounted) return;
@@ -135,6 +156,13 @@ class _HomeShellState extends State<HomeShell> {
         children: List.generate(screens.length, (i) =>
           _initializedTabs.contains(i) ? screens[i] : const SizedBox.shrink()),
       ),
+      floatingActionButton: _idx != 3 ? FloatingActionButton(
+        heroTag: 'fab_global',
+        backgroundColor: AppTheme.primary,
+        foregroundColor: AppTheme.background,
+        onPressed: () => _abrirRegistroRapido(context, now),
+        child: const Icon(Icons.add, size: 28),
+      ) : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _idx,
         backgroundColor: AppTheme.surface,
@@ -301,6 +329,24 @@ class _MasTab extends StatelessWidget {
                   color: AppTheme.warning,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => DashboardScreen(firebaseUid: firebaseUid),
+                  )),
+                ),
+                _ModuloCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Patrimonio',
+                  subtitle: 'Activos y pasivos',
+                  color: AppTheme.info,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => PatrimonioScreen(firebaseUid: firebaseUid),
+                  )),
+                ),
+                _ModuloCard(
+                  icon: Icons.flag_outlined,
+                  title: 'Objetivos',
+                  subtitle: 'Metas a largo plazo',
+                  color: AppTheme.colorAhorro,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ObjetivosScreen(firebaseUid: firebaseUid),
                   )),
                 ),
                 if (modoNegocio)

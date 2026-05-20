@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
 import 'services/consejero_service.dart';
+import 'services/api_client.dart';
 import 'mes_detalle_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
@@ -29,6 +32,8 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   Map<int, Map<String, dynamic>> _alertasResumen = {};
   String _vista = 'mensual'; // 'mensual' | 'quincenal' | 'anual'
   Map<String, dynamic>? _consejero;
+  Map<String, dynamic>? _comparativa;
+  Map<String, dynamic>? _consejeroIA;
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -78,6 +83,30 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       final now = DateTime.now();
       final c = await ConsejeroService.get(widget.firebaseUid, anio: _anio, mes: now.month);
       if (mounted) setState(() => _consejero = c);
+    } catch (_) {}
+    _cargarComparativa();
+    _cargarConsejeroIA();
+  }
+
+  Future<void> _cargarComparativa() async {
+    try {
+      final now = DateTime.now();
+      final r = await ApiClient.get(
+          '/user/comparativa?firebase_uid=${widget.firebaseUid}&anio=$_anio&mes=${now.month}');
+      if (r.statusCode == 200 && mounted) {
+        setState(() => _comparativa = jsonDecode(r.body) as Map<String, dynamic>);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _cargarConsejeroIA() async {
+    try {
+      final now = DateTime.now();
+      final r = await ApiClient.get(
+          '/user/consejero-ia?firebase_uid=${widget.firebaseUid}&anio=$_anio&mes=${now.month}');
+      if (r.statusCode == 200 && mounted) {
+        setState(() => _consejeroIA = jsonDecode(r.body) as Map<String, dynamic>);
+      }
     } catch (_) {}
   }
 
@@ -186,6 +215,18 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         const SizedBox(height: 12),
         _CardAnual(ea: ea, anio: _anio, vista: _vista,
             onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
+        // ── Claude IA ─────────────────────────────────────────────────────
+        if (_consejeroIA != null) ...[
+          _buildConsejeroIA(_consejeroIA!),
+          const SizedBox(height: 12),
+        ],
+        // ── Gráfica tendencia ──────────────────────────────────────────────
+        if (_comparativa != null) ...[
+          _buildTendenciaChart(_comparativa!),
+          const SizedBox(height: 12),
+          _buildComparativa(_comparativa!),
+          const SizedBox(height: 12),
+        ],
         // ── Insights ──────────────────────────────────────────────────────
         if (_consejero != null && !(_consejero!['sin_perfil'] as bool? ?? false)) ...[
           _buildInsights(_consejero!),
@@ -432,6 +473,188 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         );
       }),
     ]);
+  }
+
+  Widget _buildConsejeroIA(Map<String, dynamic> c) {
+    final disponible = c['disponible'] as bool? ?? false;
+    if (!disponible) return const SizedBox.shrink();
+    final analisis = c['analisis'] as String? ?? '';
+    if (analisis.isEmpty) return const SizedBox.shrink();
+    final mesLabel = c['mes_label'] as String? ?? '';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 14),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Análisis IA', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+            Text('Asesor financiero · $mesLabel', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+          ])),
+        ]),
+        const SizedBox(height: 12),
+        const Divider(color: AppTheme.border, height: 1),
+        const SizedBox(height: 12),
+        Text(analisis, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.55)),
+      ]),
+    );
+  }
+
+  Widget _buildTendenciaChart(Map<String, dynamic> comp) {
+    final tendencia = (comp['tendencia'] as List? ?? []).cast<Map<String, dynamic>>();
+    if (tendencia.isEmpty) return const SizedBox.shrink();
+
+    final spots = <FlSpot>[];
+    final labels = <String>[];
+    for (int i = 0; i < tendencia.length; i++) {
+      final m = tendencia[i];
+      final real = m['remanente_real'];
+      final est  = m['remanente_est'] as num? ?? 0;
+      final val  = real != null ? (real as num).toDouble() : est.toDouble();
+      spots.add(FlSpot(i.toDouble(), val));
+      labels.add(m['label'] as String? ?? '');
+    }
+
+    final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final rangeY = (maxY - minY).abs();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('TENDENCIA DEL AÑO', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        const Text('Remanente mes a mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 120,
+          child: LineChart(LineChartData(
+            minY: minY - rangeY * 0.1,
+            maxY: maxY + rangeY * 0.1,
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              bottomTitles: AxisTitles(sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, _) {
+                  final i = v.toInt();
+                  if (i < 0 || i >= labels.length) return const SizedBox.shrink();
+                  return Text(labels[i], style: const TextStyle(color: AppTheme.textMuted, fontSize: 9));
+                },
+                reservedSize: 20,
+              )),
+            ),
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (spots) => spots.map((s) => LineTooltipItem(
+                  '\$${s.y.toStringAsFixed(0)}',
+                  const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                )).toList(),
+              ),
+            ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: spots,
+                isCurved: true,
+                color: AppTheme.primary,
+                barWidth: 2.5,
+                dotData: FlDotData(
+                  getDotPainter: (spot, pct, bar, idx) => FlDotCirclePainter(
+                    radius: 3,
+                    color: spot.y >= 0 ? AppTheme.success : AppTheme.danger,
+                    strokeColor: AppTheme.surface,
+                    strokeWidth: 1.5,
+                  ),
+                ),
+                belowBarData: BarAreaData(
+                  show: true,
+                  color: AppTheme.primary.withValues(alpha: 0.07),
+                ),
+              ),
+            ],
+          )),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildComparativa(Map<String, dynamic> comp) {
+    final actual   = comp['actual']   as Map<String, dynamic>?;
+    final anterior = comp['anterior'] as Map<String, dynamic>?;
+    if (actual == null || anterior == null) return const SizedBox.shrink();
+
+    double dbl(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
+
+    final remAct = dbl(actual['remanente']);
+    final remAnt = dbl(anterior['remanente']);
+    final diff   = remAct - remAnt;
+    final mejoro = diff >= 0;
+    final esEst  = actual['es_estimado'] as bool? ?? false;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('VS MES ANTERIOR', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _CompCol(label: anterior['label'] as String, remanente: remAnt, active: false)),
+          Container(width: 1, height: 48, color: AppTheme.border, margin: const EdgeInsets.symmetric(horizontal: 12)),
+          Expanded(child: _CompCol(label: '${actual['label'] as String}${esEst ? '*' : ''}', remanente: remAct, active: true)),
+        ]),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: mejoro ? AppTheme.success.withValues(alpha: 0.08) : AppTheme.danger.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            Icon(mejoro ? Icons.trending_up : Icons.trending_down,
+                color: mejoro ? AppTheme.success : AppTheme.danger, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              mejoro
+                  ? 'Mejoraste \$${diff.abs().toStringAsFixed(2)} vs ${anterior['label']}'
+                  : 'Bajaste \$${diff.abs().toStringAsFixed(2)} vs ${anterior['label']}',
+              style: TextStyle(
+                color: mejoro ? AppTheme.success : AppTheme.danger,
+                fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ]),
+        ),
+        if (esEst)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text('* Basado en planificación — registra gastos para ver el real.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+          ),
+      ]),
+    );
   }
 
   void _mostrarAyuda(BuildContext context) {
@@ -743,3 +966,26 @@ class _AlertaBanner extends StatelessWidget {
     ),
   );
 }
+
+class _CompCol extends StatelessWidget {
+  final String label;
+  final double remanente;
+  final bool active;
+  const _CompCol({required this.label, required this.remanente, required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = remanente >= 0 ? AppTheme.success : AppTheme.danger;
+    return Column(children: [
+      Text(label, style: TextStyle(
+        color: active ? AppTheme.primary : AppTheme.textMuted,
+        fontSize: 12, fontWeight: active ? FontWeight.w700 : FontWeight.normal,
+      )),
+      const SizedBox(height: 4),
+      Text('\$${remanente.toStringAsFixed(2)}',
+          style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800)),
+      Text('te sobró', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+    ]);
+  }
+}
+
