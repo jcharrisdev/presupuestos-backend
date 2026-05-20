@@ -9273,7 +9273,7 @@ Da tu análisis en máximo 180 palabras:
 Sin bullets, párrafos cortos, español panameño natural.`;
 
     const https = require('https');
-    const reqBody = JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 350,
+    const reqBody = JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
       messages: [{ role: 'user', content: prompt }] });
 
     let claudeStatus = 0;
