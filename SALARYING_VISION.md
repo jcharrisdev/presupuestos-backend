@@ -1,7 +1,7 @@
 # Salarying — Visión completa, flujo y arquitectura funcional
 
 > Documento de referencia para desarrollo. Todo cambio en la app debe estar alineado con esta visión.
-> Última actualización: 2026-05-18
+> Última actualización: 2026-05-20
 
 ---
 
@@ -446,6 +446,7 @@ GET https://presupuestos-backend-h3l6.onrender.com/logs?secret=salarying_logs_20
 - [x] Agregar gastos (fijo/variable/no presupuestado)
 - [x] Compromisos del mes (gastos fijos + deudas activas)
 - [x] Deudas (revolving + letras, estrategias, proyecciones)
+- [x] Edición completa de deudas — tasa de interés siempre editable
 - [x] Creación de deudas con dia_pago, dia_pago_2, mes_inicio_pago
 - [x] dia_pago_2 funcional en gastos fijos del perfil (2 eventos/mes en calendario)
 - [x] Categorías personalizadas con "Otro" y guardado para futuro
@@ -458,9 +459,14 @@ GET https://presupuestos-backend-h3l6.onrender.com/logs?secret=salarying_logs_20
 - [x] Scanner QR en AppBar global (EstadoAnual, MesDetalle, Perfil)
 - [x] Gastos reutilizables: expense_definitions + selector en AgregarGastoSheet
 - [x] Logs del servidor con auto-limpieza
-- [x] Deploy web en Vercel (con skip-waiting + no-cache headers)
+- [x] Deploy: build/web commiteado en git, servido por Render
 - [x] Backend en Render (Node.js + Express + MySQL Clever Cloud)
-- [x] CHECKLIST_ENTREGABLE.md con verificaciones pre-deploy
+- [x] **Vista quincenal**: día 1–14=Q1, día 16–31=Q2, día 15=ambas al 50% (badge ½ mes)
+- [x] **Compromisos quincenal**: gastos fijos + variables base, visible en _QuincenaCard
+- [x] **Gastos hormiga**: auto-detección no_presupuestado ≤ $25, badge 🐜 en resumen
+- [x] **Onboarding inclusivo**: "¿Cuánto recibes al mes?", default ingreso informal
+- [x] **Split puntual con email**: tipos partes iguales / por porcentaje, widget SplitSection reutilizable, disponible en gastos y facturas QR
+- [x] Estrategias deudas: avalanche/snowball con banner explicativo cuando son idénticas
 
 ### Pendiente — próximas fases
 
