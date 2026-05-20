@@ -301,100 +301,101 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             ),
             const SizedBox(height: 12),
 
-            if (!_esLetra) ...[
-              // ── Tasa anual ──────────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceAlt,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.border),
+            // ── Tasa de interés — siempre visible ───────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('TASA DE INTERÉS',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _tasaCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    suffixText: '% anual',
+                    labelText: 'Tasa de interés (TEA)',
+                    hintText: 'Ej: 24',
+                  ),
                 ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('INTERÉS Y PLAZO',
-                      style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _tasaCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: AppTheme.textPrimary),
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          suffixText: '% anual',
-                          labelText: 'Tasa de interés (TEA)',
-                          hintText: 'Ej: 24',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _plazoCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        style: const TextStyle(color: AppTheme.textPrimary),
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          suffixText: 'meses',
-                          labelText: 'Plazo restante',
-                          hintText: 'Ej: 36',
-                        ),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    const Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 13),
-                    const SizedBox(width: 6),
-                    Expanded(child: Text(_tasaHint(_tipo),
-                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
-                  ]),
-                  // ── Cuota calculada ────────────────────────────────────
-                  if (_cuotaCalculada > 0) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.calculate_outlined, color: AppTheme.primary, size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          const Text('Cuota mensual calculada',
-                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                          Text('\$ ${_cuotaCalculada.toStringAsFixed(2)}',
-                              style: const TextStyle(color: AppTheme.primary,
-                                  fontSize: 17, fontWeight: FontWeight.w700)),
-                        ])),
-                        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                          Text('Total: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0)).toStringAsFixed(2)}',
-                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-                          Text('Intereses: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0) - (double.tryParse(_pendienteCtrl.text.replaceAll(',', '')) ?? 0)).toStringAsFixed(2)}',
-                              style: const TextStyle(color: AppTheme.warning, fontSize: 10)),
-                        ]),
-                      ]),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                Row(children: [
+                  const Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 13),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(_tasaHint(_tipo),
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
                 ]),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _pagoMinCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: InputDecoration(
-                  prefixText: '\$ ',
-                  labelText: 'Pago mínimo mensual',
-                  hintText: _cuotaCalculada > 0
-                      ? _cuotaCalculada.toStringAsFixed(2)
-                      : 'Si ya conoces tu cuota exacta',
+              ]),
+            ),
+            const SizedBox(height: 12),
+
+            if (!_esLetra) ...[
+              // ── Plazo + pago mínimo (solo para deudas no letra) ─────────
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _plazoCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: const TextStyle(color: AppTheme.textPrimary),
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      suffixText: 'meses',
+                      labelText: 'Plazo restante',
+                      hintText: 'Ej: 36',
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _pagoMinCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(color: AppTheme.textPrimary),
+                    decoration: InputDecoration(
+                      prefixText: '\$ ',
+                      labelText: 'Pago mínimo',
+                      hintText: _cuotaCalculada > 0
+                          ? _cuotaCalculada.toStringAsFixed(2)
+                          : 'Ej: 250',
+                    ),
+                  ),
+                ),
+              ]),
+              if (_cuotaCalculada > 0) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.calculate_outlined, color: AppTheme.primary, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('Cuota calculada (PMT)',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                      Text('\$ ${_cuotaCalculada.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.primary,
+                              fontSize: 17, fontWeight: FontWeight.w700)),
+                    ])),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('Total: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0)).toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                      Text('Intereses: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0) - (double.tryParse(_pendienteCtrl.text.replaceAll(',', '')) ?? 0)).toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.warning, fontSize: 10)),
+                    ]),
+                  ]),
+                ),
+              ],
               const SizedBox(height: 16),
             ],
 
