@@ -9272,28 +9272,43 @@ Da tu análisis en máximo 180 palabras:
 
 Sin bullets, párrafos cortos, español panameño natural.`;
 
-    // Usar https nativo de Node — no depende de ESM/CJS de node-fetch
     const https = require('https');
-    const body = JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+    const reqBody = JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
       messages: [{ role: 'user', content: prompt }] });
+
+    let claudeStatus = 0;
     const data = await new Promise((resolve, reject) => {
       const req = https.request({
         hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body),
+        headers: { 'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(reqBody),
           'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      }, (res) => {
+      }, (httpRes) => {
+        claudeStatus = httpRes.statusCode;
         let raw = '';
-        res.on('data', chunk => raw += chunk);
-        res.on('end', () => {
+        httpRes.on('data', chunk => raw += chunk);
+        httpRes.on('end', () => {
           try { resolve(JSON.parse(raw)); }
-          catch (e) { reject(new Error('JSON parse error: ' + raw.slice(0, 100))); }
+          catch (e) { reject(new Error('parse: ' + raw.slice(0, 200))); }
         });
       });
       req.on('error', reject);
-      req.write(body);
+      req.write(reqBody);
       req.end();
     });
+
+    // Si Claude retornó error HTTP
+    if (claudeStatus >= 400) {
+      const detalle = data.error?.message || `HTTP ${claudeStatus}`;
+      console.error(`[consejero-ia] Claude error ${claudeStatus}: ${detalle}`);
+      return res.json({ disponible: false, razon: 'error_api', detalle });
+    }
+
     const texto = data.content?.[0]?.text || '';
+    if (!texto) {
+      return res.json({ disponible: false, razon: 'error_api', detalle: 'respuesta vacía de Claude' });
+    }
+
     const ahora = new Date();
     const hora  = `${ahora.getHours().toString().padStart(2,'0')}:${ahora.getMinutes().toString().padStart(2,'0')}`;
     res.json({
@@ -9304,7 +9319,10 @@ Sin bullets, párrafos cortos, español panameño natural.`;
       tokens_usados: data.usage?.output_tokens || 0,
       mes: month, mes_label: MESES[month], anio: year,
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[consejero-ia] error:', e.message);
+    res.json({ disponible: false, razon: 'error_api', detalle: e.message });
+  }
 });
 
 // GET /user/subcategorias?firebase_uid=&categoria=alimentacion
