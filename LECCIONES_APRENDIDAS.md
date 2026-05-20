@@ -270,6 +270,20 @@ No pasar al siguiente punto sin confirmar el anterior.
 
 ---
 
+---
+
+### L-19: Error enmascarado por bloque de guardia — se expone al quitar el bloqueo
+
+**Error:** La query `SELECT nombre FROM user_gastos_fijos` tenía un bug — la columna real es `descripcion`. Este error existía desde el inicio pero nunca se ejecutaba porque el endpoint moría antes en `if (!mesRow) return res.status(404)`. Al quitar esa dependencia, el código por fin llegó al query y explotó con `Unknown column 'nombre'` → 500.
+
+**Fix:** `SELECT descripcion AS nombre, monto_mensual AS monto FROM user_gastos_fijos`
+
+**Regla:** Cuando se elimina un bloque de guardia (un `if` que antes cortaba el flujo), leer TODO el código que viene después y verificar que es correcto. El código "muerto" puede tener bugs acumulados que nunca se vieron porque nunca se ejecutó.
+
+**Cómo detectar antes:** Al refactorizar un endpoint para hacerlo más permisivo, siempre leer el CREATE TABLE de cada tabla que se consulta y verificar que los nombres de columna en los SELECTs coinciden exactamente. `descripcion` ≠ `nombre`.
+
+---
+
 ## Patrones que funcionan bien (mantenerlos)
 
 - **Widget reutilizable**: cuando un feature se necesita en 2+ pantallas, extraer a `lib/widgets/financiero/`. Ejemplo: `SplitSection`.
