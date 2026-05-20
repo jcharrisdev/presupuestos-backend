@@ -939,9 +939,10 @@ class _TabQuincenasState extends State<_TabQuincenas> {
           if (_q2 != null) _QuincenaCard(data: _q2!, activa: esActual && !esQ1),
           const SizedBox(height: 20),
           const Text(
-            'Los gastos se asignan a cada quincena según la fecha en que los registraste.',
+            'Los gastos con fecha específica (día 1–14 o 16–31) aparecen solo en su quincena. '
+            'Los que no tienen fecha preferida (½ mes) se dividen entre ambas quincenas.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.5),
           ),
         ],
       ),
@@ -1056,16 +1057,32 @@ class _QuincenaCard extends StatelessWidget {
             child: Text('${registros.length} gastos registrados',
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
           ),
-          ...registros.take(5).map((r) => ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-            title: Text(r['nombre'] as String? ?? '—',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
-            subtitle: Text(r['categoria'] as String? ?? '',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-            trailing: Text('\$${_d(r['monto']).toStringAsFixed(2)}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-          )),
+          ...registros.take(5).map((r) {
+            final esMensual = r['es_mensual'] == true || r['es_mensual'] == 1;
+            return ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              title: Row(children: [
+                Expanded(child: Text(r['nombre'] as String? ?? '—',
+                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                if (esMensual)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppTheme.info.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppTheme.info.withValues(alpha: 0.3)),
+                    ),
+                    child: const Text('½ mes',
+                        style: TextStyle(color: AppTheme.info, fontSize: 9, fontWeight: FontWeight.w700)),
+                  ),
+              ]),
+              subtitle: Text(r['categoria'] as String? ?? '',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              trailing: Text('\$${_d(r['monto']).toStringAsFixed(2)}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+            );
+          }),
           if (registros.length > 5)
             Padding(
               padding: const EdgeInsets.only(left: 16, bottom: 8),
