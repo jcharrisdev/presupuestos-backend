@@ -165,7 +165,7 @@ class _HomeShellState extends State<HomeShell> {
         children: List.generate(screens.length, (i) =>
           _initializedTabs.contains(i) ? screens[i] : const SizedBox.shrink()),
       ),
-      floatingActionButton: _idx != 3 ? FloatingActionButton(
+      floatingActionButton: (_idx != 2 && _idx != 3) ? FloatingActionButton(
         heroTag: 'fab_global',
         backgroundColor: AppTheme.primary,
         foregroundColor: AppTheme.background,

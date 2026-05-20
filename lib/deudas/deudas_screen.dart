@@ -243,6 +243,17 @@ class _DeudasScreenState extends State<DeudasScreen>
                     _plan = null;
                   });
                 }),
+            onEditar: (deuda) => CrearDeudaSheet.show(context,
+                firebaseUid: widget.firebaseUid,
+                deudaExistente: deuda,
+                onCreada: () {
+                  _cargar();
+                  setState(() {
+                    _proyeccion = null;
+                    _simulador = null;
+                    _plan = null;
+                  });
+                }),
           ),
           _TabEstrategias(
             proyeccion: _proyeccion,
@@ -288,6 +299,7 @@ class _TabSituacion extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final Future<void> Function(int, String) onArchivar;
   final void Function(Map<String, dynamic>) onAbono;
+  final void Function(Map<String, dynamic>) onEditar;
 
   const _TabSituacion({
     required this.deudas,
@@ -298,6 +310,7 @@ class _TabSituacion extends StatelessWidget {
     required this.onRefresh,
     required this.onArchivar,
     required this.onAbono,
+    required this.onEditar,
   });
 
   double _d(dynamic v) {
@@ -416,6 +429,7 @@ class _TabSituacion extends StatelessWidget {
               onAbono: () => onAbono(d),
               onArchivar: () =>
                   onArchivar(d['id'] as int, d['nombre'] as String? ?? ''),
+              onEditar: () => onEditar(d),
             );
           }),
           const SizedBox(height: 80),
@@ -462,9 +476,13 @@ class _TabEstrategias extends StatelessWidget {
       );
     }
 
+    final trayectoria = proyeccion!['trayectoria_actual'] as Map<String, dynamic>?;
     final av = proyeccion!['avalanche'] as Map<String, dynamic>;
     final sw = proyeccion!['snowball'] as Map<String, dynamic>;
     final ahorroAv = _d(proyeccion!['ahorro_avalanche_vs_snowball']);
+    // Estrategias son idénticas cuando no hay pago extra (matemáticamente correcto)
+    final estrategiasIguales = (av['meses_totales'] == sw['meses_totales']) &&
+        (_d(av['total_intereses']) - _d(sw['total_intereses'])).abs() < 0.01;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -487,9 +505,10 @@ class _TabEstrategias extends StatelessWidget {
                 '\$${_d(proyeccion!['total_pago_minimo']).toStringAsFixed(2)}',
                 AppTheme.textPrimary),
             _InfoRow('Si sigues así, terminas en',
-                av['fecha_fin'] as String? ?? '—', AppTheme.textSecondary),
+                (trayectoria?['fecha_fin'] ?? av['fecha_fin']) as String? ?? '—',
+                AppTheme.textSecondary),
             _InfoRow('Total de intereses a pagar',
-                '\$${_d(av['total_intereses']).toStringAsFixed(2)}',
+                '\$${_d(trayectoria?['total_intereses'] ?? av['total_intereses']).toStringAsFixed(2)}',
                 AppTheme.warning),
           ]),
         ),
@@ -497,6 +516,30 @@ class _TabEstrategias extends StatelessWidget {
         const SizedBox(height: 24),
         _SeccionHeader('Compara las estrategias'),
         const SizedBox(height: 8),
+
+        if (estrategiasIguales) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.3)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.info_outline, color: AppTheme.info, size: 18),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Con solo los pagos mínimos ambas estrategias llegan al mismo resultado — '
+                  'la diferencia aparece cuando agregas dinero extra. '
+                  'Ve al Simulador para verlo en acción.',
+                  style: TextStyle(color: AppTheme.info, fontSize: 12, height: 1.4),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
 
         // Comparativa lado a lado
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -533,9 +576,9 @@ class _TabEstrategias extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppTheme.success.withOpacity(0.08),
+              color: AppTheme.success.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+              border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
             ),
             child: Row(children: [
               const Icon(Icons.info_outline, color: AppTheme.success, size: 18),
@@ -1327,12 +1370,14 @@ class _DeudaTile extends StatelessWidget {
   final Map<String, dynamic> deuda;
   final VoidCallback onAbono;
   final VoidCallback onArchivar;
+  final VoidCallback onEditar;
   final bool esMayorTasa;
   final bool infoIncompleta;
   const _DeudaTile(
       {required this.deuda,
       required this.onAbono,
       required this.onArchivar,
+      required this.onEditar,
       this.esMayorTasa = false,
       this.infoIncompleta = false});
 
@@ -1356,170 +1401,124 @@ class _DeudaTile extends StatelessWidget {
     final pct =
         montoTotal > 0 ? (montoPendiente / montoTotal).clamp(0.0, 1.0) : 0.0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: activa ? AppTheme.surface : AppTheme.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: activa
-                ? AppTheme.border
-                : AppTheme.border.withOpacity(0.4)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          _TipoIcon(tipo),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Row(children: [
-                Expanded(
-                  child: Text(nombre,
-                      style: TextStyle(
-                          color: activa
-                              ? AppTheme.textPrimary
-                              : AppTheme.textSecondary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
-                ),
-                if (esMayorTasa)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.danger.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                          color: AppTheme.danger.withOpacity(0.4)),
-                    ),
-                    child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bolt,
-                              color: AppTheme.danger, size: 11),
-                          SizedBox(width: 3),
-                          Text('Atacar primero',
-                              style: TextStyle(
-                                  color: AppTheme.danger,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700)),
-                        ]),
-                  ),
-              ]),
-              Row(children: [
-                _TipoChip(tipo),
-                if (infoIncompleta) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.warning.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppTheme.warning.withOpacity(0.4)),
-                    ),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.edit_outlined, color: AppTheme.warning, size: 10),
-                      SizedBox(width: 3),
-                      Text('Completar info', style: TextStyle(
-                          color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w700)),
-                    ]),
-                  ),
-                ],
-                if (!activa) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text('Saldada',
-                        style: TextStyle(
-                            color: AppTheme.success,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ]),
-            ]),
-          ),
-          Text('\$${montoPendiente.toStringAsFixed(2)}',
-              style: TextStyle(
-                  color: activa ? AppTheme.danger : AppTheme.textMuted,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800)),
-        ]),
-
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: pct,
-            backgroundColor: AppTheme.success.withOpacity(0.2),
-            valueColor: AlwaysStoppedAnimation(
-                activa ? AppTheme.danger : AppTheme.textMuted),
-            minHeight: 6,
-          ),
+    return GestureDetector(
+      onTap: activa ? onEditar : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: activa ? AppTheme.surface : AppTheme.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: activa ? AppTheme.border : AppTheme.border.withValues(alpha: 0.4)),
         ),
-        const SizedBox(height: 4),
-        Text(
-          '\$${montoPendiente.toStringAsFixed(2)} pendiente de '
-          '\$${montoTotal.toStringAsFixed(2)}  '
-          '(${(pct * 100).toStringAsFixed(0)}%)',
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
-        ),
-
-        if (pagoMinimo > 0 || tasa > 0 || fechaPago != null) ...[
-          const SizedBox(height: 10),
-          Wrap(spacing: 12, children: [
-            if (pagoMinimo > 0)
-              Text('Pago mínimo: \$${pagoMinimo.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 12)),
-            if (tasa > 0)
-              Text('Tasa: ${tasa.toStringAsFixed(1)}%/año',
-                  style: const TextStyle(
-                      color: AppTheme.warning, fontSize: 12)),
-            if (fechaPago != null)
-              Text('Próximo pago: $fechaPago',
-                  style: const TextStyle(
-                      color: AppTheme.info, fontSize: 12)),
-          ]),
-        ],
-
-        if (activa) ...[
-          const SizedBox(height: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── Header: ícono + nombre + monto ──
           Row(children: [
+            _TipoIcon(tipo),
+            const SizedBox(width: 10),
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onAbono,
-                icon: const Icon(Icons.payments_outlined, size: 15),
-                label: const Text('Registrar abono'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.success,
-                  side: const BorderSide(color: AppTheme.success),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                ),
-              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(nombre,
+                    style: TextStyle(
+                        color: activa ? AppTheme.textPrimary : AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  _TipoChip(tipo),
+                  if (esMayorTasa) ...[
+                    const SizedBox(width: 5),
+                    const _MiniTag(Icons.bolt, 'Atacar primero', AppTheme.danger),
+                  ],
+                  if (infoIncompleta) ...[
+                    const SizedBox(width: 5),
+                    _TappableMiniTag(
+                      icon: Icons.edit_outlined,
+                      label: 'Completar info',
+                      color: AppTheme.warning,
+                      onTap: onEditar,
+                    ),
+                  ],
+                  if (!activa) ...[
+                    const SizedBox(width: 5),
+                    const _MiniTag(Icons.check, 'Saldada', AppTheme.success),
+                  ],
+                ]),
+              ]),
             ),
             const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: onArchivar,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.textMuted,
-                side: const BorderSide(color: AppTheme.border),
-                padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              ),
-              child: const Text('Archivar'),
-            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('\$${montoPendiente.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      color: activa ? AppTheme.danger : AppTheme.textMuted,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800)),
+              if (tasa > 0)
+                Text('${tasa.toStringAsFixed(1)}% TEA',
+                    style: const TextStyle(color: AppTheme.warning, fontSize: 10)),
+            ]),
           ]),
-        ],
-      ]),
+
+          // ── Barra de progreso ──
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: pct,
+              backgroundColor: AppTheme.success.withValues(alpha: 0.15),
+              valueColor: AlwaysStoppedAnimation(
+                  activa ? AppTheme.danger.withValues(alpha: 0.6) : AppTheme.textMuted),
+              minHeight: 4,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Pendiente: \$${montoPendiente.toStringAsFixed(2)}',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+            if (pagoMinimo > 0)
+              Text('Cuota: \$${pagoMinimo.toStringAsFixed(2)}/mes',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+            if (fechaPago != null)
+              Text('Pago: $fechaPago',
+                  style: const TextStyle(color: AppTheme.info, fontSize: 10)),
+          ]),
+
+          // ── Acciones ──
+          if (activa) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onAbono,
+                  icon: const Icon(Icons.payments_outlined, size: 14),
+                  label: const Text('Abonar'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.success,
+                    side: const BorderSide(color: AppTheme.success),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _IconAction(
+                icon: Icons.edit_outlined,
+                color: AppTheme.primary,
+                tooltip: 'Editar',
+                onTap: onEditar,
+              ),
+              const SizedBox(width: 4),
+              _IconAction(
+                icon: Icons.archive_outlined,
+                color: AppTheme.textMuted,
+                tooltip: 'Archivar',
+                onTap: onArchivar,
+              ),
+            ]),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -1548,12 +1547,12 @@ class _DeudaTile extends StatelessWidget {
         color = AppTheme.textSecondary;
     }
     return Container(
-      width: 40,
-      height: 40,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8)),
-      child: Icon(icon, color: color, size: 20),
+      child: Icon(icon, color: color, size: 18),
     );
   }
 }
@@ -1585,4 +1584,87 @@ class _TipoChip extends StatelessWidget {
               fontWeight: FontWeight.w500)),
     );
   }
+}
+
+class _MiniTag extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _MiniTag(this.icon, this.label, this.color);
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color, size: 9),
+          const SizedBox(width: 3),
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 9, fontWeight: FontWeight.w700)),
+        ]),
+      );
+}
+
+class _TappableMiniTag extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _TappableMiniTag(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.onTap});
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: color, size: 9),
+            const SizedBox(width: 3),
+            Text(label,
+                style: TextStyle(
+                    color: color, fontSize: 9, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      );
+}
+
+class _IconAction extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _IconAction(
+      {required this.icon,
+      required this.color,
+      required this.tooltip,
+      required this.onTap});
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withValues(alpha: 0.25)),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+        ),
+      );
 }

@@ -9,6 +9,7 @@ class CrearDeudaSheet {
     BuildContext context, {
     required String firebaseUid,
     required VoidCallback onCreada,
+    Map<String, dynamic>? deudaExistente,
   }) {
     showModalBottomSheet(
       context: context,
@@ -19,6 +20,7 @@ class CrearDeudaSheet {
       builder: (_) => _CrearDeudaForm(
         firebaseUid: firebaseUid,
         onCreada: onCreada,
+        deudaExistente: deudaExistente,
       ),
     );
   }
@@ -27,7 +29,12 @@ class CrearDeudaSheet {
 class _CrearDeudaForm extends StatefulWidget {
   final String firebaseUid;
   final VoidCallback onCreada;
-  const _CrearDeudaForm({required this.firebaseUid, required this.onCreada});
+  final Map<String, dynamic>? deudaExistente;
+  const _CrearDeudaForm({
+    required this.firebaseUid,
+    required this.onCreada,
+    this.deudaExistente,
+  });
 
   @override
   State<_CrearDeudaForm> createState() => _CrearDeudaFormState();
@@ -37,12 +44,13 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
   final _nombreCtrl      = TextEditingController();
   final _totalCtrl       = TextEditingController();
   final _pendienteCtrl   = TextEditingController();
-  final _tasaCtrl        = TextEditingController(); // % anual (TEA)
-  final _plazoCtrl       = TextEditingController(); // meses
+  final _tasaCtrl        = TextEditingController();
+  final _plazoCtrl       = TextEditingController();
   final _pagoMinCtrl     = TextEditingController();
   final _cuotaFijaCtrl   = TextEditingController();
   final _numCuotasCtrl   = TextEditingController();
   final _acreedorCtrl    = TextEditingController();
+  final _notasCtrl       = TextEditingController();
 
   String _tipo           = 'personal';
   bool _esLetra          = false;
@@ -51,6 +59,8 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
   int _mesInicioPago     = DateTime.now().month;
   DateTime? _fechaProximoPago;
   bool _guardando        = false;
+
+  bool get _modoEdicion => widget.deudaExistente != null;
 
   static const _tipos = [
     {'value': 'tarjeta_credito', 'label': 'Tarjeta'},
@@ -67,6 +77,46 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final d = widget.deudaExistente;
+    if (d != null) {
+      _nombreCtrl.text    = d['nombre'] as String? ?? '';
+      _tipo               = d['tipo'] as String? ?? 'personal';
+      _esLetra            = (d['es_letra'] as int? ?? 0) == 1;
+      _totalCtrl.text     = _fmt(d['monto_total']);
+      _pendienteCtrl.text = _fmt(d['monto_pendiente']);
+      _tasaCtrl.text      = _fmt(d['tasa_interes']);
+      _pagoMinCtrl.text   = _fmt(d['pago_minimo']);
+      _cuotaFijaCtrl.text = _fmt(d['cuota_fija']);
+      _notasCtrl.text     = d['notas'] as String? ?? '';
+      _acreedorCtrl.text  = d['nombre_acreedor'] as String? ?? '';
+      final numCuotas = d['num_cuotas_total'];
+      if (numCuotas != null) _numCuotasCtrl.text = numCuotas.toString();
+      _mesInicioPago = (d['mes_inicio_pago'] as int?) ?? DateTime.now().month;
+      final fechaStr = d['fecha_proximo_pago'] as String?;
+      if (fechaStr != null && fechaStr.isNotEmpty) {
+        _fechaProximoPago = DateTime.tryParse(fechaStr.substring(0, 10));
+      }
+    }
+  }
+
+  String _fmt(dynamic v) {
+    if (v == null) return '';
+    if (v is num) {
+      final d = v.toDouble();
+      if (d == 0) return '';
+      return d % 1 == 0 ? d.toInt().toString() : d.toString();
+    }
+    if (v is String) {
+      final parsed = double.tryParse(v);
+      if (parsed == null || parsed == 0) return '';
+      return parsed % 1 == 0 ? parsed.toInt().toString() : v;
+    }
+    return '';
+  }
+
+  @override
   void dispose() {
     _nombreCtrl.dispose();
     _totalCtrl.dispose();
@@ -77,6 +127,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
     _cuotaFijaCtrl.dispose();
     _numCuotasCtrl.dispose();
     _acreedorCtrl.dispose();
+    _notasCtrl.dispose();
     super.dispose();
   }
 
@@ -124,9 +175,11 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                 decoration: BoxDecoration(color: AppTheme.border,
                     borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
-            const Text('Nueva deuda',
-                style: TextStyle(color: AppTheme.textPrimary,
-                    fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(
+              _modoEdicion ? 'Editar deuda' : 'Nueva deuda',
+              style: const TextStyle(color: AppTheme.textPrimary,
+                  fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 20),
 
             // ── Nombre ──────────────────────────────────────────────────────
@@ -285,7 +338,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                         onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           suffixText: 'meses',
-                          labelText: 'Plazo',
+                          labelText: 'Plazo restante',
                           hintText: 'Ej: 36',
                         ),
                       ),
@@ -425,6 +478,17 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             ),
             const SizedBox(height: 16),
 
+            // ── Notas ───────────────────────────────────────────────────────
+            TextField(
+              controller: _notasCtrl,
+              maxLines: 2,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: const InputDecoration(
+                  labelText: 'Notas (opcional)',
+                  hintText: 'Ej: tasa especial hasta dic 2025, negociar refinanciamiento…'),
+            ),
+            const SizedBox(height: 16),
+
             // ── Fecha próximo pago ──────────────────────────────────────────
             GestureDetector(
               onTap: _seleccionarFecha,
@@ -463,7 +527,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                     ? const SizedBox(height: 18, width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2,
                             color: AppTheme.background))
-                    : const Text('Guardar deuda'),
+                    : Text(_modoEdicion ? 'Guardar cambios' : 'Guardar deuda'),
               ),
             ),
           ],
@@ -475,8 +539,8 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
   Future<void> _seleccionarFecha() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 7)),
-      firstDate: DateTime.now(),
+      initialDate: _fechaProximoPago ?? DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
@@ -520,6 +584,9 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
         'mes_inicio_pago': _mesInicioPago,
       };
 
+      final notas = _notasCtrl.text.trim();
+      if (notas.isNotEmpty) body['notas'] = notas;
+
       if (_esLetra) {
         final cuota = double.tryParse(_cuotaFijaCtrl.text);
         if (cuota != null && cuota > 0) body['cuota_fija'] = cuota;
@@ -531,7 +598,6 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
         final tasa  = double.tryParse(_tasaCtrl.text);
         final plazo = int.tryParse(_plazoCtrl.text) ?? 0;
         if (tasa != null && tasa > 0) body['tasa_interes'] = tasa;
-        // pago_minimo: manual > calculado PMT
         final pagoMinManual = double.tryParse(_pagoMinCtrl.text);
         final cuotaPmt = (tasa != null && tasa > 0 && plazo > 0)
             ? _pmt(pendiente, tasa, plazo)
@@ -550,7 +616,12 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             _fechaProximoPago!.toIso8601String().substring(0, 10);
       }
 
-      await DeudasService.crear(body);
+      if (_modoEdicion) {
+        await DeudasService.editar(widget.deudaExistente!['id'] as int, body);
+      } else {
+        await DeudasService.crear(body);
+      }
+
       if (mounted) {
         Navigator.pop(context);
         widget.onCreada();
