@@ -9240,7 +9240,7 @@ app.get('/user/consejero-ia', async (req, res) => {
       `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
     if (!income) return res.json({ disponible: false, razon: 'sin_perfil' });
     const [gastosFijos] = await db.execute(
-      `SELECT nombre, monto_mensual FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
+      `SELECT descripcion AS nombre, monto_mensual FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
     const [deudas] = await db.execute(
       `SELECT nombre, tasa_interes, monto_pendiente, monto_total, pago_minimo, cuota_fija, num_cuotas_total, num_pagos_realizados
        FROM deudas WHERE firebase_uid = ? AND activa = 1 ORDER BY tasa_interes DESC`, [firebase_uid]);
