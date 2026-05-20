@@ -514,7 +514,29 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
 
   Widget _buildConsejeroIA(Map<String, dynamic> c) {
     final disponible = c['disponible'] as bool? ?? false;
-    if (!disponible) return const SizedBox.shrink();
+    if (!disponible) {
+      final razon = c['razon'] as String? ?? 'desconocido';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(children: [
+          const Icon(Icons.auto_awesome, color: AppTheme.textMuted, size: 16),
+          const SizedBox(width: 10),
+          Expanded(child: Text(
+            razon == 'sin_api_key'
+                ? 'Análisis IA: API key no configurada en el servidor.'
+                : razon == 'sin_perfil'
+                    ? 'Análisis IA: completa tu perfil financiero primero.'
+                    : 'Análisis IA no disponible ($razon)',
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+          )),
+        ]),
+      );
+    }
     final analisis = c['analisis'] as String? ?? '';
     if (analisis.isEmpty) return const SizedBox.shrink();
     final mesLabel = c['mes_label'] as String? ?? '';
