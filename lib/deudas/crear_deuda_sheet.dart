@@ -588,17 +588,22 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
       final notas = _notasCtrl.text.trim();
       if (notas.isNotEmpty) body['notas'] = notas;
 
+      // Tasa siempre se guarda independientemente del tipo de deuda
+      final tasa = double.tryParse(_tasaCtrl.text);
+      if (tasa != null && tasa > 0) body['tasa_interes'] = tasa;
+
       if (_esLetra) {
         final cuota = double.tryParse(_cuotaFijaCtrl.text);
-        if (cuota != null && cuota > 0) body['cuota_fija'] = cuota;
+        if (cuota != null && cuota > 0) {
+          body['cuota_fija'] = cuota;
+          body['pago_minimo'] = double.parse(cuota.toStringAsFixed(2));
+        }
         final numCuotas = int.tryParse(_numCuotasCtrl.text);
         if (numCuotas != null && numCuotas > 0) body['num_cuotas_total'] = numCuotas;
         final acreedor = _acreedorCtrl.text.trim();
         if (acreedor.isNotEmpty) body['nombre_acreedor'] = acreedor;
       } else {
-        final tasa  = double.tryParse(_tasaCtrl.text);
         final plazo = int.tryParse(_plazoCtrl.text) ?? 0;
-        if (tasa != null && tasa > 0) body['tasa_interes'] = tasa;
         final pagoMinManual = double.tryParse(_pagoMinCtrl.text);
         final cuotaPmt = (tasa != null && tasa > 0 && plazo > 0)
             ? _pmt(pendiente, tasa, plazo)
