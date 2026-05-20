@@ -179,6 +179,67 @@ res.json({ resumen: { hormiga_count: hormigaRegistros.length } });
 
 ---
 
+---
+
+### L-15: `new Date(fecha).getUTCDate()` — bug de timezone en Node.js con MySQL2
+
+**Error:** Se usó `new Date(r.fecha).getUTCDate()` para extraer el día de una fecha. MySQL2 devuelve columnas `DATE` como objetos JavaScript Date creados en hora local del servidor. Si el servidor Render no está en UTC, `getUTCDate()` puede devolver el día anterior (ej: día 15 → 14), haciendo que el filtro de quincena fuera incorrecto. Los gastos del día 15 no aparecían en Q2.
+
+**Causa raíz:** `getUTCDate()` lee en UTC, pero el objeto Date fue creado con hora local del servidor. Con timezone UTC+X, medianoche local = hora anterior en UTC = día anterior.
+
+**Fix aplicado:** Usar `DAY(rg.fecha)` directamente en el `SELECT` SQL y leer `r.dia_fecha` en JavaScript. MySQL calcula el día en el contexto de la base de datos, sin ningún parsing JS.
+```javascript
+// MAL — bug de timezone
+const d = new Date(r.fecha).getUTCDate();
+
+// BIEN — MySQL extrae el día directamente
+SELECT rg.*, DAY(rg.fecha) AS dia_fecha FROM registros_gasto rg ...
+const d = Number(r.dia_fecha);
+```
+
+**Regla:** Nunca usar `new Date(mysqlDate).getUTCDate()` para comparar días. Siempre extraer el día en SQL con `DAY(fecha)` o `DAYOFMONTH(fecha)`. Aplica también a `MONTH()`, `YEAR()`, `HOUR()`.
+
+---
+
+### L-16: Pantalla vacía sin mensaje de error — imposible diagnosticar
+
+**Error:** Cuando el endpoint `/user/quincena/:anio/:mes/:num` devolvía 404 (mes sin estado financiero) o 500 (error JS), el Flutter atrapaba silenciosamente con `catch (_) {}` y dejaba `_q1 = null`. La vista mostraba una pantalla completamente vacía sin ninguna indicación de qué falló. El usuario interpretaba que sus datos no existían.
+
+**Causa raíz:** Manejo de errores demasiado silencioso. `catch (_)` descarta toda información útil.
+
+**Fix aplicado:**
+- Capturar el mensaje de error del API (`jsonDecode(r1.body)['error']`)
+- Mostrar un widget explicativo cuando `statusCode != 200`
+- Botón "Reintentar" visible
+- Mensaje específico: "Este mes no tiene estado financiero generado aún. Ve a Estado y genera el estado anual."
+
+**Regla:** Todo estado de carga/error en Flutter debe tener tres variantes visuales: loading, success, error. Nunca usar `catch (_) {}` que descarte errores en vistas que el usuario ve directamente. El error visible es siempre mejor que el silencio.
+
+---
+
+### L-17: Múltiples fixes acumulados sobre el mismo bug — efecto "Whack-a-Mole"
+
+**Situación:** El bug de "vista quincenal vacía" recibió 5 fixes distintos en la misma sesión:
+1. Fecha por defecto día 15 en meses pasados
+2. Migración día 1 → día 15 (solo día 1)
+3. Lógica de día 15 = ambas quincenas en backend JS
+4. `compromisos_quincenal` no renderizado en Flutter
+5. `DAY()` SQL en vez de `new Date().getUTCDate()`
+
+Solo el fix 4 y el fix 5 eran el problema real. Los fixes 1, 2, 3 atacaban síntomas secundarios.
+
+**Causa raíz:** Se empezó a implementar soluciones antes de diagnosticar completamente la causa raíz. Cada fix nuevo creaba la ilusión de progreso sin resolver el problema core.
+
+**Regla:** Antes de escribir código para un bug reportado como "no veo X", hacer estas preguntas en orden:
+1. ¿El API devuelve datos? (revisar con logs del servidor)
+2. ¿El Flutter recibe y procesa esos datos? (trazar el response hasta el widget)
+3. ¿Los datos en BD tienen los valores esperados?
+4. Solo entonces: ¿hay un bug de lógica?
+
+No pasar al siguiente punto sin confirmar el anterior.
+
+---
+
 ## Patrones que funcionan bien (mantenerlos)
 
 - **Widget reutilizable**: cuando un feature se necesita en 2+ pantallas, extraer a `lib/widgets/financiero/`. Ejemplo: `SplitSection`.
