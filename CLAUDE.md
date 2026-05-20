@@ -158,6 +158,22 @@ server_logs                 → logs TTL 60 min
 
 ---
 
+## Proceso obligatorio antes de cualquier cambio de código
+
+```
+1. ENTENDER   — ¿Qué ve el usuario? ¿Qué esperaba? ¿En qué pantalla exacta?
+2. TRAZAR     — Flujo completo: Flutter widget → servicio → API endpoint → BD → respuesta → widget que renderiza
+3. LEER       — Leer el código actual de cada archivo en el flujo. No asumir.
+4. PREGUNTAR  — Si hay dudas, preguntar al usuario ANTES de codear.
+5. PROPONER   — Explicar el diagnóstico y el plan. Esperar confirmación si el cambio es grande.
+6. IMPLEMENTAR — Hacer el cambio contemplando: UI + backend + BD + migraciones + build + commit + push + deploy
+7. VERIFICAR  — Releer el flujo con el código nuevo. ¿Hay algo que olvidé?
+```
+
+Cada deploy incorrecto cuesta tiempo y dinero real. Una pregunta antes de codear vale más que 5 fixes.
+
+---
+
 ## Antes de empezar a codear en cualquier sesión
 
 1. Leer este archivo

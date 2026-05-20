@@ -240,6 +240,36 @@ No pasar al siguiente punto sin confirmar el anterior.
 
 ---
 
+---
+
+### L-18: Proceso de cambios — regla de oro (no negociable)
+
+**Situación:** Múltiples fixes sucesivos sobre el mismo problema sin resolver el issue real, causando frustración y desperdicio de tiempo y dinero del usuario.
+
+**Regla obligatoria antes de escribir cualquier línea de código:**
+
+```
+1. ENTENDER — Leer el reporte del usuario. ¿Qué ve exactamente? ¿Qué esperaba ver?
+2. TRAZAR — Seguir el flujo completo: Flutter → API → BD → respuesta → widget.
+             Identificar TODOS los archivos impactados.
+3. VERIFICAR — Leer el código actual de cada archivo impactado. No asumir.
+4. DUDAR — Si algo no está claro, PREGUNTAR antes de codear. Una pregunta ahorra 5 fixes.
+5. PROPONER — Explicar el diagnóstico y la solución antes de implementar.
+6. IMPLEMENTAR — Solo después de los pasos anteriores, hacer el cambio contemplando
+                 TODO lo que impacta (UI + backend + BD + migraciones).
+7. VERIFICAR — Trazar de nuevo el flujo completo con el código nuevo antes de hacer push.
+```
+
+**Lo que nunca se debe hacer:**
+- Hacer un fix parcial (ej: solo el backend sin el frontend)
+- Hacer un fix sin leer el código que está alrededor
+- Asumir que "este cambio pequeño no rompe nada"
+- Hacer 5 deploys intentando adivinar el error
+
+**Why:** Cada deploy incorrecto consume tiempo del usuario y dinero real. Un fix sin diagnóstico completo muy probablemente agrega un bug nuevo.
+
+---
+
 ## Patrones que funcionan bien (mantenerlos)
 
 - **Widget reutilizable**: cuando un feature se necesita en 2+ pantallas, extraer a `lib/widgets/financiero/`. Ejemplo: `SplitSection`.

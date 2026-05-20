@@ -9166,7 +9166,7 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     const totalNoPres= registros.filter(r => r.tipo === 'no_presupuestado').reduce((s, r) => s + Number(r.monto), 0);
     const totalGasto = totalFijos + totalVar + totalNoPres;
     const [compFijos] = await db.execute(
-      `SELECT nombre, monto_mensual AS monto FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
+      `SELECT descripcion AS nombre, monto_mensual AS monto FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
       [firebase_uid]);
     const [compVariables] = await db.execute(
       `SELECT nombre, monto_estimado AS monto FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`,
