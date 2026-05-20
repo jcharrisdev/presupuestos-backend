@@ -9131,12 +9131,15 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   const esQ1 = Number(num) === 1;
   try {
+    // Ingreso: usar meses_financieros si existe, si no user_income. No bloquear si no hay estado anual.
     const [[mesRow]] = await db.execute(
-      `SELECT * FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      `SELECT ingreso_estimado FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
       [firebase_uid, anio, mes]);
-    if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado' });
+    const [[income]] = await db.execute(
+      `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    const ingresoMensual = mesRow ? Number(mesRow.ingreso_estimado) : (income ? Number(income.ingreso_neto_mensual) : 0);
 
-    // Usar DAY() en SQL para evitar bugs de timezone con Date de JS.
+    // Registros directo por anio+mes, sin depender de mes_id ni de que exista el estado anual.
     // Día 15 → ambas quincenas al 50%. Día 1-14 → solo Q1. Día 16-31 → solo Q2.
     const filtroSQL = esQ1
       ? `(DAY(rg.fecha) <= 15)`
@@ -9144,9 +9147,9 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
 
     const [registrosRaw] = await db.execute(
       `SELECT rg.*, DAY(rg.fecha) AS dia_fecha FROM registros_gasto rg
-       WHERE rg.firebase_uid = ? AND rg.mes_id = ? AND ${filtroSQL}
+       WHERE rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ? AND ${filtroSQL}
        ORDER BY rg.fecha DESC`,
-      [firebase_uid, mesRow.id]);
+      [firebase_uid, anio, mes]);
 
     const registros = registrosRaw.map(r => {
       const esMensual = Number(r.dia_fecha) === 15;
@@ -9157,7 +9160,7 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
       };
     });
 
-    const ingresoQ   = Number(mesRow.ingreso_estimado) / 2;
+    const ingresoQ = ingresoMensual / 2;
     const totalFijos = registros.filter(r => r.tipo === 'fijo').reduce((s, r) => s + Number(r.monto), 0);
     const totalVar   = registros.filter(r => r.tipo === 'variable').reduce((s, r) => s + Number(r.monto), 0);
     const totalNoPres= registros.filter(r => r.tipo === 'no_presupuestado').reduce((s, r) => s + Number(r.monto), 0);

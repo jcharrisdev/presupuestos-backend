@@ -941,15 +941,11 @@ class _TabQuincenasState extends State<_TabQuincenas> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.info_outline, color: AppTheme.warning, size: 36),
+            const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 36),
             const SizedBox(height: 12),
-            const Text('Este mes no tiene estado financiero generado aún.',
+            const Text('No se pudo cargar la vista quincenal.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
-            const SizedBox(height: 8),
-            const Text('Ve a la pantalla Estado y genera el estado anual para poder ver la vista quincenal.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.5)),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _cargar,
