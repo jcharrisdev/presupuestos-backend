@@ -14,7 +14,14 @@ import 'widgets/ayuda_sheet.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
-  const EstadoFinancieroAnualScreen({Key? key, required this.firebaseUid}) : super(key: key);
+  final String periodoInicial;
+  final void Function(String)? onPeriodoChanged;
+  const EstadoFinancieroAnualScreen({
+    Key? key,
+    required this.firebaseUid,
+    this.periodoInicial = 'mensual',
+    this.onPeriodoChanged,
+  }) : super(key: key);
 
   @override
   State<EstadoFinancieroAnualScreen> createState() => _EstadoFinancieroAnualScreenState();
@@ -29,7 +36,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   bool _mesesExpanded = false;
   int _alertasCount = 0;
   Map<int, Map<String, dynamic>> _alertasResumen = {};
-  String _vista = 'mensual'; // 'mensual' | 'quincenal' | 'anual'
+  late String _vista; // 'mensual' | 'quincenal' | 'anual'
   Map<String, dynamic>? _consejero;
   Map<String, dynamic>? _comparativa;
   Map<String, dynamic>? _consejeroIA;
@@ -41,6 +48,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   @override
   void initState() {
     super.initState();
+    _vista = widget.periodoInicial;
     _cargar();
   }
 
@@ -192,6 +200,11 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     ),
   );
 
+  void _cambiarVista(String v) {
+    setState(() => _vista = v);
+    if (v != 'anual') widget.onPeriodoChanged?.call(v);
+  }
+
   Widget _buildBody() {
     final ea = _data!['estado_anual'] as Map<String, dynamic>;
     final meses = (_data!['meses'] as List).cast<Map<String, dynamic>>();
@@ -211,11 +224,11 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         ],
         // Toggle de vista
         Row(children: [
-          _VistaChip('Quincenal', 'quincenal', _vista, (v) => setState(() => _vista = v)),
+          _VistaChip('Quincenal', 'quincenal', _vista, _cambiarVista),
           const SizedBox(width: 8),
-          _VistaChip('Mensual',   'mensual',   _vista, (v) => setState(() => _vista = v)),
+          _VistaChip('Mensual',   'mensual',   _vista, _cambiarVista),
           const SizedBox(width: 8),
-          _VistaChip('Anual',     'anual',     _vista, (v) => setState(() => _vista = v)),
+          _VistaChip('Anual',     'anual',     _vista, _cambiarVista),
         ]),
         const SizedBox(height: 12),
         _CardAnual(ea: ea, anio: _anio, vista: _vista,

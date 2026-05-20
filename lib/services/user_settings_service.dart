@@ -13,12 +13,18 @@ class UserSettingsService {
   static Future<bool> setModoNegocio(String uid, bool activo) async {
     try {
       final res = await ApiClient.patch('/user/settings', {
-        'firebase_uid': uid,
-        'modo_negocio': activo ? 1 : 0,
+        'firebase_uid': uid, 'modo_negocio': activo ? 1 : 0,
       });
       return res.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+    } catch (_) { return false; }
+  }
+
+  static Future<bool> setPeriodo(String uid, String periodo) async {
+    try {
+      final res = await ApiClient.patch('/user/settings', {
+        'firebase_uid': uid, 'periodo_preferido': periodo,
+      });
+      return res.statusCode == 200;
+    } catch (_) { return false; }
   }
 }

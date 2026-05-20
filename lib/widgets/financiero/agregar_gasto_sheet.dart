@@ -255,8 +255,21 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                 child: Row(children: [
                   const Icon(Icons.calendar_today, color: AppTheme.textSecondary, size: 16),
                   const SizedBox(width: 10),
-                  Text(DateFormat('dd MMM yyyy', 'es').format(_fecha),
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+                  Expanded(
+                    child: Text(DateFormat('dd MMM yyyy', 'es').format(_fecha),
+                        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _fecha.day <= 15 ? 'Q1 · 1–15' : 'Q2 · 16–fin',
+                      style: const TextStyle(color: AppTheme.primary, fontSize: 10, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ]),
               ),
             ),

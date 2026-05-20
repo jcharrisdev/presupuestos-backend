@@ -53,7 +53,7 @@ class _DeudasScreenState extends State<DeudasScreen>
   void _onTabChanged(int i) {
     if (i == 1 && _proyeccion == null) _cargarProyeccion();
     if (i == 2 && _simulador == null) _cargarSimulador();
-    if (i == 3 && _plan == null) _cargarPlan();
+    if (i == 3) { _plan = null; _cargarPlan(); } // siempre recarga al abrir Mi Plan
   }
 
   Future<void> _cargar() async {
@@ -254,6 +254,7 @@ class _DeudasScreenState extends State<DeudasScreen>
             loading: _loadingSim,
             extraMensual: _extraMensual,
             estrategia: _estrategia,
+            deudas: _deudas,
             onChanged: (extra, est) {
               setState(() {
                 _extraMensual = extra;
@@ -335,6 +336,10 @@ class _TabSituacion extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── PRÓXIMA ACCIÓN ─────────────────────────────────────────────
+          _ProximaAccion(deudas: deudas, totalPagoMinimo: totalPagoMinimo),
+          const SizedBox(height: 12),
+
           // Resumen
           Container(
             padding: const EdgeInsets.all(16),
@@ -646,12 +651,14 @@ class _TabSimulador extends StatefulWidget {
   final bool loading;
   final double extraMensual;
   final String estrategia;
+  final List<dynamic> deudas;
   final void Function(double, String) onChanged;
   const _TabSimulador({
     required this.simulador,
     required this.loading,
     required this.extraMensual,
     required this.estrategia,
+    required this.deudas,
     required this.onChanged,
   });
 
@@ -771,7 +778,41 @@ class _TabSimuladorState extends State<_TabSimulador> {
               child: Text('No tienes deudas activas',
                   style: TextStyle(color: AppTheme.textSecondary)))
         else ...[
-          _SeccionHeader('Resultado'),
+          // Deuda objetivo — prominente y claro
+          if (deudaObjetivo != null) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.danger.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('DÓNDE VA EL DINERO EXTRA', style: TextStyle(
+                    color: AppTheme.danger, fontSize: 10,
+                    fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const Icon(Icons.bolt, color: AppTheme.danger, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    '\$${_local.toStringAsFixed(0)}/mes extra → "${deudaObjetivo['nombre']}"',
+                    style: const TextStyle(color: AppTheme.textPrimary,
+                        fontSize: 14, fontWeight: FontWeight.w700),
+                  )),
+                ]),
+                const SizedBox(height: 4),
+                Text(
+                  _estrategiaLocal == 'avalanche'
+                      ? 'Estrategia Avalanche: se ataca primero la deuda con mayor tasa de interés'
+                      : 'Estrategia Snowball: se ataca primero la deuda con menor saldo',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 12),
+          ],
+          _SeccionHeader('QUÉ GANÁS CON ESTE EXTRA'),
           const SizedBox(height: 8),
 
           Row(children: [
@@ -1168,6 +1209,80 @@ class _TabPlan extends StatelessWidget {
       ]),
     );
   }
+}
+
+// ── Próxima Acción ─────────────────────────────────────────────────────────────
+
+class _ProximaAccion extends StatelessWidget {
+  final List<dynamic> deudas;
+  final double totalPagoMinimo;
+  const _ProximaAccion({required this.deudas, required this.totalPagoMinimo});
+
+  double _d(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activas = deudas.where((d) => (d as Map)['activa'] == 1).toList();
+    if (activas.isEmpty) return const SizedBox.shrink();
+
+    // Deudas ya vienen ordenadas por tasa DESC
+    final principal = activas.first as Map<String, dynamic>;
+    final nombre = principal['nombre'] as String? ?? '—';
+    final tasa   = _d(principal['tasa_interes']);
+    final pagoMin = _d(principal['pago_minimo']);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4), width: 1.5),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.bolt, color: AppTheme.primary, size: 15),
+          SizedBox(width: 6),
+          Text('PRÓXIMA ACCIÓN', style: TextStyle(
+              color: AppTheme.primary, fontSize: 10,
+              fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+        ]),
+        const SizedBox(height: 10),
+        _paso(Icons.check_box_outline_blank, AppTheme.textSecondary,
+            totalPagoMinimo > 0
+                ? 'Paga el mínimo en todas tus deudas (\$${totalPagoMinimo.toStringAsFixed(2)}/mes en total)'
+                : 'Paga el mínimo en todas tus deudas'),
+        const SizedBox(height: 6),
+        _paso(Icons.bolt, AppTheme.danger,
+            'Todo dinero extra → "$nombre" (${tasa.toStringAsFixed(0)}% TEA — la que más te cuesta)'),
+        const SizedBox(height: 6),
+        _paso(Icons.block, AppTheme.warning,
+            'No adquieras deuda nueva mientras esto esté pendiente'),
+        if (pagoMin > 0) ...[
+          const SizedBox(height: 8),
+          const Divider(color: AppTheme.border, height: 1),
+          const SizedBox(height: 8),
+          Text(
+            'Cada \$1 extra que pagues a "$nombre" reduce drásticamente los intereses totales.',
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _paso(IconData icon, Color color, String texto) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, color: color, size: 14),
+      const SizedBox(width: 8),
+      Expanded(child: Text(texto,
+          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12, height: 1.4))),
+    ],
+  );
 }
 
 // ── Widgets auxiliares compartidos ────────────────────────────────────────────

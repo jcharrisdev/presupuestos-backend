@@ -548,10 +548,12 @@ pool.getConnection(async (err, conn) => {
   // Migración: configuración de usuario (modo_negocio, futuras preferencias)
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS user_settings (
-      firebase_uid  VARCHAR(255) PRIMARY KEY,
-      modo_negocio  TINYINT     NOT NULL DEFAULT 0,
-      updated_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      firebase_uid      VARCHAR(255) PRIMARY KEY,
+      modo_negocio      TINYINT     NOT NULL DEFAULT 0,
+      periodo_preferido ENUM('mensual','quincenal') DEFAULT 'mensual',
+      updated_at        TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`);
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS periodo_preferido ENUM('mensual','quincenal') DEFAULT 'mensual'`).catch(()=>{});
     console.log('✅ Migración user_settings OK');
   } catch (e) {
     if (!e.message.includes('already exists')) {
@@ -6214,9 +6216,12 @@ app.get('/user/settings', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[row]] = await db.execute(
-      `SELECT modo_negocio FROM user_settings WHERE firebase_uid = ?`, [firebase_uid]
+      `SELECT modo_negocio, periodo_preferido FROM user_settings WHERE firebase_uid = ?`, [firebase_uid]
     );
-    res.json({ modo_negocio: row ? Number(row.modo_negocio) : 0 });
+    res.json({
+      modo_negocio:      row ? Number(row.modo_negocio) : 0,
+      periodo_preferido: row?.periodo_preferido || 'mensual',
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -6224,17 +6229,19 @@ app.get('/user/settings', async (req, res) => {
 
 // PATCH /user/settings — actualizar configuración del usuario
 app.patch('/user/settings', async (req, res) => {
-  const { firebase_uid, modo_negocio } = req.body;
+  const { firebase_uid, modo_negocio, periodo_preferido } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // Asegura que existe el registro
     await db.execute(
-      `INSERT INTO user_settings (firebase_uid, modo_negocio)
-       VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE modo_negocio = VALUES(modo_negocio)`,
-      [firebase_uid, modo_negocio ? 1 : 0]
-    );
-    _logInfo('/user/settings', `modo_negocio → ${modo_negocio ? 1 : 0}`, firebase_uid);
-    res.json({ modo_negocio: modo_negocio ? 1 : 0 });
+      `INSERT IGNORE INTO user_settings (firebase_uid) VALUES (?)`, [firebase_uid]);
+    if (modo_negocio !== undefined)
+      await db.execute(`UPDATE user_settings SET modo_negocio=? WHERE firebase_uid=?`,
+        [modo_negocio ? 1 : 0, firebase_uid]);
+    if (periodo_preferido)
+      await db.execute(`UPDATE user_settings SET periodo_preferido=? WHERE firebase_uid=?`,
+        [periodo_preferido, firebase_uid]);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

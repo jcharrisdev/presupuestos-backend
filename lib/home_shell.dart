@@ -41,6 +41,7 @@ class _HomeShellState extends State<HomeShell> {
   int _idx = 0;
   final Set<int> _initializedTabs = {0};
   bool _modoNegocio = false;
+  String _periodo = 'mensual'; // 'mensual' | 'quincenal'
   bool _loadingSettings = true;
   bool _togglingNegocio = false;
 
@@ -64,6 +65,7 @@ class _HomeShellState extends State<HomeShell> {
     if (!mounted) return;
     setState(() {
       _modoNegocio = (s['modo_negocio'] as int? ?? 0) == 1;
+      _periodo = s['periodo_preferido'] as String? ?? 'mensual';
       _loadingSettings = false;
     });
 
@@ -130,7 +132,14 @@ class _HomeShellState extends State<HomeShell> {
     final now  = DateTime.now();
 
     final List<Widget> screens = [
-      EstadoFinancieroAnualScreen(firebaseUid: uid),
+      EstadoFinancieroAnualScreen(
+        firebaseUid: uid,
+        periodoInicial: _periodo,
+        onPeriodoChanged: (p) {
+          setState(() => _periodo = p);
+          UserSettingsService.setPeriodo(uid, p);
+        },
+      ),
       MesDetalleScreen(
         firebaseUid: uid,
         anio: now.year,
