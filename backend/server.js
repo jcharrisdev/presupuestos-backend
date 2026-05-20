@@ -555,6 +555,17 @@ pool.getConnection(async (err, conn) => {
     }
   }
 
+  // Migración: corregir gastos históricos en día 1 → día 15 para distribución quincenal correcta
+  try {
+    const [res] = await db.execute(
+      `UPDATE registros_gasto SET fecha = DATE_ADD(DATE_FORMAT(fecha, '%Y-%m-01'), INTERVAL 14 DAY)
+       WHERE DAY(fecha) = 1`
+    );
+    if (res.affectedRows > 0) console.log(`✅ Migración quincenal histórica: ${res.affectedRows} registros movidos de día 1 → día 15`);
+  } catch (e) {
+    console.error('⚠️ Migración quincenal histórica:', e.message);
+  }
+
   // Migración: tabla para splits puntuales de gastos con notificación por email
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS gasto_splits_puntual (
