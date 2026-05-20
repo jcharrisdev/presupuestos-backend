@@ -34,6 +34,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   Map<String, dynamic>? _consejero;
   Map<String, dynamic>? _comparativa;
   Map<String, dynamic>? _consejeroIA;
+  bool _loadingIA = false;
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -100,14 +101,19 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   }
 
   Future<void> _cargarConsejeroIA() async {
+    if (mounted) setState(() => _loadingIA = true);
     try {
       final now = DateTime.now();
       final r = await ApiClient.get(
           '/user/consejero-ia?firebase_uid=${widget.firebaseUid}&anio=$_anio&mes=${now.month}');
       if (r.statusCode == 200 && mounted) {
-        setState(() => _consejeroIA = jsonDecode(r.body) as Map<String, dynamic>);
+        setState(() { _consejeroIA = jsonDecode(r.body) as Map<String, dynamic>; _loadingIA = false; });
+      } else {
+        if (mounted) setState(() => _loadingIA = false);
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _loadingIA = false);
+    }
   }
 
   @override
@@ -216,7 +222,10 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         _CardAnual(ea: ea, anio: _anio, vista: _vista,
             onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
         // ── Claude IA ─────────────────────────────────────────────────────
-        if (_consejeroIA != null) ...[
+        if (_loadingIA) ...[
+          _buildIASkeleton(),
+          const SizedBox(height: 12),
+        ] else if (_consejeroIA != null) ...[
           _buildConsejeroIA(_consejeroIA!),
           const SizedBox(height: 12),
         ],
@@ -474,6 +483,34 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       }),
     ]);
   }
+
+  Widget _buildIASkeleton() => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+    ),
+    child: Row(children: [
+      Container(
+        width: 28, height: 28,
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 14),
+      ),
+      const SizedBox(width: 12),
+      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Análisis IA', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+        SizedBox(height: 4),
+        Text('Generando análisis personalizado…', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      ])),
+      const SizedBox(width: 12),
+      const SizedBox(width: 16, height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)),
+    ]),
+  );
 
   Widget _buildConsejeroIA(Map<String, dynamic> c) {
     final disponible = c['disponible'] as bool? ?? false;

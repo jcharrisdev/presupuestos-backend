@@ -9272,15 +9272,27 @@ Da tu análisis en máximo 180 palabras:
 
 Sin bullets, párrafos cortos, español panameño natural.`;
 
-    const { default: fetch } = await import('node-fetch');
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
-        messages: [{ role: 'user', content: prompt }] }),
+    // Usar https nativo de Node — no depende de ESM/CJS de node-fetch
+    const https = require('https');
+    const body = JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+      messages: [{ role: 'user', content: prompt }] });
+    const data = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body),
+          'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      }, (res) => {
+        let raw = '';
+        res.on('data', chunk => raw += chunk);
+        res.on('end', () => {
+          try { resolve(JSON.parse(raw)); }
+          catch (e) { reject(new Error('JSON parse error: ' + raw.slice(0, 100))); }
+        });
+      });
+      req.on('error', reject);
+      req.write(body);
+      req.end();
     });
-    if (!response.ok) return res.json({ disponible: false, razon: 'error_api' });
-    const data = await response.json();
     res.json({
       disponible: true,
       analisis: data.content?.[0]?.text || '',
