@@ -9244,25 +9244,34 @@ app.get('/user/consejero-ia', async (req, res) => {
     const [deudas] = await db.execute(
       `SELECT nombre, tasa_interes, monto_pendiente, monto_total, pago_minimo, cuota_fija, num_cuotas_total, num_pagos_realizados
        FROM deudas WHERE firebase_uid = ? AND activa = 1 ORDER BY tasa_interes DESC`, [firebase_uid]);
+    // Deudas SIN gasto_fijo vinculado — para no doblar-contar
+    const [deudasIndep] = await db.execute(
+      `SELECT d.pago_minimo, d.cuota_fija FROM deudas d
+       LEFT JOIN user_gastos_fijos ugf ON ugf.deuda_id = d.id
+       WHERE d.firebase_uid = ? AND d.activa = 1 AND ugf.id IS NULL`, [firebase_uid]);
     const [variablesBase] = await db.execute(
       `SELECT nombre, categoria, monto_estimado FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
     const [[mesRow]] = await db.execute(
       `SELECT fijos_reales, variables_reales, remanente_real, remanente_estimado FROM meses_financieros
        WHERE firebase_uid = ? AND anio = ? AND mes = ?`, [firebase_uid, year, month]);
 
-    const ingresoNeto = Number(income.ingreso_neto_mensual);
-    const totalFijos  = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
-    const totalVar    = variablesBase.reduce((s, v) => s + Number(v.monto_estimado), 0);
-    const remanente   = ingresoNeto - totalFijos - totalVar;
+    const ingresoNeto     = Number(income.ingreso_neto_mensual);
+    const totalFijosBase  = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    const totalDeudaIndep = deudasIndep.reduce((s, d) => s + (Number(d.pago_minimo) || Number(d.cuota_fija) || 0), 0);
+    const totalFijos      = totalFijosBase + totalDeudaIndep; // mismo cálculo que el card
+    const totalVar        = variablesBase.reduce((s, v) => s + Number(v.monto_estimado), 0);
+    const totalDeudas     = deudas.reduce((s, d) => s + (Number(d.pago_minimo) || Number(d.cuota_fija) || 0), 0);
+    const remanente       = ingresoNeto - totalFijos - totalVar;
 
     const prompt = `Eres un asesor financiero personal experto y directo, especializado en Panamá. No uses lenguaje corporativo — habla como un amigo que sabe de finanzas.
 
 SITUACIÓN FINANCIERA — ${MESES[month].toUpperCase()} ${year}:
 Ingreso neto: $${ingresoNeto.toFixed(2)}/mes
-Gastos fijos: $${totalFijos.toFixed(2)} (${Math.round(totalFijos/ingresoNeto*100)}% del ingreso): ${gastosFijos.slice(0,5).map(g=>`${g.nombre}:$${Number(g.monto_mensual).toFixed(0)}`).join(', ')}
+Gastos fijos: $${totalFijosBase.toFixed(2)}: ${gastosFijos.slice(0,5).map(g=>`${g.nombre}:$${Number(g.monto_mensual).toFixed(0)}`).join(', ')}
+Cuotas de deudas (mensuales): $${totalDeudaIndep.toFixed(2)}
 Variables estimadas: $${totalVar.toFixed(2)}
-Remanente estimado: $${remanente.toFixed(2)}${mesRow && Number(mesRow.fijos_reales) > 0 ? `\nGastos reales este mes: fijos $${Number(mesRow.fijos_reales).toFixed(2)}, variables $${Number(mesRow.variables_reales).toFixed(2)}` : ''}
-Deudas (${deudas.length}): ${deudas.length > 0 ? deudas.slice(0,4).map(d=>`${d.nombre} ${d.tasa_interes}% TEA saldo $${Number(d.monto_pendiente||d.monto_total).toFixed(0)} cuota $${Number(d.pago_minimo||d.cuota_fija||0).toFixed(0)}/mes`).join(' | ') : 'ninguna'}
+REMANENTE REAL (lo que queda después de TODO): $${remanente.toFixed(2)}/mes — este es el único dinero disponible libre
+${mesRow && Number(mesRow.fijos_reales) > 0 ? `Gastos reales este mes: fijos $${Number(mesRow.fijos_reales).toFixed(2)}, variables $${Number(mesRow.variables_reales).toFixed(2)}\n` : ''}Deudas activas (${deudas.length}, cuotas ya incluidas arriba): ${deudas.length > 0 ? deudas.slice(0,4).map(d=>`${d.nombre} ${d.tasa_interes}% TEA saldo $${Number(d.monto_pendiente||d.monto_total).toFixed(0)} cuota $${Number(d.pago_minimo||d.cuota_fija||0).toFixed(0)}/mes`).join(' | ') : 'ninguna'}
 
 Da tu análisis en máximo 180 palabras:
 1. Una frase de diagnóstico honesto (bueno o malo, con número clave)
