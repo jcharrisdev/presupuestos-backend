@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/api_client.dart';
 import '../services/invoice_scanner_service.dart';
+import '../widgets/financiero/split_section.dart';
 import 'invoice_history_screen.dart';
 
 class CreateExpenseFromInvoiceScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
   late TextEditingController _descCtrl;
   late TextEditingController _amountCtrl;
   final _notesCtrl = TextEditingController();
+  final _splitKey  = GlobalKey<SplitSectionState>();
   final _fmt = NumberFormat('#,##0.00', 'en_US');
 
   @override
@@ -68,7 +70,7 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
     }
     setState(() => _saving = true);
     try {
-      await InvoiceScannerService.assignInvoice(
+      final result = await InvoiceScannerService.assignInvoice(
         widget.invoice['id'] as int,
         {
           'assignment_type':  'gasto_nuevo',
@@ -78,6 +80,17 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
         },
         widget.firebaseUid,
       );
+      final splitState = _splitKey.currentState;
+      if (splitState != null && splitState.activo) {
+        await enviarSplitPuntual(
+          firebaseUid: widget.firebaseUid,
+          descripcion: _descCtrl.text.trim(),
+          montoTotal: amount,
+          participantes: splitState.participantes,
+          tipo: splitState.tipo,
+          registroGastoId: result['target_id'] as int?,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Gasto creado y factura asignada'),
@@ -168,7 +181,13 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
                     style: TextStyle(color: AppTheme.textPrimary),
                     decoration: _deco('Notas adicionales'),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
+
+                  SplitSection(
+                    key: _splitKey,
+                    getTotal: () => double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0,
+                  ),
+                  const SizedBox(height: 20),
 
                   SizedBox(
                     width: double.infinity,
