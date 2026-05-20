@@ -331,7 +331,6 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     final color    = _scoreColor(score);
     final label    = _scoreLabel(score);
     final m        = c['metricas'] as Map<String, dynamic>;
-    final numDeudas = (m['num_deudas'] as num).toInt();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -358,11 +357,10 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
             Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
           ]),
           const SizedBox(height: 4),
-          Text('Fijos: ${m['pct_fijos']}% del ingreso  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
+          Text('Fijos+deudas: ${m['pct_fijos']}%  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-          if (numDeudas > 0)
-            Text('DTI (deuda/ingreso): ${m['pct_deuda']}%',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+          Text('Te sobran \$${m['remanente']}/mes  ·  \$${m['remanente_quincenal']}/quincena',
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
         ])),
       ]),
     );
@@ -622,8 +620,9 @@ class _MesCard extends StatelessWidget {
 
     Color borderColor = AppTheme.border;
     if (esActual) borderColor = AppTheme.primary;
-    if ((esCerrado || (esActual && tieneReal)) && remReal != null && remReal < 0)
+    if ((esCerrado || (esActual && tieneReal)) && remReal != null && remReal < 0) {
       borderColor = AppTheme.danger;
+    }
 
     final noLeidas = alertasBadge?['no_leidas'] as int? ?? 0;
     final hayPeligro = (alertasBadge?['peligro'] as int? ?? 0) > 0;
@@ -637,7 +636,7 @@ class _MesCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: esActual ? AppTheme.primary.withOpacity(0.08) : AppTheme.surface,
+              color: esActual ? AppTheme.primary.withValues(alpha: 0.08) : AppTheme.surface,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: borderColor, width: esActual ? 1.5 : 1),
             ),
@@ -728,9 +727,9 @@ class _AlertaBanner extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.warning.withOpacity(0.10),
+        color: AppTheme.warning.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
       ),
       child: Row(children: [
         const Icon(Icons.notifications_active, color: AppTheme.warning, size: 16),

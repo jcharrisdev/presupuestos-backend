@@ -9182,6 +9182,13 @@ app.get('/user/consejero', async (req, res) => {
       `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
     const [deudas] = await db.execute(
       `SELECT * FROM deudas WHERE firebase_uid = ? AND activa = 1 ORDER BY tasa_interes DESC`, [firebase_uid]);
+    // Deudas sin gasto_fijo vinculado — para no doblar-contar
+    const [deudasIndep] = await db.execute(
+      `SELECT d.* FROM deudas d
+       LEFT JOIN user_gastos_fijos ugf ON ugf.deuda_id = d.id
+       WHERE d.firebase_uid = ? AND d.activa = 1 AND ugf.id IS NULL`, [firebase_uid]);
+    const [variablesBase] = await db.execute(
+      `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]);
     const [[mesRow]] = await db.execute(
       `SELECT * FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
       [firebase_uid, year, month]);
@@ -9190,10 +9197,17 @@ app.get('/user/consejero', async (req, res) => {
        WHERE firebase_uid = ? AND mes_id = ? GROUP BY tipo, categoria`,
       [firebase_uid, mesRow.id]) : [[]];
 
-    // ── Métricas base ────────────────────────────────────────────────────────
-    const totalFijosMensual = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    // ── Métricas base — misma lógica que _recalcularEstimadosAnio ────────────
+    const totalFijosBase    = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+    const totalDeudaIndep   = deudasIndep.reduce((s, d) => s + (Number(d.pago_minimo) || Number(d.cuota_fija) || 0), 0);
+    const totalFijosMensual = totalFijosBase + totalDeudaIndep; // coincide con el card
     const totalPagosDeuda   = deudas.reduce((s, d) => s + (Number(d.pago_minimo) || Number(d.cuota_fija) || 0), 0);
-    const remanente         = ingresoNeto - totalFijosMensual;
+    const totalVarAnual     = variablesBase.reduce((s, g) => {
+      const arr = g.aplica_meses ? (typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses) : [1,2,3,4,5,6,7,8,9,10,11,12];
+      return s + _montoMensual(g) * arr.length;
+    }, 0);
+    const totalVarMensual = totalVarAnual / 12;
+    const remanente         = ingresoNeto - totalFijosMensual - totalVarMensual; // coincide con el card
     const pctFijos          = ingresoNeto > 0 ? totalFijosMensual / ingresoNeto : 0;
     const pctDeuda          = ingresoNeto > 0 ? totalPagosDeuda / ingresoNeto : 0;
     const tasaAhorro        = ingresoNeto > 0 ? Math.max(0, remanente) / ingresoNeto : 0;
@@ -9217,12 +9231,13 @@ app.get('/user/consejero', async (req, res) => {
     const insights = [];
 
     // 1. Remanente (siempre primero — responde "¿me sobra o me falta?")
+    const remQ = remanente / 2;
     if (remanente >= 0) {
-      insights.push({ tipo: 'positivo', icono: 'savings', titulo: 'Tu remanente mensual',
-        texto: `Te sobran $${remanente.toFixed(2)}/mes ($${(remanente/2).toFixed(2)} por quincena) después de cubrir todos tus compromisos fijos planificados.` });
+      insights.push({ tipo: 'positivo', icono: 'savings', titulo: 'Tu remanente real',
+        texto: `Te sobran $${remanente.toFixed(2)}/mes ($${remQ.toFixed(2)} por quincena) después de fijos ($${totalFijosMensual.toFixed(2)}), deudas y variables estimadas ($${totalVarMensual.toFixed(2)}).` });
     } else {
       insights.push({ tipo: 'critico', icono: 'warning', titulo: 'Déficit mensual',
-        texto: `Tu planificación muestra un déficit de $${Math.abs(remanente).toFixed(2)}/mes. Tus gastos fijos superan tu ingreso neto. Necesitás reducir algún compromiso.` });
+        texto: `Gastas $${Math.abs(remanente).toFixed(2)} más de lo que ganás por mes. Fijos+deudas: $${totalFijosMensual.toFixed(2)}, variables est.: $${totalVarMensual.toFixed(2)}, ingreso neto: $${ingresoNeto.toFixed(2)}.` });
     }
 
     // 2. Fijos vs regla 50/30/20
@@ -9272,10 +9287,11 @@ app.get('/user/consejero', async (req, res) => {
         texto: `Te quedan ${restantes} cuota${restantes !== 1 ? 's' : ''} de ${total}. Mantené tus pagos puntuales y estarás libre de esta deuda en ${label}.` });
     }
 
-    // 6. Fondo de emergencia
-    const fondoRec = totalFijosMensual * 3;
+    // 6. Fondo de emergencia — 3 meses de todos los gastos (fijos + variables)
+    const gastoMensualTotal = totalFijosMensual + totalVarMensual;
+    const fondoRec = gastoMensualTotal * 3;
     insights.push({ tipo: 'info', icono: 'shield', titulo: 'Fondo de emergencia recomendado',
-      texto: `Con tus gastos fijos actuales, tu fondo de emergencia debería ser $${fondoRec.toFixed(2)} (3 meses de compromisos). Verificá si tenés esa liquidez disponible en efectivo o cuenta de ahorro.` });
+      texto: `Con tus gastos totales de $${gastoMensualTotal.toFixed(2)}/mes, tu fondo de emergencia debería ser $${fondoRec.toFixed(2)} (3 meses). Verificá si tenés esa liquidez disponible en efectivo o cuenta de ahorro.` });
 
     // ── Enfoque del mes (1 acción concreta) ──────────────────────────────────
     let enfoque;
@@ -9301,8 +9317,10 @@ app.get('/user/consejero', async (req, res) => {
       metricas: {
         ingreso_neto:                parseFloat(ingresoNeto.toFixed(2)),
         total_fijos:                 parseFloat(totalFijosMensual.toFixed(2)),
+        total_variables:             parseFloat(totalVarMensual.toFixed(2)),
         total_pagos_deuda:           parseFloat(totalPagosDeuda.toFixed(2)),
         remanente:                   parseFloat(remanente.toFixed(2)),
+        remanente_quincenal:         parseFloat((remanente / 2).toFixed(2)),
         pct_fijos:                   parseFloat((pctFijos * 100).toFixed(1)),
         pct_deuda:                   parseFloat((pctDeuda * 100).toFixed(1)),
         tasa_ahorro_pct:             parseFloat((tasaAhorro * 100).toFixed(1)),
