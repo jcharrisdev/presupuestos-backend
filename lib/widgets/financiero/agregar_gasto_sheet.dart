@@ -36,6 +36,8 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
   late DateTime _fecha;
   bool _guardando          = false;
   bool _guardarComoBase    = false;
+  bool _compartido         = false;
+  late final List<_SplitRow> _splits = [_SplitRow()];
   int  _mesInicio          = 1;
   int  _mesFin             = 12;
 
@@ -56,7 +58,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
     final now = DateTime.now();
     _fecha = (widget.anio == now.year && widget.mes == now.month)
         ? now
-        : DateTime(widget.anio, widget.mes, 1);
+        : DateTime(widget.anio, widget.mes, 15);
     _mesInicio = widget.mes;
     _mesFin    = 12;
     _cargarDefiniciones();
@@ -65,6 +67,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
   @override
   void dispose() {
     _nombre.dispose(); _monto.dispose(); _notas.dispose();
+    for (final s in _splits) { s.dispose(); }
     super.dispose();
   }
 
@@ -318,6 +321,87 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               const SizedBox(height: 16),
             ],
 
+            // ── ¿Gasto compartido? ───────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Switch(
+                    value: _compartido,
+                    onChanged: (v) => setState(() => _compartido = v),
+                    activeColor: AppTheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('¿Lo compartiste con alguien?',
+                          style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text('Les enviaremos un correo con su parte',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    ],
+                  )),
+                ]),
+                if (_compartido) ...[
+                  const SizedBox(height: 12),
+                  ..._splits.asMap().entries.map((e) {
+                    final i = e.key;
+                    final s = e.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(children: [
+                        Expanded(
+                          flex: 5,
+                          child: TextField(
+                            controller: s.email,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                            decoration: const InputDecoration(
+                              labelText: 'Correo del participante',
+                              hintText: 'ejemplo@correo.com',
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: s.monto,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                            decoration: const InputDecoration(
+                              labelText: 'Su parte (\$)',
+                              prefixText: '\$ ',
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        if (_splits.length > 1)
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: AppTheme.danger, size: 18),
+                            onPressed: () => setState(() => _splits.removeAt(i)),
+                          ),
+                      ]),
+                    );
+                  }),
+                  if (_splits.length < 4)
+                    TextButton.icon(
+                      onPressed: () => setState(() => _splits.add(_SplitRow())),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Agregar otro', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+                    ),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 16),
+
             // ── Botón guardar ────────────────────────────────────────────
             SizedBox(
               width: double.infinity,
@@ -363,7 +447,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
       final categoriaFinal = (_categoria == 'otro' && _categoriaCustom != null)
           ? _categoriaCustom!
           : _categoria;
-      await RegistrosService.crear(
+      final creado = await RegistrosService.crear(
         uid: widget.firebaseUid, anio: widget.anio, mes: widget.mes,
         tipo: _tipo, categoria: categoriaFinal,
         nombre: _nombre.text.trim(),
@@ -371,7 +455,6 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         fecha: DateFormat('yyyy-MM-dd').format(_fecha),
         notas: _notas.text.isEmpty ? null : _notas.text.trim(),
         definitionId: _defSeleccionada,
-        // Los fijos se crean como pagados (ya pagaste el compromiso)
         pagado: _tipo == 'fijo' ? 1 : 0,
       );
       if (_guardarComoBase && _tipo != 'fijo') {
@@ -382,6 +465,25 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
           mesInicio: _mesInicio, mesFin: _mesFin,
         );
       }
+      // Split puntual: notificar participantes si aplica
+      if (_compartido) {
+        final validos = _splits.where((s) =>
+          s.email.text.trim().isNotEmpty && s.monto.text.trim().isNotEmpty).toList();
+        if (validos.isNotEmpty) {
+          final registroId = creado['id'] as int?;
+          await ApiClient.post('/gastos/split-notificar', {
+            'firebase_uid': widget.firebaseUid,
+            if (registroId != null) 'registro_gasto_id': registroId,
+            'descripcion': _nombre.text.trim(),
+            'monto_total': double.parse(_monto.text),
+            'remitente': widget.firebaseUid,
+            'participantes': validos.map((s) => {
+              'email': s.email.text.trim(),
+              'monto': double.parse(s.monto.text.trim()),
+            }).toList(),
+          });
+        }
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -390,4 +492,10 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
       if (mounted) setState(() => _guardando = false);
     }
   }
+}
+
+class _SplitRow {
+  final email = TextEditingController();
+  final monto = TextEditingController();
+  void dispose() { email.dispose(); monto.dispose(); }
 }

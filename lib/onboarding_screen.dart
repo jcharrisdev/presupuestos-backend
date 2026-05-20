@@ -24,7 +24,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _paso = 0;
 
   // ── Paso 1: Ingreso ──────────────────────────────────────────────────
-  String _tipoIngreso = 'salario';
+  String _tipoIngreso = 'informal';
   bool _aplicarCss    = true;
   final _brutoCtrl    = TextEditingController();
   final _netoCtrl     = TextEditingController();
@@ -424,27 +424,27 @@ class _Paso1IncomeState extends State<_Paso1Income> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Paso 1 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('¿Cuánto ganas?',
+        const Text('¿Cuánto recibes al mes?',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
         const Text(
-          'Tu ingreso neto es la base de todo. Define cuánto recibes realmente cada mes.',
+          'Salario, negocio, freelance, alquiler — cualquier ingreso cuenta. Define cuánto recibes realmente.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.5),
         ),
         const SizedBox(height: 24),
 
         // Tipo de ingreso
-        _Label('Tipo de ingreso'),
+        _Label('¿Cómo recibes tu ingreso?'),
         const SizedBox(height: 8),
         Row(children: [
-          _TipoChip('salario',  'Salario fijo',    Icons.badge_outlined,     widget.tipoIngreso, widget.onTipoChanged),
+          _TipoChip('informal', 'Ingreso propio',  Icons.handshake_outlined, widget.tipoIngreso, widget.onTipoChanged),
           const SizedBox(width: 10),
-          _TipoChip('informal', 'Independiente',   Icons.handshake_outlined, widget.tipoIngreso, widget.onTipoChanged),
+          _TipoChip('salario',  'Empleo formal',   Icons.badge_outlined,     widget.tipoIngreso, widget.onTipoChanged),
         ]),
         const SizedBox(height: 6),
         _InfoBox(widget.tipoIngreso == 'salario'
             ? 'Empleado en planilla — tu empleador descuenta CSS, educativo e ISR antes de pagarte.'
-            : 'Freelance, negocio propio o ingresos variables — ingresa tu promedio mensual neto.'),
+            : 'Negocio, freelance, ventas, alquiler, remesas u otro ingreso — ingresa tu promedio mensual.'),
         const SizedBox(height: 20),
 
         if (widget.tipoIngreso == 'salario') ...[

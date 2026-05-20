@@ -545,6 +545,35 @@ pool.getConnection(async (err, conn) => {
     }
   }
 
+  // Migración: es_hormiga en registros_gasto (gastos no presupuestados pequeños)
+  try {
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN es_hormiga TINYINT DEFAULT 0`);
+    console.log('✅ Migración es_hormiga en registros_gasto OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración es_hormiga:', e.message);
+    }
+  }
+
+  // Migración: tabla para splits puntuales de gastos con notificación por email
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS gasto_splits_puntual (
+      id                  INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid        VARCHAR(255) NOT NULL,
+      registro_gasto_id   INT DEFAULT NULL,
+      descripcion         VARCHAR(255) NOT NULL,
+      monto_total         DECIMAL(10,2) NOT NULL,
+      email_participante  VARCHAR(255) NOT NULL,
+      monto_participante  DECIMAL(10,2) NOT NULL,
+      notificado_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_gsp_uid (firebase_uid),
+      KEY idx_gsp_registro (registro_gasto_id)
+    )`);
+    console.log('✅ Migración gasto_splits_puntual OK');
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('⚠️ Migración gasto_splits_puntual:', e.message);
+  }
+
   // Migración: configuración de usuario (modo_negocio, futuras preferencias)
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS user_settings (
@@ -9104,9 +9133,16 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     const totalVar   = registros.filter(r => r.tipo === 'variable').reduce((s, r) => s + Number(r.monto), 0);
     const totalNoPres= registros.filter(r => r.tipo === 'no_presupuestado').reduce((s, r) => s + Number(r.monto), 0);
     const totalGasto = totalFijos + totalVar + totalNoPres;
-    const [compromisos] = await db.execute(
-      `SELECT nombre, monto_mensual FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
+    const [compFijos] = await db.execute(
+      `SELECT nombre, monto_mensual AS monto FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
       [firebase_uid]);
+    const [compVariables] = await db.execute(
+      `SELECT nombre, monto_estimado AS monto FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`,
+      [firebase_uid]);
+    const todosCompromisos = [
+      ...compFijos.map(c => ({ nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'fijo' })),
+      ...compVariables.map(c => ({ nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'variable' })),
+    ];
     res.json({
       quincena: Number(num),
       dias: esQ1 ? '1–15' : '16–fin',
@@ -9117,9 +9153,7 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
       variables: parseFloat(totalVar.toFixed(2)),
       no_presupuestados: parseFloat(totalNoPres.toFixed(2)),
       registros,
-      compromisos_quincenal: compromisos.map(c => ({
-        nombre: c.nombre, monto: parseFloat((Number(c.monto_mensual) / 2).toFixed(2)),
-      })),
+      compromisos_quincenal: todosCompromisos,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -9805,6 +9839,9 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     );
     const totalEventosMes = eventosDelMes.reduce((s, e) => s + Number(e.cuota_mensual), 0);
 
+    const hormigaRegistros = registros.filter(r => r.es_hormiga == 1);
+    const hormigaTotal = hormigaRegistros.reduce((s, r) => s + Number(r.monto), 0);
+
     res.json({
       mes: mesRow,
       compromisos_fijos: {
@@ -9843,6 +9880,8 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         no_presupuestados:   parseFloat(noPresReales.toFixed(2)),
         remanente_real:      parseFloat(remanenteReal.toFixed(2)),
         presupuesto_sano:    remanenteReal >= 0,
+        hormiga_count:       hormigaRegistros.length,
+        hormiga_total:       parseFloat(hormigaTotal.toFixed(2)),
       },
       registros,
       analisis_categorias: analisisCategorias,
@@ -10051,6 +10090,68 @@ async function _actualizarTotalesMes(mesId, firebaseUid) {
   );
 }
 
+// =============================================================================
+// SPLITS PUNTUALES — notificación de gastos compartidos sin presupuesto
+// =============================================================================
+
+async function _enviarNotificacionSplit({ emailParticipante, remitente, descripcion, montoTotal, montoParticipante, participantes }) {
+  if (!process.env.BREVO_API_KEY) return;
+  const otros = participantes.filter(p => p.email !== emailParticipante)
+    .map(p => `${p.email} — $${Number(p.monto).toFixed(2)}`).join('<br>');
+  await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { email: process.env.BREVO_SENDER_EMAIL, name: 'Salarying' },
+      to: [{ email: emailParticipante }],
+      subject: `${remitente} compartió un gasto contigo`,
+      htmlContent: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;background:#1E2026;color:#EAECEF;border-radius:12px;">
+          <h2 style="color:#F0B90B;margin-bottom:4px;">Salarying</h2>
+          <p style="color:#848E9C;margin-top:0;">Registro de gasto compartido</p>
+          <p style="font-size:15px;"><b>${remitente}</b> registró un gasto compartido contigo:</p>
+          <div style="background:#2B3139;border-radius:8px;padding:16px;margin:16px 0;">
+            <p style="margin:0 0 6px;font-size:13px;color:#848E9C;">GASTO</p>
+            <p style="margin:0;font-size:18px;font-weight:700;">${descripcion}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#848E9C;">Total: <span style="color:#EAECEF;">$${Number(montoTotal).toFixed(2)}</span></p>
+          </div>
+          <div style="background:#F0B90B;border-radius:8px;padding:14px;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#1E2026;">TU PARTE</p>
+            <p style="margin:4px 0 0;font-size:28px;font-weight:800;color:#1E2026;">$${Number(montoParticipante).toFixed(2)}</p>
+          </div>
+          ${otros ? `<p style="margin-top:16px;font-size:12px;color:#848E9C;">También incluye:<br>${otros}</p>` : ''}
+          <p style="margin-top:20px;font-size:11px;color:#848E9C;text-align:center;">Aviso informativo de Salarying. No necesitas crear una cuenta.</p>
+        </div>`,
+    }),
+  });
+}
+
+// POST /gastos/split-notificar
+app.post('/gastos/split-notificar', async (req, res) => {
+  const { firebase_uid, registro_gasto_id, descripcion, monto_total, participantes, remitente } = req.body;
+  if (!firebase_uid || !descripcion || !monto_total || !Array.isArray(participantes) || participantes.length === 0)
+    return res.status(400).json({ error: 'firebase_uid, descripcion, monto_total y participantes requeridos' });
+  try {
+    for (const p of participantes) {
+      if (!p.email || !p.monto) continue;
+      await db.execute(
+        `INSERT INTO gasto_splits_puntual (firebase_uid, registro_gasto_id, descripcion, monto_total, email_participante, monto_participante)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [firebase_uid, registro_gasto_id || null, descripcion, monto_total, p.email, p.monto]
+      );
+      _enviarNotificacionSplit({
+        emailParticipante: p.email,
+        remitente: remitente || firebase_uid,
+        descripcion,
+        montoTotal: monto_total,
+        montoParticipante: p.monto,
+        participantes,
+      }).catch(() => {});
+    }
+    res.json({ enviado: true, cantidad: participantes.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /registros/:anio/:mes?firebase_uid=&tipo=&categoria=
 app.get('/registros/:anio/:mes', async (req, res) => {
   const { anio, mes } = req.params;
@@ -10073,7 +10174,14 @@ app.get('/registros/:anio/:mes', async (req, res) => {
     sql += ` ORDER BY rg.fecha DESC, rg.created_at DESC`;
     const [registros] = await db.execute(sql, params);
     const total = registros.reduce((s, r) => s + Number(r.monto), 0);
-    res.json({ registros, total: parseFloat(total.toFixed(2)) });
+    const hormigaRegistros = registros.filter(r => r.es_hormiga === 1 || r.es_hormiga === true);
+    const hormigaTotal = hormigaRegistros.reduce((s, r) => s + Number(r.monto), 0);
+    res.json({
+      registros,
+      total: parseFloat(total.toFixed(2)),
+      hormiga_count: hormigaRegistros.length,
+      hormiga_total: parseFloat(hormigaTotal.toFixed(2)),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -10114,16 +10222,18 @@ app.post('/registros', async (req, res) => {
       }
     }
 
+    const esHormiga = (tipo === 'no_presupuestado' && Number(monto) <= 25) ? 1 : 0;
+
     const [r] = await db.execute(
       `INSERT INTO registros_gasto
          (firebase_uid, mes_id, anio, mes, tipo, categoria, subcategoria_id,
           nombre, monto, fecha, pagado, origen_fijo_id, origen_variable_id,
-          notas, en_calendario, definition_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          notas, en_calendario, definition_id, es_hormiga)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [firebase_uid, mesRow.id, anio, mes, tipo, categoria, subcategoria_id || null,
        nombre, monto, fecha, pagado ? 1 : 0, origen_fijo_id || null,
        origen_variable_id || null, notas || null, en_calendario ? 1 : 0,
-       definitionId]
+       definitionId, esHormiga]
     );
     await _actualizarTotalesMes(mesRow.id, firebase_uid);
 

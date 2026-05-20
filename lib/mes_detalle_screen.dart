@@ -223,6 +223,8 @@ class _TabResumen extends StatelessWidget {
     final varEst  = _d(r['variables_estimados']);
     final varReal = _d(r['variables_reales']);
     final noPres  = _d(r['no_presupuestados']);
+    final hormigaTotal = _d(r['hormiga_total']);
+    final hormigaCount = (r['hormiga_count'] as num?)?.toInt() ?? 0;
     final remEst  = _d(r['remanente_estimado']);
     final remReal = _d(r['remanente_real']);
     final sano    = r['presupuesto_sano'] as bool? ?? true;
@@ -327,6 +329,32 @@ class _TabResumen extends StatelessWidget {
         _FilaComparativa('Gastos fijos', fijosEst, fijosReal, AppTheme.colorFijo),
         _FilaComparativa('Gastos variables', varEst, varReal, AppTheme.warning),
         if (noPres > 0) _FilaComparativa('No presupuestados', 0, noPres, AppTheme.danger),
+        if (hormigaCount > 0 && hormigaTotal > 0) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.warning.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.warning.withValues(alpha: 0.25)),
+            ),
+            child: Row(children: [
+              const Text('🐜', style: TextStyle(fontSize: 14)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                '$hormigaCount pequeña${hormigaCount == 1 ? '' : 's'} compra${hormigaCount == 1 ? '' : 's'} '
+                '— \$${hormigaTotal.toStringAsFixed(2)} en total este mes',
+                style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
+              )),
+              if (ingresoRef > 0)
+                Text(
+                  '${(hormigaTotal / ingresoRef * 100).toStringAsFixed(1)}%\ndel ingreso',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+            ]),
+          ),
+        ],
         const Divider(color: AppTheme.border, height: 24),
         _FilaComparativa('Te sobra', remEst, remReal,
             remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
