@@ -898,6 +898,7 @@ class _TabQuincenasState extends State<_TabQuincenas> {
   Map<String, dynamic>? _q1;
   Map<String, dynamic>? _q2;
   bool _loading = true;
+  String? _errorMsg;
 
   @override
   void initState() {
@@ -906,27 +907,60 @@ class _TabQuincenasState extends State<_TabQuincenas> {
   }
 
   Future<void> _cargar() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _errorMsg = null; });
     try {
       final base = '/user/quincena/${widget.anio}/${widget.mes}';
       final r1 = await ApiClient.get('$base/1?firebase_uid=${widget.uid}');
       final r2 = await ApiClient.get('$base/2?firebase_uid=${widget.uid}');
-      if (mounted) setState(() {
-        if (r1.statusCode == 200) _q1 = jsonDecode(r1.body);
-        if (r2.statusCode == 200) _q2 = jsonDecode(r2.body);
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      if (r1.statusCode == 200 && r2.statusCode == 200) {
+        setState(() {
+          _q1 = jsonDecode(r1.body);
+          _q2 = jsonDecode(r2.body);
+          _loading = false;
+        });
+      } else {
+        // El mes no existe en el estado financiero anual todavía
+        final err = r1.statusCode != 200 ? jsonDecode(r1.body)['error'] : jsonDecode(r2.body)['error'];
+        setState(() { _errorMsg = err?.toString(); _loading = false; });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _errorMsg = e.toString(); _loading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
     final now = DateTime.now();
     final esActual = widget.anio == now.year && widget.mes == now.month;
     final esQ1 = esActual && now.day <= 15;
+
+    if (_errorMsg != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.info_outline, color: AppTheme.warning, size: 36),
+            const SizedBox(height: 12),
+            const Text('Este mes no tiene estado financiero generado aún.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+            const SizedBox(height: 8),
+            const Text('Ve a la pantalla Estado y genera el estado anual para poder ver la vista quincenal.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.5)),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _cargar,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reintentar'),
+            ),
+          ]),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _cargar,
       child: ListView(
@@ -939,8 +973,8 @@ class _TabQuincenasState extends State<_TabQuincenas> {
           if (_q2 != null) _QuincenaCard(data: _q2!, activa: esActual && !esQ1),
           const SizedBox(height: 20),
           const Text(
-            'Los gastos con fecha específica (día 1–14 o 16–31) aparecen solo en su quincena. '
-            'Los que no tienen fecha preferida (½ mes) se dividen entre ambas quincenas.',
+            'Tus gastos fijos y variables aparecen automáticamente en cada quincena. '
+            'Registrar un gasto en el + lo añade a la quincena de su fecha.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.5),
           ),

@@ -9135,28 +9135,27 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
       `SELECT * FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
       [firebase_uid, anio, mes]);
     if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado' });
-    // Día 15 = gasto mensual genérico → aparece en AMBAS quincenas al 50%
-    // Día 1–14 → solo Q1. Día 16–31 → solo Q2.
-    const [todosRegistros] = await db.execute(
-      `SELECT rg.* FROM registros_gasto rg
-       WHERE rg.firebase_uid = ? AND rg.mes_id = ? ORDER BY rg.fecha DESC`,
+
+    // Usar DAY() en SQL para evitar bugs de timezone con Date de JS.
+    // Día 15 → ambas quincenas al 50%. Día 1-14 → solo Q1. Día 16-31 → solo Q2.
+    const filtroSQL = esQ1
+      ? `(DAY(rg.fecha) <= 15)`
+      : `(DAY(rg.fecha) >= 15)`;
+
+    const [registrosRaw] = await db.execute(
+      `SELECT rg.*, DAY(rg.fecha) AS dia_fecha FROM registros_gasto rg
+       WHERE rg.firebase_uid = ? AND rg.mes_id = ? AND ${filtroSQL}
+       ORDER BY rg.fecha DESC`,
       [firebase_uid, mesRow.id]);
 
-    const registros = todosRegistros
-      .filter(r => {
-        const d = new Date(r.fecha).getUTCDate();
-        if (d === 15) return true;          // mensual → ambas quincenas
-        return esQ1 ? d < 15 : d > 15;
-      })
-      .map(r => {
-        const d = new Date(r.fecha).getUTCDate();
-        const esMensual = d === 15;
-        return {
-          ...r,
-          monto: esMensual ? parseFloat((Number(r.monto) / 2).toFixed(2)) : Number(r.monto),
-          es_mensual: esMensual,
-        };
-      });
+    const registros = registrosRaw.map(r => {
+      const esMensual = Number(r.dia_fecha) === 15;
+      return {
+        ...r,
+        monto: esMensual ? parseFloat((Number(r.monto) / 2).toFixed(2)) : Number(r.monto),
+        es_mensual: esMensual,
+      };
+    });
 
     const ingresoQ   = Number(mesRow.ingreso_estimado) / 2;
     const totalFijos = registros.filter(r => r.tipo === 'fijo').reduce((s, r) => s + Number(r.monto), 0);
