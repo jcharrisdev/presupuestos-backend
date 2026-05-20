@@ -537,36 +537,56 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         ]),
       );
     }
-    final analisis = c['analisis'] as String? ?? '';
+    final analisis      = c['analisis']     as String? ?? '';
+    final generadoA     = c['generado_a']   as String? ?? '';
+    final tokensUsados  = (c['tokens_usados'] as num? ?? 0).toInt();
     if (analisis.isEmpty) return const SizedBox.shrink();
     final mesLabel = c['mes_label'] as String? ?? '';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        gradient: LinearGradient(
+          colors: [AppTheme.primary.withValues(alpha: 0.06), AppTheme.surface],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header inequívoco
         Row(children: [
-          Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+          const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 18),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('ASESOR IA — Claude Haiku',
+              style: TextStyle(color: AppTheme.primary, fontSize: 11,
+                  fontWeight: FontWeight.w800, letterSpacing: 1.0))),
+          if (generadoA.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text('Generado $generadoA',
+                  style: const TextStyle(color: AppTheme.primary, fontSize: 9, fontWeight: FontWeight.w700)),
             ),
-            child: const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 14),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Análisis IA', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
-            Text('Asesor financiero · $mesLabel', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-          ])),
         ]),
+        const SizedBox(height: 4),
+        Text('Análisis personalizado para $mesLabel · $tokensUsados tokens',
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         const SizedBox(height: 12),
         const Divider(color: AppTheme.border, height: 1),
         const SizedBox(height: 12),
-        Text(analisis, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.55)),
+        Text(analisis, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.6)),
+        const SizedBox(height: 10),
+        // Footer que confirma origen
+        Row(children: [
+          const Icon(Icons.verified, color: AppTheme.primary, size: 12),
+          const SizedBox(width: 4),
+          const Text('Generado por Claude AI · Anthropic',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+        ]),
       ]),
     );
   }

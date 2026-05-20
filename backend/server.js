@@ -9293,9 +9293,15 @@ Sin bullets, párrafos cortos, español panameño natural.`;
       req.write(body);
       req.end();
     });
+    const texto = data.content?.[0]?.text || '';
+    const ahora = new Date();
+    const hora  = `${ahora.getHours().toString().padStart(2,'0')}:${ahora.getMinutes().toString().padStart(2,'0')}`;
     res.json({
       disponible: true,
-      analisis: data.content?.[0]?.text || '',
+      analisis: texto,
+      generado_a: hora,
+      modelo: 'claude-haiku',
+      tokens_usados: data.usage?.output_tokens || 0,
       mes: month, mes_label: MESES[month], anio: year,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
