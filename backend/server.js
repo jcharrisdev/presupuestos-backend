@@ -49,6 +49,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 2,
   queueLimit: 0,
+  charset:  'utf8mb4',
 });
 
 // Verifica la conexión y ejecuta migraciones al arrancar
@@ -324,6 +325,18 @@ pool.getConnection(async (err, conn) => {
     console.log('✅ Migración calendario_eventos OK');
   } catch (e) {
     console.error('⚠️ Migración calendario_eventos:', e.message);
+  }
+
+  // Migración: columna deuda_id en calendario_eventos para trackear pagos de deudas
+  try {
+    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS deuda_id INT DEFAULT NULL`).catch(() => {});
+    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS notificacion_enviada TINYINT DEFAULT 0`).catch(() => {});
+    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS google_event_id VARCHAR(255) DEFAULT NULL`).catch(() => {});
+    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS periodo_id INT DEFAULT NULL`).catch(() => {});
+    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS cobro_id INT DEFAULT NULL`).catch(() => {});
+    console.log('✅ Migración calendario_eventos deuda_id OK');
+  } catch (e) {
+    console.error('⚠️ Migración calendario_eventos deuda_id:', e.message);
   }
 
   // Migración: gastos globales reutilizables (independientes de presupuesto)
@@ -1583,8 +1596,27 @@ app.get('/user/dashboard', async (req, res) => {
       }
     }
 
+    // Metas de ahorro activas
+    const [objetivos] = await db.execute(
+      `SELECT id, nombre, monto_meta, monto_actual, fecha_limite,
+              DATEDIFF(fecha_limite, CURDATE()) AS dias_restantes
+       FROM objetivos_financieros WHERE firebase_uid = ? AND activo = 1 ORDER BY fecha_limite ASC LIMIT 3`,
+      [firebase_uid]);
+    const objetivosResumen = objetivos.map(o => {
+      const diasR = Math.max(0, Number(o.dias_restantes) || 365);
+      const falta = Math.max(0, Number(o.monto_meta) - Number(o.monto_actual));
+      return {
+        id: o.id, nombre: o.nombre,
+        monto_meta: Number(o.monto_meta), monto_actual: Number(o.monto_actual),
+        pct_avance: Number(o.monto_meta) > 0 ? parseFloat((Number(o.monto_actual)/Number(o.monto_meta)*100).toFixed(1)) : 0,
+        falta: parseFloat(falta.toFixed(2)),
+        cuota_mensual: parseFloat((falta / Math.max(1, Math.ceil(diasR/30))).toFixed(2)),
+        dias_restantes: diasR,
+      };
+    });
+
     // Score de salud (no punitivo)
-    const totalAhorros = 0; // TODO: integrar metas de ahorro cuando existan
+    const totalAhorros = objetivos.reduce((s, o) => s + Number(o.monto_actual), 0);
     const score = _calcularScore({ ingresoNeto, totalGastosFijos, totalCuotasDeudas, totalAhorros, pagosCumplidos, pagosTotales });
     const scoreLegible = _scoreLegible(score);
 
@@ -1618,6 +1650,7 @@ app.get('/user/dashboard', async (req, res) => {
       },
       presupuesto_activo: presActivo || null,
       periodo_activo:     resumenPeriodo,
+      objetivos:          objetivosResumen,
       proximos_3_meses:   timeline3.map(m => ({
         label:      m.label,
         disponible: m.disponible,
@@ -1651,8 +1684,8 @@ app.get('/user/metricas', async (req, res) => {
        JOIN presupuestos pr ON pr.id = p.presupuesto_id
        LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
        WHERE p.firebase_uid = ? AND p.estado = 'cerrado'
-       GROUP BY p.id ORDER BY p.fecha_inicio DESC LIMIT ?`,
-      [firebase_uid, Number(meses)]
+       GROUP BY p.id ORDER BY p.fecha_inicio DESC LIMIT ${parseInt(meses)}`,
+      [firebase_uid]
     );
 
     const periodosOrdenados = periodos.reverse(); // Cronológico
@@ -7755,6 +7788,34 @@ function _enriquecerDeuda(d) {
   return { ...d, cuotas_restantes, fecha_fin_estimada };
 }
 
+// Genera/actualiza eventos de calendario para los pagos próximos de todas las deudas activas.
+// Se llama como fire-and-forget tras crear o editar una deuda.
+async function _sincronizarEventosDeudas(firebase_uid) {
+  const [deudas] = await db.execute(
+    `SELECT id, nombre, fecha_proximo_pago, IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
+     FROM deudas WHERE firebase_uid = ? AND activa = 1 AND fecha_proximo_pago IS NOT NULL`,
+    [firebase_uid]);
+  for (const d of deudas) {
+    // Eliminar eventos pendientes/vencidos anteriores de esta deuda
+    await db.execute(
+      `DELETE FROM calendario_eventos WHERE firebase_uid = ? AND deuda_id = ? AND estado IN ('pendiente','vencido')`,
+      [firebase_uid, d.id]).catch(() => {});
+    // Crear evento para los próximos 3 meses de pago
+    const base = new Date(d.fecha_proximo_pago);
+    for (let i = 0; i < 3; i++) {
+      const fecha = new Date(base);
+      fecha.setMonth(fecha.getMonth() + i);
+      const fechaStr = fecha.toISOString().slice(0, 10);
+      const estado = fecha < new Date() ? 'vencido' : 'pendiente';
+      await db.execute(
+        `INSERT INTO calendario_eventos (firebase_uid, deuda_id, titulo, tipo, fecha_evento, monto_esperado, estado, notificacion_activa, dias_anticipacion)
+         VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 3)`,
+        [firebase_uid, d.id, d.nombre, fechaStr, Number(d.cuota || 0), estado]
+      ).catch(() => {});
+    }
+  }
+}
+
 // GET /deudas?firebase_uid=   — lista deudas activas del usuario
 app.get('/deudas', async (req, res) => {
   const { firebase_uid, incluir_saldadas } = req.query;
@@ -7808,6 +7869,7 @@ app.post('/deudas', async (req, res) => {
     const [[created]] = await db.execute(`SELECT * FROM deudas WHERE id = ?`, [result.insertId]);
     res.status(201).json(_enriquecerDeuda(created));
     _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _sincronizarEventosDeudas(firebase_uid).catch(() => {});
     _logInfo('/deudas', `Deuda creada: "${nombre}" ${es_letra ? 'letra' : tipo} - pendiente $${Number(monto_pendiente).toFixed(2)}`, firebase_uid);
   } catch (error) {
     console.error(error);
@@ -7848,6 +7910,7 @@ app.put('/deudas/:id', async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Deuda no encontrada' });
     const [[updated]] = await db.execute(`SELECT * FROM deudas WHERE id = ?`, [id]);
     res.json(_enriquecerDeuda(updated));
+    _sincronizarEventosDeudas(firebase_uid).catch(() => {});
     _logInfo(`/deudas/${id}`, `Deuda editada: "${updated.nombre}" - pendiente $${Number(updated.monto_pendiente).toFixed(2)}`, firebase_uid);
   } catch (error) {
     console.error(error);
@@ -8349,9 +8412,29 @@ app.get('/user/timeline', async (req, res) => {
         mejor_mes:               { label: mesMejor.label, disponible: mesMejor.disponible },
         meses_criticos:          mesesCriticos,
         deudas_activas:          deudas.length,
-        fecha_libertad_deudas:   deudas.length === 0 ? null : (() => {
-          const ultimo = [...timeline].reverse().find(t => t.eventos.some(e => e.tipo === 'deuda_saldada'));
-          return ultimo ? ultimo.fecha : null;
+        fecha_libertad_deudas:   (() => {
+          if (deudas.length === 0) return null;
+          // Simular mes a mes hasta que todas las deudas queden en 0
+          const sim = deudas.map(d => ({
+            pendiente:   Number(d.monto_pendiente),
+            tasa_mensual: Number(d.tasa_interes || 0) / 100 / 12,
+            cuota: d.es_letra ? Number(d.cuota_fija || 0) : Number(d.pago_minimo || 0),
+            es_letra: Boolean(d.es_letra),
+          }));
+          const inicio = new Date();
+          for (let mes = 1; mes <= 600; mes++) {
+            for (const d of sim) {
+              if (d.pendiente <= 0) continue;
+              if (!d.es_letra) d.pendiente = Math.max(0, d.pendiente + d.pendiente * d.tasa_mensual - d.cuota);
+              else d.pendiente = Math.max(0, d.pendiente - d.cuota);
+            }
+            if (sim.every(d => d.pendiente <= 0)) {
+              const fecha = new Date(inicio);
+              fecha.setMonth(fecha.getMonth() + mes);
+              return fecha.toISOString().slice(0, 10);
+            }
+          }
+          return null;
         })(),
       },
       meses: timeline,
@@ -9173,9 +9256,13 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     const [compVariables] = await db.execute(
       `SELECT nombre, monto_estimado AS monto FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`,
       [firebase_uid]);
+    const [compDeudas] = await db.execute(
+      `SELECT nombre, IF(es_letra=1, cuota_fija, pago_minimo) AS monto FROM deudas WHERE firebase_uid = ? AND activa = 1`,
+      [firebase_uid]);
     const todosCompromisos = [
       ...compFijos.map(c => ({ nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'fijo' })),
       ...compVariables.map(c => ({ nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'variable' })),
+      ...compDeudas.map(d => ({ nombre: d.nombre, monto: parseFloat((Number(d.monto) / 2).toFixed(2)), tipo: 'deuda' })),
     ];
     res.json({
       quincena: Number(num),
@@ -9267,13 +9354,14 @@ app.get('/user/objetivos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/user/objetivos', async (req, res) => {
-  const { firebase_uid, nombre, descripcion, monto_meta, fecha_limite, tipo } = req.body;
+  const { firebase_uid, nombre, descripcion, monto_meta, fecha_limite, fecha_objetivo, tipo } = req.body;
   if (!firebase_uid || !nombre || !monto_meta) return res.status(400).json({ error: 'firebase_uid, nombre y monto_meta requeridos' });
+  const fechaFinal = fecha_limite || fecha_objetivo || null;
   try {
     const [r] = await db.execute(
       `INSERT INTO objetivos_financieros (firebase_uid, nombre, descripcion, monto_meta, fecha_limite, tipo)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [firebase_uid, nombre, descripcion || null, monto_meta, fecha_limite || null, tipo || 'otro']);
+      [firebase_uid, nombre, descripcion || null, monto_meta, fechaFinal, tipo || 'otro']);
     res.status(201).json({ id: r.insertId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -10375,6 +10463,41 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
   );
   if (!mesRow) return alertas;
 
+  // Alerta DTI crítico: cuotas de deudas > 36% del ingreso neto
+  const [[income]] = await db.execute(
+    `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+  if (income) {
+    const [deudas] = await db.execute(
+      `SELECT IF(es_letra=1, cuota_fija, pago_minimo) AS cuota FROM deudas WHERE firebase_uid = ? AND activa = 1`,
+      [firebase_uid]);
+    const totalCuotas = deudas.reduce((s, d) => s + Number(d.cuota || 0), 0);
+    const ingresoNeto = Number(income.ingreso_neto_mensual);
+    const dti = ingresoNeto > 0 ? totalCuotas / ingresoNeto : 0;
+    if (dti > 0.36) {
+      alertas.push({
+        tipo: 'dti_critico', categoria: null, nivel: dti > 0.50 ? 'danger' : 'warning',
+        titulo: `DTI crítico: ${(dti * 100).toFixed(0)}% de tu ingreso va a deudas`,
+        mensaje: `Estás destinando $${totalCuotas.toFixed(2)}/mes al pago de deudas (${(dti*100).toFixed(0)}% de tu ingreso neto de $${ingresoNeto.toFixed(2)}). El límite saludable es 36%.`,
+        accion_sugerida: 'Considera estrategia avalanche o snowball para acelerar el pago. No contraigas nueva deuda.',
+      });
+    }
+  }
+
+  // Alerta pagos vencidos: deudas con fecha_proximo_pago < hoy
+  const [deudasVencidas] = await db.execute(
+    `SELECT nombre, fecha_proximo_pago, IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
+     FROM deudas WHERE firebase_uid = ? AND activa = 1 AND fecha_proximo_pago < CURDATE()`,
+    [firebase_uid]);
+  for (const d of deudasVencidas) {
+    const fecha = new Date(d.fecha_proximo_pago).toLocaleDateString('es', { day: 'numeric', month: 'long' });
+    alertas.push({
+      tipo: 'pago_vencido', categoria: null, nivel: 'danger',
+      titulo: `Pago vencido: ${d.nombre}`,
+      mensaje: `El pago de $${Number(d.cuota).toFixed(2)} de "${d.nombre}" venció el ${fecha}. Los retrasos generan intereses moratorios y afectan tu historial.`,
+      accion_sugerida: `Realiza el pago de "${d.nombre}" lo antes posible y actualiza la fecha en tu perfil.`,
+    });
+  }
+
   // Gastos variables base del usuario (presupuesto estimado por categoría)
   const [varBase] = await db.execute(
     `SELECT categoria, SUM(monto_estimado) AS presupuestado
@@ -10545,15 +10668,19 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
     }
   }
 
-  // Guardar alertas nuevas (evitar duplicados del mismo mes/tipo/categoría)
+  // Guardar alertas nuevas: borrar la del mismo tipo/categoría/mes y re-insertar con datos frescos
   for (const a of alertas) {
     try {
+      await db.execute(
+        `DELETE FROM alertas_financieras WHERE firebase_uid=? AND anio=? AND mes=? AND tipo=? AND (categoria=? OR (categoria IS NULL AND ? IS NULL))`,
+        [firebase_uid, anio, mes, a.tipo, a.categoria || null, a.categoria || null]
+      );
       await db.execute(
         `INSERT INTO alertas_financieras (firebase_uid, anio, mes, tipo, categoria, nivel, titulo, mensaje, accion_sugerida)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [firebase_uid, anio, mes, a.tipo, a.categoria || null, a.nivel, a.titulo, a.mensaje, a.accion_sugerida || null]
       );
-    } catch (_) { /* ignorar duplicados */ }
+    } catch (_) { /* ignorar errores inesperados */ }
   }
   return alertas;
 }
