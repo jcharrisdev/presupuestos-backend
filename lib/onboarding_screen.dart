@@ -254,7 +254,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
       _irSiguiente();
     } catch (_) {
-      _irSiguiente(); // no bloquear si falla — se puede configurar después
+      _snack('No pudimos guardar algunos gastos estimados. Puedes agregarlos desde tu Perfil Financiero después.');
+      _irSiguiente();
     }
     if (mounted) setState(() => _guardandoVariables = false);
   }

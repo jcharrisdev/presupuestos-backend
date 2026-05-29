@@ -5958,24 +5958,26 @@ app.get('/jobs/:id/financial-summary', async (req, res) => {
  */
 app.post('/gustitos', async (req, res) => {
   const {
-    user_id, budget_id, name, amount, spent_at,
+    user_id, budget_id = null, name, amount, spent_at,
     description = null, merchant = null, category = null,
     emotion_tag = null, source = 'manual', scanned_invoice_id = null
   } = req.body;
 
-  if (!user_id || !budget_id || !name || amount == null || !spent_at)
-    return res.status(400).json({ error: 'Datos incompletos: user_id, budget_id, name, amount y spent_at son requeridos' });
+  if (!user_id || !name || amount == null || !spent_at)
+    return res.status(400).json({ error: 'Datos incompletos: user_id, name, amount y spent_at son requeridos' });
 
   if (Number(amount) <= 0)
     return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
 
   try {
-    // Verificar que el presupuesto pertenece al usuario
-    const [[presupuesto]] = await db.execute(
-      `SELECT id FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
-      [budget_id, user_id]
-    );
-    if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+    // Verificar presupuesto solo si se provee (budget_id es opcional)
+    if (budget_id != null) {
+      const [[presupuesto]] = await db.execute(
+        `SELECT id FROM presupuestos WHERE id = ? AND firebase_uid = ?`,
+        [budget_id, user_id]
+      );
+      if (!presupuesto) return res.status(404).json({ error: 'Presupuesto no encontrado' });
+    }
 
     const spentAtStr = spent_at.split('T')[0];
 

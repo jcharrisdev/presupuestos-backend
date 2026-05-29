@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import '../services/api_client.dart';
-import '../services/invoice_scanner_service.dart';
+import '../services/gustitos_service.dart';
 import 'invoice_history_screen.dart';
 
 class CreateGustitoFromInvoiceScreen extends StatefulWidget {
@@ -16,71 +14,61 @@ class CreateGustitoFromInvoiceScreen extends StatefulWidget {
 }
 
 class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoiceScreen> {
-  List<dynamic> _presupuestos    = [];
-  dynamic        _selectedBudget;
-  String         _emocion        = 'antojo';
-  bool           _loading        = false;
-  bool           _saving         = false;
+  String _emocion = 'antojo';
+  bool   _saving  = false;
 
   late TextEditingController _nameCtrl;
   late TextEditingController _amountCtrl;
+  late DateTime _fecha;
   final _fmt = NumberFormat('#,##0.00', 'en_US');
 
-  final _emociones = ['antojo', 'premio', 'social', 'impulso', 'estres', 'otro'];
+  static const _emociones = ['antojo', 'premio', 'social', 'impulso', 'estres', 'otro'];
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl   = TextEditingController(text: widget.invoice['merchant_name'] ?? 'Gustito QR');
+    _nameCtrl   = TextEditingController(text: widget.invoice['merchant_name'] ?? 'Gustito');
     _amountCtrl = TextEditingController(text: (widget.invoice['total_amount'] ?? '').toString());
-    _cargarPresupuestos();
+    final rawDate = widget.invoice['invoice_date'] as String?;
+    _fecha = rawDate != null ? DateTime.tryParse(rawDate) ?? DateTime.now() : DateTime.now();
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _amountCtrl.dispose();
+    _nameCtrl.dispose();
+    _amountCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _cargarPresupuestos() async {
-    setState(() => _loading = true);
-    try {
-      final resp = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
-      if (resp.statusCode == 200) setState(() => _presupuestos = json.decode(resp.body));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   Future<void> _crear() async {
-    if (_selectedBudget == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Selecciona un presupuesto'), backgroundColor: AppTheme.danger,
+    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', ''));
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Monto inválido'), backgroundColor: AppTheme.danger,
       ));
       return;
     }
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', ''));
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Monto inválido'), backgroundColor: AppTheme.danger,
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Ingresa un nombre'), backgroundColor: AppTheme.danger,
       ));
       return;
     }
     setState(() => _saving = true);
     try {
-      await InvoiceScannerService.assignInvoice(
-        widget.invoice['id'] as int,
-        {
-          'assignment_type': 'gustito',
-          'presupuesto_id':  _selectedBudget['id'],
-          'amount_assigned': amount,
-          'notes':           _emocion,
-        },
-        widget.firebaseUid,
-      );
+      await GustitosService.crear({
+        'user_id':            widget.firebaseUid,
+        'name':               name,
+        'amount':             amount,
+        'spent_at':           '${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}',
+        'emotion_tag':        _emocion,
+        'source':             'qr',
+        'scanned_invoice_id': widget.invoice['id'],
+      });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Gustito creado'), backgroundColor: AppTheme.success,
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Gustito registrado'), backgroundColor: AppTheme.success,
       ));
       Navigator.pushAndRemoveUntil(
         context,
@@ -97,101 +85,149 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
     }
   }
 
-  InputDecoration _deco(String hint) => InputDecoration(
-    hintText: hint, hintStyle: TextStyle(color: AppTheme.textSecondary),
-    filled: true, fillColor: AppTheme.surface,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-  );
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text('Crear gustito', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
-        iconTheme: IconThemeData(color: AppTheme.textPrimary),
+        title: const Text('Registrar como gustito',
+            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
       ),
-      body: _loading
-          ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Total factura: B/. ${_fmt.format(widget.invoice['total_amount'] ?? 0)}',
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 20),
-
-                  Text('Presupuesto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<dynamic>(
-                    value: _selectedBudget,
-                    dropdownColor: AppTheme.surface,
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('Selecciona presupuesto'),
-                    items: _presupuestos.map((p) => DropdownMenuItem(
-                      value: p,
-                      child: Text(p['nombre'] ?? '', style: TextStyle(color: AppTheme.textPrimary)),
-                    )).toList(),
-                    onChanged: (p) => setState(() => _selectedBudget = p),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text('Nombre del gustito', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _nameCtrl,
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('¿Qué compraste?'),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text('Monto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _amountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('0.00'),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text('Emoción', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: _emociones.map((e) => ChoiceChip(
-                      label: Text(e, style: TextStyle(
-                        color: _emocion == e ? Colors.black : AppTheme.textSecondary,
-                      )),
-                      selected: _emocion == e,
-                      selectedColor: AppTheme.primary,
-                      backgroundColor: AppTheme.surface,
-                      onSelected: (_) => setState(() => _emocion = e),
-                    )).toList(),
-                  ),
-                  const SizedBox(height: 28),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _saving ? null : _crear,
-                      child: _saving
-                          ? const SizedBox(height: 18, width: 18,
-                              child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                          : const Text('Crear gustito',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Resumen de la factura
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border),
             ),
+            child: Row(children: [
+              const Icon(Icons.receipt_outlined, color: AppTheme.textSecondary, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Text(
+                widget.invoice['merchant_name'] ?? 'Factura QR',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              )),
+              Text('B/. ${_fmt.format(widget.invoice['total_amount'] ?? 0)}',
+                  style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          const Text('Nombre', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 6),
+          _field(_nameCtrl, '¿Qué compraste?'),
+          const SizedBox(height: 16),
+
+          const Text('Monto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 6),
+          _field(_amountCtrl, '0.00', numeric: true),
+          const SizedBox(height: 16),
+
+          const Text('Fecha', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: () async {
+              final p = await showDatePicker(
+                context: context,
+                initialDate: _fecha,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+                builder: (ctx, child) => Theme(
+                  data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.dark(
+                    primary: AppTheme.primary, surface: AppTheme.surfaceAlt,
+                  )),
+                  child: child!,
+                ),
+              );
+              if (p != null) setState(() => _fecha = p);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(children: [
+                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                const SizedBox(width: 10),
+                Text(
+                  '${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                ),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          const Text('¿Cómo te sentiste?',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: _emociones.map((e) => GestureDetector(
+              onTap: () => setState(() => _emocion = e),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _emocion == e ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _emocion == e ? AppTheme.primary : AppTheme.border,
+                    width: _emocion == e ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(e, style: TextStyle(
+                  color: _emocion == e ? AppTheme.primary : AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: _emocion == e ? FontWeight.w600 : FontWeight.normal,
+                )),
+              ),
+            )).toList(),
+          ),
+          const SizedBox(height: 32),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _saving ? null : _crear,
+              child: _saving
+                  ? const SizedBox(height: 18, width: 18,
+                      child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                  : const Text('Guardar gustito',
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ]),
+      ),
     );
   }
+
+  Widget _field(TextEditingController ctrl, String hint, {bool numeric = false}) =>
+      TextField(
+        controller: ctrl,
+        keyboardType: numeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        style: const TextStyle(color: AppTheme.textPrimary),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: AppTheme.textMuted),
+          filled: true,
+          fillColor: AppTheme.surface,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+      );
 }
