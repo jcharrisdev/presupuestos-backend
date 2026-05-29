@@ -803,34 +803,38 @@ class _CardAnual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final factorEst = vista == 'anual' ? 1.0 : vista == 'mensual' ? 1 / 12 : 1 / 24;
-    final label     = vista == 'anual' ? 'Anual' : vista == 'mensual' ? 'Mensual' : 'Quincenal';
+    final factor = vista == 'anual' ? 1.0 : vista == 'mensual' ? 1 / 12 : 1 / 24;
+    final label  = vista == 'anual' ? 'Anual' : vista == 'mensual' ? 'Mensual' : 'Quincenal';
 
-    final ingresoEst = _d(ea['ingreso_anual_estimado'])  * factorEst;
-    final fijosEst   = _d(ea['gastos_fijos_anuales'])    * factorEst;
-    final varEst     = _d(ea['gastos_variables_anuales'])* factorEst;
-    final remEst     = _d(ea['remanente_anual_estimado']) * factorEst;
+    // Estimados: siempre dividir por 12 (ó 24 quincenal) porque el anual = mensual × 12
+    final ingresoEst = _d(ea['ingreso_anual_estimado'])  * factor;
+    final fijosEst   = _d(ea['gastos_fijos_anuales'])    * factor;
+    final varEst     = _d(ea['gastos_variables_anuales'])* factor;
+    final remEst     = _d(ea['remanente_anual_estimado']) * factor;
 
-    // Para los reales: dividir entre meses con datos reales, no siempre entre 12
-    final mFijos = vista == 'anual' ? 1 : vista == 'mensual'
-        ? (_i(ea['meses_con_fijos_reales']) > 0 ? _i(ea['meses_con_fijos_reales']) : 12)
-        : (_i(ea['meses_con_fijos_reales']) > 0 ? _i(ea['meses_con_fijos_reales']) * 2 : 24);
-    final mVars  = vista == 'anual' ? 1 : vista == 'mensual'
-        ? (_i(ea['meses_con_vars_reales']) > 0 ? _i(ea['meses_con_vars_reales']) : 12)
-        : (_i(ea['meses_con_vars_reales']) > 0 ? _i(ea['meses_con_vars_reales']) * 2 : 24);
-    final mIng   = vista == 'anual' ? 1 : vista == 'mensual'
-        ? (_i(ea['meses_con_ing_real']) > 0 ? _i(ea['meses_con_ing_real']) : 12)
-        : (_i(ea['meses_con_ing_real']) > 0 ? _i(ea['meses_con_ing_real']) * 2 : 24);
-    final mNoPres= vista == 'anual' ? 1 : vista == 'mensual'
-        ? (_i(ea['meses_con_no_pres']) > 0 ? _i(ea['meses_con_no_pres']) : 12)
-        : (_i(ea['meses_con_no_pres']) > 0 ? _i(ea['meses_con_no_pres']) * 2 : 24);
+    // Reales:
+    // - Ingreso usa /12 igual que estimado (incluye meses sin dato real como fallback estimado)
+    // - Gastos usan /meses_con_datos para mostrar el promedio real de los meses con registros
+    final divisorGastos = vista == 'anual' ? 1
+        : vista == 'mensual'
+            ? (_i(ea['meses_con_fijos_reales']) > 0 ? _i(ea['meses_con_fijos_reales']) : 1)
+            : (_i(ea['meses_con_fijos_reales']) > 0 ? _i(ea['meses_con_fijos_reales']) * 2 : 1);
+    final divisorVars  = vista == 'anual' ? 1
+        : vista == 'mensual'
+            ? (_i(ea['meses_con_vars_reales']) > 0 ? _i(ea['meses_con_vars_reales']) : 1)
+            : (_i(ea['meses_con_vars_reales']) > 0 ? _i(ea['meses_con_vars_reales']) * 2 : 1);
+    final divisorNoPres= vista == 'anual' ? 1
+        : vista == 'mensual'
+            ? (_i(ea['meses_con_no_pres']) > 0 ? _i(ea['meses_con_no_pres']) : 1)
+            : (_i(ea['meses_con_no_pres']) > 0 ? _i(ea['meses_con_no_pres']) * 2 : 1);
 
-    final ingresoReal = _d(ea['ingreso_anual_real'])       / mIng;
-    final fijosReal   = _d(ea['gastos_fijos_reales'])     / mFijos;
-    final varReal     = _d(ea['gastos_variables_reales'])  / mVars;
-    final noPres      = _d(ea['compras_no_presup_reales']) / mNoPres;
+    final ingresoReal = _d(ea['ingreso_anual_real'])       * factor;
+    final fijosReal   = _d(ea['gastos_fijos_reales'])      / divisorGastos;
+    final varReal     = _d(ea['gastos_variables_reales'])  / divisorVars;
+    final noPres      = _d(ea['compras_no_presup_reales']) / divisorNoPres;
     final remReal     = ingresoReal - fijosReal - varReal - noPres;
-    final tieneReal   = _d(ea['ingreso_anual_real']) > 0 || _d(ea['gastos_fijos_reales']) > 0;
+    final tieneReal   = _d(ea['gastos_fijos_reales']) > 0 || _d(ea['gastos_variables_reales']) > 0
+                     || _d(ea['compras_no_presup_reales']) > 0;
 
     return GestureDetector(
       onTap: onTap,
