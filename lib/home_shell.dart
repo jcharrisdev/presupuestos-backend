@@ -11,7 +11,6 @@ import 'mes_detalle_screen.dart';
 import 'deudas/deudas_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'shared_budgets_list_screen.dart';
-import 'ahorro_meta.dart';
 import 'calendario.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
 import 'dashboard_screen.dart';
@@ -310,7 +309,7 @@ class _MasTab extends StatelessWidget {
                   subtitle: 'Objetivos financieros',
                   color: AppTheme.colorAhorro,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => AhorroMetaScreen(firebaseUid: firebaseUid),
+                    builder: (_) => ObjetivosScreen(firebaseUid: firebaseUid),
                   )),
                 ),
                 _ModuloCard(
@@ -347,15 +346,6 @@ class _MasTab extends StatelessWidget {
                   color: AppTheme.info,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => PatrimonioScreen(firebaseUid: firebaseUid),
-                  )),
-                ),
-                _ModuloCard(
-                  icon: Icons.flag_outlined,
-                  title: 'Objetivos',
-                  subtitle: 'Metas a largo plazo',
-                  color: AppTheme.colorAhorro,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => ObjetivosScreen(firebaseUid: firebaseUid),
                   )),
                 ),
                 if (modoNegocio)

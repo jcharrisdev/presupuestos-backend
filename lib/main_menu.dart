@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'ahorro_meta.dart';
+import 'objetivos_screen.dart';
 import 'calendario.dart';
 import 'login_screen.dart';
 import 'ventas_landing_screen.dart';
@@ -233,7 +233,7 @@ class _MainMenuState extends State<MainMenu> {
                 subtitle: 'Define y sigue tus objetivos financieros',
                 color: AppTheme.colorAhorro,
                 onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => AhorroMetaScreen(firebaseUid: firebaseUid),
+                  builder: (_) => ObjetivosScreen(firebaseUid: firebaseUid),
                 )),
               ),
               const SizedBox(height: 12),

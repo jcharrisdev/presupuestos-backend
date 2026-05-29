@@ -302,6 +302,8 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
   final _descCtrl   = TextEditingController();
   String _tipo = 'ahorro';
   DateTime? _fechaLimite;
+  bool _usarPlazo = false;
+  int _plazoMeses = 12;
   bool _guardando = false;
 
   static const _tipos = [
@@ -313,9 +315,21 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _metaCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
     _nombreCtrl.dispose(); _metaCtrl.dispose(); _descCtrl.dispose();
     super.dispose();
+  }
+
+  double get _cuotaMensual {
+    final meta = double.tryParse(_metaCtrl.text) ?? 0;
+    if (!_usarPlazo || _plazoMeses <= 0 || meta <= 0) return 0;
+    return (meta / _plazoMeses * 100).ceil() / 100;
   }
 
   Future<void> _guardar() async {
@@ -325,6 +339,11 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nombre y monto meta son requeridos')));
       return;
     }
+    DateTime? fechaFinal = _fechaLimite;
+    if (_usarPlazo && fechaFinal == null) {
+      final ahora = DateTime.now();
+      fechaFinal = DateTime(ahora.year, ahora.month + _plazoMeses, ahora.day);
+    }
     setState(() => _guardando = true);
     await ApiClient.post('/user/objetivos', {
       'firebase_uid': widget.uid,
@@ -332,8 +351,8 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
       'descripcion': _descCtrl.text.trim(),
       'monto_meta': meta,
       'tipo': _tipo,
-      if (_fechaLimite != null)
-        'fecha_limite': '${_fechaLimite!.year}-${_fechaLimite!.month.toString().padLeft(2, '0')}-${_fechaLimite!.day.toString().padLeft(2, '0')}',
+      if (fechaFinal != null)
+        'fecha_limite': '${fechaFinal.year}-${fechaFinal.month.toString().padLeft(2, '0')}-${fechaFinal.day.toString().padLeft(2, '0')}',
     });
     if (mounted) Navigator.pop(context, true);
   }
@@ -344,28 +363,38 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
       initialDate: DateTime.now().add(const Duration(days: 365)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(primary: AppTheme.primary, surface: AppTheme.surfaceAlt),
+        ),
+        child: child!,
+      ),
     );
     if (f != null) setState(() => _fechaLimite = f);
   }
 
   @override
   Widget build(BuildContext context) {
+    final cuota = _cuotaMensual;
     return SafeArea(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Nuevo objetivo', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
+
           TextField(controller: _nombreCtrl,
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre (ej: Fondo emergencia, Carro nuevo)')),
           const SizedBox(height: 12),
+
           TextField(controller: _metaCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(labelText: 'Monto meta', prefixText: '\$ ')),
           const SizedBox(height: 12),
+
           DropdownButtonFormField<String>(
             value: _tipo,
             dropdownColor: AppTheme.surface,
@@ -374,31 +403,86 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
             items: _tipos.map((t) => DropdownMenuItem(value: t['value'], child: Text(t['label']!))).toList(),
             onChanged: (v) => setState(() => _tipo = v ?? 'ahorro'),
           ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: _elegirFecha,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppTheme.border)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.calendar_today_outlined, color: AppTheme.textMuted, size: 18),
-                const SizedBox(width: 10),
-                Text(
-                  _fechaLimite != null
-                      ? 'Fecha límite: ${_fechaLimite!.day}/${_fechaLimite!.month}/${_fechaLimite!.year}'
-                      : 'Fecha límite (opcional)',
-                  style: TextStyle(color: _fechaLimite != null ? AppTheme.textPrimary : AppTheme.textMuted, fontSize: 14),
+          const SizedBox(height: 16),
+
+          // Toggle plazo / fecha límite
+          Row(children: [
+            const Text('Plazo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => setState(() { _usarPlazo = !_usarPlazo; }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _usarPlazo ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _usarPlazo ? AppTheme.primary : AppTheme.border),
                 ),
-              ]),
+                child: Text(
+                  _usarPlazo ? 'En meses' : 'Por fecha',
+                  style: TextStyle(
+                    color: _usarPlazo ? AppTheme.primary : AppTheme.textMuted,
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
-          ),
+          ]),
+          const SizedBox(height: 8),
+
+          if (_usarPlazo) ...[
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('$_plazoMeses ${_plazoMeses == 1 ? "mes" : "meses"}',
+                  style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+            ]),
+            Slider(
+              value: _plazoMeses.toDouble(), min: 1, max: 60, divisions: 59,
+              activeColor: AppTheme.primary,
+              label: '$_plazoMeses meses',
+              onChanged: (v) => setState(() => _plazoMeses = v.toInt()),
+            ),
+            if (cuota > 0)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.colorAhorro.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.colorAhorro.withValues(alpha: 0.25)),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Cuota mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  Text('\$${cuota.toStringAsFixed(2)}/mes',
+                      style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16)),
+                ]),
+              ),
+          ] else ...[
+            GestureDetector(
+              onTap: _elegirFecha,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppTheme.border)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textMuted, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    _fechaLimite != null
+                        ? 'Fecha límite: ${_fechaLimite!.day}/${_fechaLimite!.month}/${_fechaLimite!.year}'
+                        : 'Fecha límite (opcional)',
+                    style: TextStyle(color: _fechaLimite != null ? AppTheme.textPrimary : AppTheme.textMuted, fontSize: 14),
+                  ),
+                ]),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
+
           TextField(controller: _descCtrl,
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Descripción (opcional)')),
           const SizedBox(height: 20),
+
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(

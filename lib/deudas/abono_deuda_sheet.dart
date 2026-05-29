@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/deudas_service.dart';
+import '../services/registros_service.dart';
 
 class AbonoDeudaSheet {
   static void show(
@@ -97,6 +98,20 @@ class AbonoDeudaSheet {
                   deuda['id'] as int, firebaseUid, monto,
                   fechaProximoPago: fechaProximoPago?.toIso8601String().substring(0, 10),
                 );
+                final hoy = DateTime.now();
+                final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+                await RegistrosService.crear(
+                  uid: firebaseUid,
+                  anio: hoy.year,
+                  mes: hoy.month,
+                  tipo: 'fijo',
+                  categoria: 'deudas',
+                  nombre: deuda['nombre'] as String? ?? 'Abono deuda',
+                  monto: monto,
+                  fecha: fecha,
+                  origenDeudaId: deuda['id'] as int,
+                  pagado: 1,
+                ).catchError((_) => <String, dynamic>{});
                 Navigator.pop(ctx);
                 onAbonado();
               } catch (e) {
