@@ -327,16 +327,34 @@ pool.getConnection(async (err, conn) => {
     console.error('⚠️ Migración calendario_eventos:', e.message);
   }
 
-  // Migración: columna deuda_id en calendario_eventos para trackear pagos de deudas
+  // Migración: columnas adicionales en calendario_eventos (MySQL 5.6 no soporta IF NOT EXISTS en ADD COLUMN)
+  const _migrCalEvCols = [
+    [`ALTER TABLE calendario_eventos ADD COLUMN deuda_id INT DEFAULT NULL`, 'deuda_id'],
+    [`ALTER TABLE calendario_eventos ADD COLUMN notificacion_enviada TINYINT DEFAULT 0`, 'notificacion_enviada'],
+    [`ALTER TABLE calendario_eventos ADD COLUMN google_event_id VARCHAR(255) DEFAULT NULL`, 'google_event_id'],
+    [`ALTER TABLE calendario_eventos ADD COLUMN periodo_id INT DEFAULT NULL`, 'periodo_id'],
+    [`ALTER TABLE calendario_eventos ADD COLUMN cobro_id INT DEFAULT NULL`, 'cobro_id'],
+  ];
+  for (const [sql, col] of _migrCalEvCols) {
+    try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
+  }
+  console.log('✅ Migración calendario_eventos columnas extra OK');
+
+  // Limpieza de alertas duplicadas: mantener solo la más reciente por (firebase_uid, anio, mes, tipo, categoria)
   try {
-    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS deuda_id INT DEFAULT NULL`).catch(() => {});
-    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS notificacion_enviada TINYINT DEFAULT 0`).catch(() => {});
-    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS google_event_id VARCHAR(255) DEFAULT NULL`).catch(() => {});
-    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS periodo_id INT DEFAULT NULL`).catch(() => {});
-    await db.execute(`ALTER TABLE calendario_eventos ADD COLUMN IF NOT EXISTS cobro_id INT DEFAULT NULL`).catch(() => {});
-    console.log('✅ Migración calendario_eventos deuda_id OK');
+    await db.execute(`
+      DELETE a1 FROM alertas_financieras a1
+      INNER JOIN alertas_financieras a2
+        ON a1.firebase_uid = a2.firebase_uid
+        AND a1.anio = a2.anio
+        AND a1.mes = a2.mes
+        AND a1.tipo = a2.tipo
+        AND (a1.categoria = a2.categoria OR (a1.categoria IS NULL AND a2.categoria IS NULL))
+        AND a1.id < a2.id
+    `);
+    console.log('✅ Limpieza alertas duplicadas OK');
   } catch (e) {
-    console.error('⚠️ Migración calendario_eventos deuda_id:', e.message);
+    console.error('⚠️ Limpieza alertas duplicadas:', e.message);
   }
 
   // Migración: gastos globales reutilizables (independientes de presupuesto)
@@ -9661,6 +9679,11 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
     const totalVarReales   = meses.reduce((s, m) => s + Number(m.variables_reales), 0);
     const totalNoPres      = meses.reduce((s, m) => s + Number(m.no_presupuestados_reales), 0);
     const totalIngReal     = meses.reduce((s, m) => s + (Number(m.ingreso_real) || Number(m.ingreso_estimado)), 0);
+    // Cantidad de meses con datos reales (para calcular promedio mensual real correcto)
+    const mesesConFijosReales = Math.max(1, meses.filter(m => Number(m.fijos_reales) > 0).length);
+    const mesesConVarsReales  = Math.max(1, meses.filter(m => Number(m.variables_reales) > 0).length);
+    const mesesConIngReal     = Math.max(1, meses.filter(m => Number(m.ingreso_real) > 0).length);
+    const mesesConNoPres      = Math.max(1, meses.filter(m => Number(m.no_presupuestados_reales) > 0).length);
 
     const MESES_LABEL = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     res.json({
@@ -9672,6 +9695,10 @@ app.get('/user/estado-anual/:anio', async (req, res) => {
         gastos_variables_reales:  parseFloat(totalVarReales.toFixed(2)),
         compras_no_presup_reales: parseFloat(totalNoPres.toFixed(2)),
         remanente_anual_real:     parseFloat((totalIngReal - totalFijosReales - totalVarReales - totalNoPres).toFixed(2)),
+        meses_con_fijos_reales:   mesesConFijosReales,
+        meses_con_vars_reales:    mesesConVarsReales,
+        meses_con_ing_real:       mesesConIngReal,
+        meses_con_no_pres:        mesesConNoPres,
       },
       meses: meses.map(m => ({
         ...m,
