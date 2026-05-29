@@ -151,6 +151,8 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                       _TabGastos(
                         data: _data!,
                         uid: widget.firebaseUid,
+                        anio: widget.anio,
+                        mes: widget.mes,
                         onChanged: _cargar,
                       ),
                       _TabQuincenas(
@@ -494,73 +496,146 @@ class _BarraUso extends StatelessWidget {
 
 // ── TAB 2: GASTOS ────────────────────────────────────────────────────────
 
-class _TabGastos extends StatelessWidget {
+class _TabGastos extends StatefulWidget {
   final Map<String, dynamic> data;
   final String uid;
+  final int anio;
+  final int mes;
   final VoidCallback onChanged;
-  const _TabGastos({required this.data, required this.uid, required this.onChanged});
+  const _TabGastos({
+    required this.data,
+    required this.uid,
+    required this.anio,
+    required this.mes,
+    required this.onChanged,
+  });
+
+  @override
+  State<_TabGastos> createState() => _TabGastosState();
+}
+
+class _TabGastosState extends State<_TabGastos> {
+  bool _operando = false;
+
+  Future<void> _marcarFijo(Map<String, dynamic> g, bool pagado, int? registroId) async {
+    if (_operando) return;
+    setState(() => _operando = true);
+    try {
+      if (!pagado) {
+        final hoy = DateTime.now();
+        final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+        await RegistrosService.crear(
+          uid: widget.uid,
+          anio: widget.anio,
+          mes: widget.mes,
+          tipo: 'fijo',
+          categoria: (g['categoria'] as String? ?? '').isNotEmpty
+              ? g['categoria'] as String
+              : 'otros',
+          nombre: g['nombre'] as String? ?? '',
+          monto: _num(g['monto']),
+          fecha: fecha,
+          origenFijoId: g['id'] as int,
+          pagado: 1,
+        );
+      } else if (registroId != null) {
+        await RegistrosService.eliminar(widget.uid, registroId);
+      }
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _operando = false);
+    }
+  }
+
+  double _num(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
 
   @override
   Widget build(BuildContext context) {
-    final registros    = (data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
-    final compromisos  = data['compromisos_fijos'] as Map<String, dynamic>? ?? {};
-    final gastosFijos  = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
-    final deudas       = (compromisos['deudas'] as List? ?? []).cast<Map<String, dynamic>>();
+    final registros   = (widget.data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final compromisos = widget.data['compromisos_fijos'] as Map<String, dynamic>? ?? {};
+    final gastosFijos = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
+    final deudas      = (compromisos['deudas'] as List? ?? []).cast<Map<String, dynamic>>();
 
-    // IDs de registros que ya tienen origen_id vinculado a un gasto fijo
-    final registradosIds = registros
-        .where((r) => r['origen_fijo_id'] != null)
-        .map((r) => r['origen_fijo_id'] as int)
-        .toSet();
+    // Mapa fijoId → registroId para saber qué registro borrar al desmarcar
+    final fijoARegistroId = <int, int>{};
+    final registradosIds  = <int>{};
+    for (final r in registros) {
+      final origenId = r['origen_fijo_id'];
+      if (origenId != null) {
+        final fijoId = origenId as int;
+        registradosIds.add(fijoId);
+        fijoARegistroId[fijoId] = r['id'] as int;
+      }
+    }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+    return Stack(
       children: [
-        // ── COMPROMISOS FIJOS DEL MES ──────────────────────────────────
-        if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
-          _SeccionLabel('COMPROMISOS DEL MES',
-              '${gastosFijos.length + deudas.length} ítems planificados'),
-          ...gastosFijos.map((g) {
-            final pagado = registradosIds.contains(g['id'] as int? ?? -1);
-            return _PlanTile(
-              nombre: g['nombre'] as String? ?? '',
-              monto: (g['monto'] as num).toDouble(),
-              tipo: g['tipo'] as String? ?? 'otro',
-              pagado: pagado,
-              esPago: false,
-            );
-          }),
-          ...deudas.map((d) => _PlanTile(
-            nombre: d['nombre'] as String? ?? '',
-            monto: (d['cuota'] as num? ?? 0).toDouble(),
-            tipo: 'deuda',
-            pagado: false,
-            esPago: true,
-            cuotasRestantes: d['cuotas_restantes'] as int?,
-          )),
-          const Divider(color: AppTheme.border, height: 24),
-        ],
-
-        // ── REGISTROS REALES ───────────────────────────────────────────
-        if (registros.isNotEmpty) ...[
-          _SeccionLabel('GASTOS REGISTRADOS', '${registros.length} transacciones'),
-          ...registros.map((r) => _RegistroTile(reg: r, uid: uid, onChanged: onChanged)),
-        ] else
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: const Row(children: [
-              Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
-              SizedBox(width: 10),
-              Expanded(child: Text(
-                'Aún no registraste gastos reales. Presiona + para agregar o escanea una factura QR.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
+        ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          children: [
+            // ── COMPROMISOS FIJOS DEL MES ────────────────────────────
+            if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
+              _SeccionLabel('COMPROMISOS DEL MES',
+                  '${gastosFijos.length + deudas.length} ítems planificados'),
+              ...gastosFijos.map((g) {
+                final fijoId = g['id'] as int;
+                final pagado = registradosIds.contains(fijoId);
+                return _PlanTile(
+                  nombre: g['nombre'] as String? ?? '',
+                  monto: _num(g['monto']),
+                  tipo: g['tipo'] as String? ?? 'otro',
+                  pagado: pagado,
+                  esPago: false,
+                  onTap: _operando ? null : () => _marcarFijo(g, pagado, fijoARegistroId[fijoId]),
+                );
+              }),
+              ...deudas.map((d) => _PlanTile(
+                nombre: d['nombre'] as String? ?? '',
+                monto: (d['cuota'] as num? ?? 0).toDouble(),
+                tipo: 'deuda',
+                pagado: false,
+                esPago: true,
+                cuotasRestantes: d['cuotas_restantes'] as int?,
               )),
-            ]),
+              const Divider(color: AppTheme.border, height: 24),
+            ],
+
+            // ── REGISTROS REALES ────────────────────────────────────
+            if (registros.isNotEmpty) ...[
+              _SeccionLabel('GASTOS REGISTRADOS', '${registros.length} transacciones'),
+              ...registros.map((r) => _RegistroTile(
+                  reg: r, uid: widget.uid, onChanged: widget.onChanged)),
+            ] else
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
+                  SizedBox(width: 10),
+                  Expanded(child: Text(
+                    'Aún no registraste gastos reales. Presiona + para agregar o escanea una factura QR.',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
+                  )),
+                ]),
+              ),
+          ],
+        ),
+        if (_operando)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: Colors.black26,
+              child: Center(child: CircularProgressIndicator()),
+            ),
           ),
       ],
     );
@@ -590,10 +665,12 @@ class _PlanTile extends StatelessWidget {
   final bool pagado;
   final bool esPago;
   final int? cuotasRestantes;
+  final VoidCallback? onTap;
   const _PlanTile({
     required this.nombre, required this.monto, required this.tipo,
     required this.pagado, required this.esPago,
     this.cuotasRestantes,
+    this.onTap,
   });
 
   @override
@@ -601,7 +678,10 @@ class _PlanTile extends StatelessWidget {
     final color = tipo == 'deuda' ? AppTheme.danger
         : tipo == 'vivienda' ? AppTheme.colorFijo
         : AppTheme.colorFijo;
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -635,10 +715,13 @@ class _PlanTile extends StatelessWidget {
               )),
           if (pagado)
             const Text('Registrado', style: TextStyle(color: AppTheme.success, fontSize: 9)),
-          if (!pagado)
+          if (!pagado && onTap != null)
+            const Text('Toca para pagar', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
+          if (!pagado && onTap == null)
             const Text('Pendiente', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
         ]),
       ]),
+    ),
     );
   }
 }

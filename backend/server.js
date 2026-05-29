@@ -10039,6 +10039,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         gastos_fijos: gastosFijosPerfil.map(g => ({
           id: g.id, nombre: g.descripcion, monto: Number(g.monto_mensual),
           tipo: g.tipo, dia_pago: g.dia_pago, dia_pago_2: g.dia_pago_2, frecuencia: g.frecuencia,
+          categoria: g.categoria || null,
         })),
         deudas: deudasDelMes.map(d => ({
           id: d.id, nombre: d.nombre, tipo: d.tipo,
