@@ -568,74 +568,66 @@ class _TabGastosState extends State<_TabGastos> {
     for (final r in registros) {
       final origenId = r['origen_fijo_id'];
       if (origenId != null) {
-        final fijoId = origenId as int;
-        registradosIds.add(fijoId);
-        fijoARegistroId[fijoId] = r['id'] as int;
+        final fijoId  = (origenId as num?)?.toInt() ?? -1;
+        final regId   = (r['id'] as num?)?.toInt() ?? -1;
+        if (fijoId >= 0 && regId >= 0) {
+          registradosIds.add(fijoId);
+          fijoARegistroId[fijoId] = regId;
+        }
       }
     }
 
-    return Stack(
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       children: [
-        ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-          children: [
-            // ── COMPROMISOS FIJOS DEL MES ────────────────────────────
-            if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
-              _SeccionLabel('COMPROMISOS DEL MES',
-                  '${gastosFijos.length + deudas.length} ítems planificados'),
-              ...gastosFijos.map((g) {
-                final fijoId = g['id'] as int;
-                final pagado = registradosIds.contains(fijoId);
-                return _PlanTile(
-                  nombre: g['nombre'] as String? ?? '',
-                  monto: _num(g['monto']),
-                  tipo: g['tipo'] as String? ?? 'otro',
-                  pagado: pagado,
-                  esPago: false,
-                  onTap: _operando ? null : () => _marcarFijo(g, pagado, fijoARegistroId[fijoId]),
-                );
-              }),
-              ...deudas.map((d) => _PlanTile(
-                nombre: d['nombre'] as String? ?? '',
-                monto: (d['cuota'] as num? ?? 0).toDouble(),
-                tipo: 'deuda',
-                pagado: false,
-                esPago: true,
-                cuotasRestantes: d['cuotas_restantes'] as int?,
-              )),
-              const Divider(color: AppTheme.border, height: 24),
-            ],
+        // ── COMPROMISOS FIJOS DEL MES ────────────────────────────
+        if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
+          _SeccionLabel('COMPROMISOS DEL MES',
+              '${gastosFijos.length + deudas.length} ítems planificados'),
+          ...gastosFijos.map((g) {
+            final fijoId = (g['id'] as num?)?.toInt() ?? -1;
+            final pagado = registradosIds.contains(fijoId);
+            return _PlanTile(
+              nombre: g['nombre'] as String? ?? '',
+              monto: _num(g['monto']),
+              tipo: g['tipo'] as String? ?? 'otro',
+              pagado: pagado,
+              esPago: false,
+              onTap: (_operando || fijoId < 0) ? null : () => _marcarFijo(g, pagado, fijoARegistroId[fijoId]),
+            );
+          }),
+          ...deudas.map((d) => _PlanTile(
+            nombre: d['nombre'] as String? ?? '',
+            monto: (d['cuota'] as num? ?? 0).toDouble(),
+            tipo: 'deuda',
+            pagado: false,
+            esPago: true,
+            cuotasRestantes: d['cuotas_restantes'] as int?,
+          )),
+          const Divider(color: AppTheme.border, height: 24),
+        ],
 
-            // ── REGISTROS REALES ────────────────────────────────────
-            if (registros.isNotEmpty) ...[
-              _SeccionLabel('GASTOS REGISTRADOS', '${registros.length} transacciones'),
-              ...registros.map((r) => _RegistroTile(
-                  reg: r, uid: widget.uid, onChanged: widget.onChanged)),
-            ] else
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceAlt,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.border),
-                ),
-                child: const Row(children: [
-                  Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
-                  SizedBox(width: 10),
-                  Expanded(child: Text(
-                    'Aún no registraste gastos reales. Presiona + para agregar o escanea una factura QR.',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
-                  )),
-                ]),
-              ),
-          ],
-        ),
-        if (_operando)
-          const Positioned.fill(
-            child: ColoredBox(
-              color: Colors.black26,
-              child: Center(child: CircularProgressIndicator()),
+        // ── REGISTROS REALES ────────────────────────────────────
+        if (registros.isNotEmpty) ...[
+          _SeccionLabel('GASTOS REGISTRADOS', '${registros.length} transacciones'),
+          ...registros.map((r) => _RegistroTile(
+              reg: r, uid: widget.uid, onChanged: widget.onChanged)),
+        ] else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border),
             ),
+            child: const Row(children: [
+              Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
+              SizedBox(width: 10),
+              Expanded(child: Text(
+                'Aún no registraste gastos reales. Presiona + para agregar o escanea una factura QR.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
+              )),
+            ]),
           ),
       ],
     );
