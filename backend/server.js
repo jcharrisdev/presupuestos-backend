@@ -609,6 +609,16 @@ pool.getConnection(async (err, conn) => {
     }
   }
 
+  // Migración: origen_deuda_id en registros_gasto — vincula un pago mensual con su deuda
+  try {
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN origen_deuda_id INT DEFAULT NULL`);
+    console.log('✅ Migración origen_deuda_id en registros_gasto OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración origen_deuda_id:', e.message);
+    }
+  }
+
   // Migración: todos los registros_gasto existentes → día 15 para distribución quincenal 50/50
   try {
     const [res] = await db.execute(
@@ -6400,7 +6410,15 @@ app.get('/user/gastos-para-vincular', async (req, res) => {
 // POST /invoice-scanner/:id/registrar-en-mes — conecta factura con estado financiero
 app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid, categoria = 'Compras', nombre_gasto, origen_tipo, origen_id } = req.body;
+  const {
+    firebase_uid,
+    categoria = 'Compras',
+    nombre_gasto,
+    origen_tipo,
+    origen_id,
+    tipo: tipoParam,
+    fecha_override,
+  } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[invoice]] = await db.execute(
@@ -6426,7 +6444,7 @@ app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
     if (!mesRow) return res.status(400).json({ error: 'No tienes un mes activo. Genera tu estado financiero anual primero.' });
 
     const montoReal = Number(invoice.total_amount);
-    const fechaGasto = invoice.invoice_date || hoy.toISOString().split('T')[0];
+    const fechaGasto = fecha_override || invoice.invoice_date || hoy.toISOString().split('T')[0];
     let registroId;
 
     if (origen_tipo && origen_id) {
@@ -6470,12 +6488,13 @@ app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
         registroId = r.insertId;
       }
     } else {
-      // ── NUEVO GASTO NO PRESUPUESTADO ───────────────────────────────────────
+      // ── NUEVO GASTO NO PRESUPUESTADO (o tipo elegido por el usuario) ───────
+      const tipoFinal = ['fijo', 'variable', 'no_presupuestado'].includes(tipoParam) ? tipoParam : 'no_presupuestado';
       const nombre = nombre_gasto || `${invoice.merchant_name || 'Factura QR'} #${invoice.numero_factura || id}`;
       const [r] = await db.execute(
         `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, scanned_invoice_id)
-         VALUES (?, ?, ?, ?, 'no_presupuestado', ?, ?, ?, ?, 1, ?)`,
-        [firebase_uid, mesRow.id, anioHoy, mesHoy, categoria, nombre, montoReal, fechaGasto, id]
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+        [firebase_uid, mesRow.id, anioHoy, mesHoy, tipoFinal, categoria, nombre, montoReal, fechaGasto, id]
       );
       registroId = r.insertId;
     }
@@ -10381,7 +10400,7 @@ app.get('/registros/:anio/:mes', async (req, res) => {
 app.post('/registros', async (req, res) => {
   const {
     firebase_uid, anio, mes, tipo, categoria = 'otro', subcategoria_id,
-    nombre, monto, fecha, pagado = 0, origen_fijo_id, origen_variable_id,
+    nombre, monto, fecha, pagado = 0, origen_fijo_id, origen_variable_id, origen_deuda_id,
     notas, en_calendario = 0, definition_id: defIdParam,
   } = req.body;
   if (!firebase_uid || !anio || !mes || !tipo || !nombre || monto == null || !fecha)
@@ -10419,12 +10438,12 @@ app.post('/registros', async (req, res) => {
     const [r] = await db.execute(
       `INSERT INTO registros_gasto
          (firebase_uid, mes_id, anio, mes, tipo, categoria, subcategoria_id,
-          nombre, monto, fecha, pagado, origen_fijo_id, origen_variable_id,
+          nombre, monto, fecha, pagado, origen_fijo_id, origen_variable_id, origen_deuda_id,
           notas, en_calendario, definition_id, es_hormiga)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [firebase_uid, mesRow.id, anio, mes, tipo, categoria, subcategoria_id || null,
        nombre, monto, fecha, pagado ? 1 : 0, origen_fijo_id || null,
-       origen_variable_id || null, notas || null, en_calendario ? 1 : 0,
+       origen_variable_id || null, origen_deuda_id || null, notas || null, en_calendario ? 1 : 0,
        definitionId, esHormiga]
     );
     await _actualizarTotalesMes(mesRow.id, firebase_uid);

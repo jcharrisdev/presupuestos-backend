@@ -1,9 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import '../services/api_client.dart';
 import '../services/invoice_scanner_service.dart';
+import '../widgets/financiero/categoria_selector.dart';
 import '../widgets/financiero/split_section.dart';
 import 'invoice_history_screen.dart';
 
@@ -17,83 +16,77 @@ class CreateExpenseFromInvoiceScreen extends StatefulWidget {
 }
 
 class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoiceScreen> {
-  List<dynamic> _presupuestos = [];
-  dynamic _selectedPresupuesto;
-  bool _loading = false;
-  bool _saving  = false;
-
-  late TextEditingController _descCtrl;
-  late TextEditingController _amountCtrl;
-  final _notesCtrl = TextEditingController();
-  final _splitKey  = GlobalKey<SplitSectionState>();
+  bool _saving = false;
+  String _tipo = 'no_presupuestado';
+  String _categoria = 'otro';
+  late DateTime _fecha;
+  late TextEditingController _nombreCtrl;
+  final _splitKey = GlobalKey<SplitSectionState>();
   final _fmt = NumberFormat('#,##0.00', 'en_US');
+
+  static const _tipos = [
+    ('no_presupuestado', 'No presupuestado'),
+    ('variable',         'Variable'),
+    ('fijo',             'Fijo'),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _descCtrl   = TextEditingController(text: widget.invoice['merchant_name'] ?? 'Gasto factura QR');
-    _amountCtrl = TextEditingController(text: (widget.invoice['total_amount'] ?? '').toString());
-    _cargarPresupuestos();
+    final merchant = widget.invoice['merchant_name'] as String? ?? '';
+    _nombreCtrl = TextEditingController(
+      text: merchant.isNotEmpty ? merchant : 'Gasto factura QR',
+    );
+    final invoiceDate = widget.invoice['invoice_date'] as String?;
+    if (invoiceDate != null) {
+      _fecha = DateTime.tryParse(invoiceDate) ?? DateTime.now();
+    } else {
+      _fecha = DateTime.now();
+    }
   }
 
   @override
   void dispose() {
-    _descCtrl.dispose(); _amountCtrl.dispose(); _notesCtrl.dispose();
+    _nombreCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _cargarPresupuestos() async {
-    setState(() => _loading = true);
-    try {
-      final resp = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
-      if (resp.statusCode == 200) setState(() => _presupuestos = json.decode(resp.body));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  String get _fechaStr =>
+      '${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}';
 
-  Future<void> _crear() async {
-    if (_selectedPresupuesto == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Selecciona un presupuesto'),
-        backgroundColor: AppTheme.danger,
-      ));
-      return;
-    }
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', ''));
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Ingresa un monto válido'),
-        backgroundColor: AppTheme.danger,
-      ));
+  Future<void> _guardar() async {
+    final nombre = _nombreCtrl.text.trim();
+    if (nombre.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un nombre para el gasto'), backgroundColor: AppTheme.danger),
+      );
       return;
     }
     setState(() => _saving = true);
     try {
-      final result = await InvoiceScannerService.assignInvoice(
+      final result = await InvoiceScannerService.registrarEnMes(
         widget.invoice['id'] as int,
-        {
-          'assignment_type':  'gasto_nuevo',
-          'presupuesto_id':   _selectedPresupuesto['id'],
-          'amount_assigned':  amount,
-          'notes':            _notesCtrl.text.isEmpty ? null : _notesCtrl.text,
-        },
         widget.firebaseUid,
+        categoria:    _categoria,
+        tipo:         _tipo,
+        nombreGasto:  nombre,
+        fecha:        _fechaStr,
       );
       final splitState = _splitKey.currentState;
+      final monto = (widget.invoice['total_amount'] as num?)?.toDouble() ?? 0;
       if (splitState != null && splitState.activo) {
         await enviarSplitPuntual(
           firebaseUid: widget.firebaseUid,
-          descripcion: _descCtrl.text.trim(),
-          montoTotal: amount,
+          descripcion: nombre,
+          montoTotal: monto,
           participantes: splitState.participantes,
           tipo: splitState.tipo,
-          registroGastoId: result['target_id'] as int?,
+          registroGastoId: result['id'] as int?,
         );
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Gasto creado y factura asignada'),
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Gasto registrado desde factura'),
         backgroundColor: AppTheme.success,
       ));
       Navigator.pushAndRemoveUntil(
@@ -103,111 +96,175 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: $e'), backgroundColor: AppTheme.danger,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  InputDecoration _deco(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: TextStyle(color: AppTheme.textSecondary),
-    filled: true,
-    fillColor: AppTheme.surface,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-  );
-
   @override
   Widget build(BuildContext context) {
+    final monto = (widget.invoice['total_amount'] as num?)?.toDouble() ?? 0;
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text('Crear gasto desde factura',
+        title: const Text('Nuevo gasto desde factura',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
-        iconTheme: IconThemeData(color: AppTheme.textPrimary),
+        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
       ),
-      body: _loading
-          ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Total factura: B/. ${_fmt.format(widget.invoice['total_amount'] ?? 0)}',
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 20),
-
-                  Text('Presupuesto destino', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<dynamic>(
-                    value: _selectedPresupuesto,
-                    dropdownColor: AppTheme.surface,
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('Selecciona presupuesto'),
-                    items: _presupuestos.map((p) => DropdownMenuItem(
-                      value: p,
-                      child: Text(p['nombre'] ?? '', style: TextStyle(color: AppTheme.textPrimary)),
-                    )).toList(),
-                    onChanged: (p) => setState(() => _selectedPresupuesto = p),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Invoice summary
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(children: [
+                const Icon(Icons.receipt_outlined, color: AppTheme.textSecondary, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${widget.invoice['merchant_name'] ?? 'Factura QR'}  •  B/. ${_fmt.format(monto)}',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                   ),
-                  const SizedBox(height: 16),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 20),
 
-                  Text('Descripción', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _descCtrl,
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('Descripción del gasto'),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text('Monto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _amountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('0.00'),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text('Notas (opcional)', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _notesCtrl,
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    decoration: _deco('Notas adicionales'),
-                  ),
-                  const SizedBox(height: 20),
-
-                  SplitSection(
-                    key: _splitKey,
-                    getTotal: () => double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0,
-                  ),
-                  const SizedBox(height: 20),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _saving ? null : _crear,
-                      child: _saving
-                          ? const SizedBox(height: 18, width: 18,
-                              child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                          : const Text('Crear gasto y asignar',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
+            // Nombre
+            const Text('Nombre del gasto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _nombreCtrl,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Nombre del gasto',
+                hintStyle: const TextStyle(color: AppTheme.textMuted),
+                filled: true, fillColor: AppTheme.surfaceAlt,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
               ),
             ),
+            const SizedBox(height: 16),
+
+            // Tipo
+            const Text('Tipo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 6),
+            Row(
+              children: _tipos.map((t) {
+                final selected = _tipo == t.$1;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _tipo = t.$1),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.surfaceAlt,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: selected ? AppTheme.primary : AppTheme.border,
+                          width: selected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Text(t.$2,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: selected ? AppTheme.primary : AppTheme.textSecondary,
+                          fontSize: 11,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // Categoría
+            const Text('Categoría', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 6),
+            CategoriaSelector(
+              firebaseUid: widget.firebaseUid,
+              categoriaActual: _categoria,
+              color: AppTheme.primary,
+              onChanged: (cat, custom) => setState(() => _categoria = custom ?? cat),
+            ),
+            const SizedBox(height: 16),
+
+            // Fecha
+            const Text('Fecha', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _fecha,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now(),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.dark(
+                          primary: AppTheme.primary, surface: AppTheme.surfaceAlt),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) setState(() => _fecha = picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                  const SizedBox(width: 10),
+                  Text(_fechaStr, style: const TextStyle(color: AppTheme.textPrimary)),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            SplitSection(
+              key: _splitKey,
+              getTotal: () => monto,
+            ),
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _saving ? null : _guardar,
+                child: _saving
+                    ? const SizedBox(height: 18, width: 18,
+                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                    : const Text('Registrar gasto',
+                        style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

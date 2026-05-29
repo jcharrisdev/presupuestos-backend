@@ -86,6 +86,31 @@ class InvoiceScannerService {
     throw Exception(err['error'] ?? 'Error al actualizar factura');
   }
 
+  static Future<Map<String, dynamic>> registrarEnMes(
+    int id,
+    String firebaseUid, {
+    required String categoria,
+    required String tipo,
+    required String nombreGasto,
+    required String fecha,
+  }) async {
+    final resp = await ApiClient.post(
+      '/invoice-scanner/$id/registrar-en-mes',
+      {
+        'firebase_uid': firebaseUid,
+        'categoria':    categoria,
+        'tipo':         tipo,
+        'nombre_gasto': nombreGasto,
+        'fecha_override': fecha,
+      },
+    );
+    if (resp.statusCode == 201 || resp.statusCode == 200) {
+      return json.decode(resp.body);
+    }
+    final err = json.decode(resp.body);
+    throw Exception(err['error'] ?? 'Error al registrar factura en el mes');
+  }
+
   static Future<List<dynamic>> getLogs(int id, String firebaseUid) async {
     final resp = await ApiClient.get(
         '/invoice-scanner/invoices/$id/logs?firebase_uid=$firebaseUid');
