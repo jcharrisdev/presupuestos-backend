@@ -35,23 +35,38 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
   final _nombreCtrl = TextEditingController();
   final _montoCtrl  = TextEditingController();
 
-  /// Plazo en meses seleccionado con el slider (1–60).
   int _meses = 12;
-
-  /// Lista de presupuestos del usuario para el dropdown.
   List<Map<String, dynamic>> _presupuestos = [];
-
-  /// ID del presupuesto seleccionado (null si aún no eligió).
+  List<Map<String, dynamic>> _metas = [];
   int? _presupuestoId;
-
   bool _cargando = true, _guardando = false;
 
   @override
   void initState() {
     super.initState();
-    _cargarPresupuestos();
-    // Recalcular cuota cada vez que cambia el monto
+    _cargar();
     _montoCtrl.addListener(() => setState(() {}));
+  }
+
+  Future<void> _cargar() async {
+    setState(() => _cargando = true);
+    try {
+      final results = await Future.wait([
+        ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}'),
+        SavingsService.getAhorros(widget.firebaseUid).catchError((_) => <Map<String, dynamic>>[]),
+      ]);
+      final presRes = results[0] as dynamic;
+      final metasRes = results[1] as List<Map<String, dynamic>>;
+      if (mounted) setState(() {
+        if ((presRes as dynamic).statusCode == 200) {
+          _presupuestos = List<Map<String, dynamic>>.from(json.decode(presRes.body));
+        }
+        _metas = metasRes;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   /// Presupuesto actualmente seleccionado en el dropdown, o null si no hay selección.
@@ -84,23 +99,6 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
   String get _tipoPeriodoLabel {
     final tipo = _presupuestoSeleccionado?['tipo_periodo'] ?? 'mensual';
     return tipo == 'quincenal' ? 'quincena' : 'mes';
-  }
-
-  Future<void> _cargarPresupuestos() async {
-    try {
-      final res = await ApiClient.get('/presupuestos?firebase_uid=${widget.firebaseUid}');
-      if (res.statusCode == 200) {
-        setState(() {
-          _presupuestos = List<Map<String, dynamic>>.from(json.decode(res.body));
-          _cargando = false;
-        });
-      } else throw Exception();
-    } catch (e) {
-      setState(() => _cargando = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar presupuestos: $e')),
-      );
-    }
   }
 
   /// Envía la meta de ahorro al backend.
@@ -208,7 +206,45 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-                // ── INFO CARD ────────────────────────────────────────────
+                // ── METAS EXISTENTES ──────────────────────────────────────
+                if (_metas.isNotEmpty) ...[
+                  const Text('MIS METAS', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  ..._metas.map((m) {
+                    final meta   = double.tryParse(m['monto_meta']?.toString() ?? '0') ?? 0;
+                    final actual = double.tryParse(m['monto_ahorrado']?.toString() ?? '0') ?? 0;
+                    final pct    = meta > 0 ? (actual / meta).clamp(0.0, 1.0) : 0.0;
+                    final done   = pct >= 1.0;
+                    final color  = done ? AppTheme.success : pct >= 0.75 ? AppTheme.warning : AppTheme.primary;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: done ? AppTheme.success.withValues(alpha: 0.4) : AppTheme.border),
+                      ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Expanded(child: Text(m['nombre']?.toString() ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14))),
+                          Text(done ? '✓ Completada' : '${(pct * 100).toStringAsFixed(0)}%',
+                              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+                        ]),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(value: pct, minHeight: 6, color: color, backgroundColor: AppTheme.surfaceAlt),
+                        ),
+                        const SizedBox(height: 6),
+                        Text('\$${actual.toStringAsFixed(2)} de \$${meta.toStringAsFixed(2)}',
+                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      ]),
+                    );
+                  }),
+                  const Divider(color: AppTheme.border, height: 32),
+                ],
+
+                // ── INFO CARD — NUEVA META ───────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(

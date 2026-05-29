@@ -357,6 +357,27 @@ pool.getConnection(async (err, conn) => {
     console.error('⚠️ Limpieza alertas duplicadas:', e.message);
   }
 
+  // Migración: columna categoria en user_gastos_fijos (para análisis presupuesto por categoría)
+  try {
+    await db.execute(`ALTER TABLE user_gastos_fijos ADD COLUMN categoria VARCHAR(100) DEFAULT NULL`);
+    console.log('✅ Migración user_gastos_fijos.categoria OK');
+  } catch (e) { /* columna ya existe */ }
+
+  // Limpieza: eventos de calendario que referencian gastos_fijos eliminados
+  try {
+    await db.execute(`
+      DELETE ce FROM calendario_eventos ce
+      WHERE ce.user_gasto_fijo_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM user_gastos_fijos ugf
+          WHERE ugf.id = ce.user_gasto_fijo_id AND ugf.activo = 1
+        )
+    `);
+    console.log('✅ Limpieza eventos calendario huérfanos OK');
+  } catch (e) {
+    console.error('⚠️ Limpieza eventos calendario huérfanos:', e.message);
+  }
+
   // Migración: gastos globales reutilizables (independientes de presupuesto)
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS gastos_globales (
@@ -7806,6 +7827,18 @@ function _enriquecerDeuda(d) {
   return { ...d, cuotas_restantes, fecha_fin_estimada };
 }
 
+// POST /deudas/sync-calendario — sincroniza manualmente los eventos de calendario de todas las deudas
+app.post('/deudas/sync-calendario', async (req, res) => {
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    await _sincronizarEventosDeudas(firebase_uid);
+    res.json({ ok: true, mensaje: 'Eventos de deudas sincronizados' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Genera/actualiza eventos de calendario para los pagos próximos de todas las deudas activas.
 // Se llama como fire-and-forget tras crear o editar una deuda.
 async function _sincronizarEventosDeudas(firebase_uid) {
@@ -9948,10 +9981,19 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     const presupuestadoPorCat = {};
     for (const g of varBase) {
       if (g.aplica_meses) {
-        const meses = typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses;
-        if (!meses.includes(Number(mes))) continue;
+        const mesesArr = typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses;
+        if (!mesesArr.includes(Number(mes))) continue;
       }
       presupuestadoPorCat[g.categoria] = (presupuestadoPorCat[g.categoria] || 0) + _montoMensual(g);
+    }
+    // Incluir gastos fijos del perfil que tienen categoría asignada en el presupuesto por categoría
+    const [fijosCat] = await db.execute(
+      `SELECT descripcion, monto_mensual, categoria FROM user_gastos_fijos
+       WHERE firebase_uid = ? AND activo = 1 AND categoria IS NOT NULL AND categoria != ''`,
+      [firebase_uid]
+    );
+    for (const f of fijosCat) {
+      presupuestadoPorCat[f.categoria] = (presupuestadoPorCat[f.categoria] || 0) + Number(f.monto_mensual);
     }
 
     const analisisCategorias = Object.entries(porCategoria).map(([cat, datos]) => {

@@ -1290,7 +1290,10 @@ class _CategoriaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nombre    = cat['categoria'] as String;
+    final rawCat    = cat['categoria'] as String;
+    final nombre    = rawCat.isNotEmpty
+        ? '${rawCat[0].toUpperCase()}${rawCat.substring(1)}'
+        : rawCat;
     final presup    = double.tryParse(cat['presupuestado'].toString()) ?? 0.0;
     final total     = double.tryParse(cat['total_gastado'].toString()) ?? 0.0;
     final noPres    = double.tryParse(cat['gastado_no_presup'].toString()) ?? 0.0;
