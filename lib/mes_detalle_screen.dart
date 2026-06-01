@@ -559,6 +559,78 @@ class _TabGastosState extends State<_TabGastos> {
 
   double _num(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
 
+  void _mostrarOpcionesFijo(BuildContext context, Map<String, dynamic> g) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
+            title: const Text('Editar gasto fijo', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: const Text('Cambia nombre o monto para todos los meses',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            onTap: () {
+              Navigator.pop(context);
+              EditarGastoFijoSheet.show(
+                context,
+                id: g['id'] as int,
+                nombre: g['nombre'] as String,
+                monto: _num(g['monto']),
+                firebaseUid: widget.uid,
+                onGuardado: widget.onChanged,
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline, color: AppTheme.danger),
+            title: const Text('Eliminar gasto fijo', style: TextStyle(color: AppTheme.danger)),
+            subtitle: const Text('Se elimina de todos los meses',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            onTap: () async {
+              Navigator.pop(context);
+              final confirmar = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  backgroundColor: AppTheme.surface,
+                  title: const Text('¿Eliminar gasto fijo?',
+                      style: TextStyle(color: AppTheme.textPrimary)),
+                  content: Text(
+                    'Se eliminará "${g['nombre']}" de todos los meses. Esta acción no se puede deshacer.',
+                    style: const TextStyle(color: AppTheme.textSecondary),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancelar')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmar == true) {
+                try {
+                  await ApiClient.delete(
+                      '/user/gastos-fijos/${g['id']}?firebase_uid=${widget.uid}');
+                  widget.onChanged();
+                } catch (e) {
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+                }
+              }
+            },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+  }
+
   Future<void> _marcarDeuda(Map<String, dynamic> d, bool pagado, int? registroId) async {
     if (_operando) return;
     setState(() => _operando = true);
@@ -676,6 +748,7 @@ class _TabGastosState extends State<_TabGastos> {
               pagado: pagado,
               esPago: false,
               onTap: (_operando || fijoId < 0) ? null : () => _marcarFijo(g, pagado, fijoARegistroId[fijoId]),
+              onLongPress: fijoId < 0 ? null : () => _mostrarOpcionesFijo(context, g),
             );
           }),
           ...deudas.map((d) {
@@ -796,11 +869,13 @@ class _PlanTile extends StatelessWidget {
   final bool esPago;
   final int? cuotasRestantes;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   const _PlanTile({
     required this.nombre, required this.monto, required this.tipo,
     required this.pagado, required this.esPago,
     this.cuotasRestantes,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -810,6 +885,7 @@ class _PlanTile extends StatelessWidget {
         : AppTheme.colorFijo;
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(8),
       child: Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -852,6 +928,93 @@ class _PlanTile extends StatelessWidget {
         ]),
       ]),
     ),
+    );
+  }
+}
+
+class EditarGastoFijoSheet {
+  static void show(
+    BuildContext context, {
+    required int id,
+    required String nombre,
+    required double monto,
+    required String firebaseUid,
+    required VoidCallback onGuardado,
+  }) {
+    final nombreCtrl = TextEditingController(text: nombre);
+    final montoCtrl  = TextEditingController(text: monto.toStringAsFixed(2));
+    bool guardando = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => StatefulBuilder(builder: (ctx, setS) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          const Text('Editar gasto fijo',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          const Text('El cambio aplica a todos los meses',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+          const SizedBox(height: 20),
+          TextField(
+            controller: nombreCtrl,
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(labelText: 'Nombre'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: montoCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: const InputDecoration(labelText: 'Monto mensual (\$)', prefixText: '\$ '),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: guardando ? null : () async {
+              final nuevoMonto = double.tryParse(montoCtrl.text);
+              if (nuevoMonto == null || nuevoMonto <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Monto inválido')));
+                return;
+              }
+              final nuevoNombre = nombreCtrl.text.trim();
+              if (nuevoNombre.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ingresa un nombre')));
+                return;
+              }
+              setS(() => guardando = true);
+              try {
+                await ApiClient.put('/user/gastos-fijos/$id', {
+                  'firebase_uid': firebaseUid,
+                  'descripcion':  nuevoNombre,
+                  'monto_mensual': nuevoMonto,
+                });
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                onGuardado();
+              } catch (e) {
+                setS(() => guardando = false);
+                if (!ctx.mounted) return;
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+              }
+            },
+            child: guardando
+                ? const SizedBox(height: 18, width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : const Text('Guardar cambios'),
+          )),
+        ]),
+      )),
     );
   }
 }
