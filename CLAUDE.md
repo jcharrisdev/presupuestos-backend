@@ -154,6 +154,7 @@ server_logs                 → logs TTL 60 min
 |---------|-----------|
 | `SALARYING_VISION.md` | Visión completa, flujo, módulos, ejemplos de usuario |
 | `LECCIONES_APRENDIDAS.md` | Errores de sesiones anteriores y cómo se resolvieron |
+| `SALARYING_MEJORAS.md` | Lista viva de mejoras con estado ✅/⚠️/❌ — LEER SIEMPRE AL INICIO |
 | `CLAUDE.md` | Este archivo — lectura obligatoria al iniciar sesión |
 
 ---
@@ -177,7 +178,26 @@ Cada deploy incorrecto cuesta tiempo y dinero real. Una pregunta antes de codear
 ## Antes de empezar a codear en cualquier sesión
 
 1. Leer este archivo
-2. Revisar `LECCIONES_APRENDIDAS.md` si la tarea toca código ya modificado antes
-3. Verificar que el endpoint ya exista antes de crear uno nuevo
-4. Trazar el flujo completo de cualquier feature antes de implementar
-5. Recordar: **commit + push + deploy**, nunca solo deploy
+2. **Leer `SALARYING_MEJORAS.md` completo** — revisar estados ✅/⚠️/❌ para saber qué está hecho y qué no
+3. Revisar `LECCIONES_APRENDIDAS.md` si la tarea toca código ya modificado antes
+4. Verificar que el endpoint ya exista antes de crear uno nuevo
+5. Trazar el flujo completo de cualquier feature antes de implementar
+6. Recordar: **commit + push + deploy**, nunca solo deploy
+
+---
+
+## Reglas de seguimiento de mejoras (OBLIGATORIO)
+
+### Regla 1 — Leer SALARYING_MEJORAS.md al inicio de cada sesión
+Al iniciar una sesión nueva, leer `SALARYING_MEJORAS.md` completo antes de cualquier acción. Esto incluye:
+- Identificar qué mejoras están ✅ implementadas, ⚠️ parciales, ❌ pendientes
+- Tomar nota de cualquier mejora marcada como discutida pero no implementada
+- Nunca proponer trabajo que ya está marcado ✅ como si fuera nuevo
+
+### Regla 2 — Actualizar SALARYING_MEJORAS.md después de cada tarea
+Inmediatamente después de completar (commit + push + deploy) cualquier mejora o corrección:
+1. Marcar el ítem correspondiente con ✅ (implementado) o ⚠️ (parcial)
+2. Agregar una línea de estado: `**Estado:** IMPLEMENTADO — [descripción breve + commit hash]`
+3. Si se implementó algo que no está en el archivo, agregar el ítem nuevo con ✅
+4. Actualizar la fecha al pie del archivo
+Esta actualización va ANTES del git commit de cada paquete — así queda en el mismo commit.
