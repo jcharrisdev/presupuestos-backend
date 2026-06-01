@@ -330,6 +330,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
 
+        // ── GASTOS HORMIGA ────────────────────────────────────────────────
+        if (_d(r['hormiga_count']) > 0) ...[
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => MesDetalleScreen(
+                firebaseUid: widget.firebaseUid,
+                anio: _now.year, mes: _now.month, label: mesNombre,
+              ),
+            )).then((_) => _cargar()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(children: [
+                const Text('🐜', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  '${_d(r['hormiga_count']).toInt()} gastos hormiga · \$${_d(r['hormiga_total']).toStringAsFixed(2)} acumulado',
+                  style: const TextStyle(color: AppTheme.textSecondary,
+                      fontSize: 13, fontWeight: FontWeight.w500),
+                )),
+                const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 16),
+              ]),
+            ),
+          ),
+        ],
+
         // ── ALERTAS ───────────────────────────────────────────────────────
         if (_alertas.isNotEmpty) ...[
           const SizedBox(height: 20),
