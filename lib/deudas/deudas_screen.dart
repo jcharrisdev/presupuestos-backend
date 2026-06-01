@@ -4,6 +4,7 @@ import '../services/deudas_service.dart';
 import '../widgets/ayuda_sheet.dart';
 import 'crear_deuda_sheet.dart';
 import 'abono_deuda_sheet.dart';
+import 'historial_abonos_sheet.dart';
 
 class DeudasScreen extends StatefulWidget {
   final String firebaseUid;
@@ -422,6 +423,7 @@ class _TabSituacion extends StatelessWidget {
                 d['monto_pendiente'] == 0) || d['tasa_interes'] == null;
             return _DeudaTile(
               deuda: d,
+              uid: uid,
               esMayorTasa: e.key == 0 &&
                   deudas.length > 1 &&
                   _d(d['tasa_interes']) > 0,
@@ -1368,6 +1370,7 @@ class _InfoRow extends StatelessWidget {
 
 class _DeudaTile extends StatelessWidget {
   final Map<String, dynamic> deuda;
+  final String uid;
   final VoidCallback onAbono;
   final VoidCallback onArchivar;
   final VoidCallback onEditar;
@@ -1375,6 +1378,7 @@ class _DeudaTile extends StatelessWidget {
   final bool infoIncompleta;
   const _DeudaTile(
       {required this.deuda,
+      required this.uid,
       required this.onAbono,
       required this.onArchivar,
       required this.onEditar,
@@ -1496,6 +1500,25 @@ class _DeudaTile extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.success,
                     side: const BorderSide(color: AppTheme.success),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => HistorialAbonosSheet.show(
+                    context,
+                    deudaId: deuda['id'] as int,
+                    deudaNombre: nombre,
+                    firebaseUid: uid,
+                  ),
+                  icon: const Icon(Icons.history, size: 14),
+                  label: const Text('Historial'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.info,
+                    side: const BorderSide(color: AppTheme.info),
                     padding: const EdgeInsets.symmetric(vertical: 7),
                     textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),

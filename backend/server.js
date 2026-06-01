@@ -8034,6 +8034,24 @@ app.delete('/deudas/:id', async (req, res) => {
   }
 });
 
+// GET /deudas/:id/abonos — Historial de pagos registrados para una deuda
+app.get('/deudas/:id/abonos', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT id, nombre, monto, fecha, created_at
+       FROM registros_gasto
+       WHERE origen_deuda_id = ? AND firebase_uid = ?
+       ORDER BY fecha DESC, created_at DESC`,
+      [id, firebase_uid]
+    );
+    const total = rows.reduce((s, r) => s + Number(r.monto), 0);
+    res.json({ abonos: rows, total_abonado: parseFloat(total.toFixed(2)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // =============================================================================
 // GET /presupuestos/:id/proyeccion — Vista mes a mes (pasado real + futuro estimado)
 // Máximo 2 queries al pool. Devuelve 12 tarjetas mensuales.
