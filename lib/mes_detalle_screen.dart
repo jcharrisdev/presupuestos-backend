@@ -1396,12 +1396,15 @@ class _RegistroTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tipo  = reg['tipo'] as String;
-    final monto = double.tryParse(reg['monto'].toString()) ?? 0.0;
-    final color = tipo == 'fijo' ? AppTheme.colorFijo
+    final tipo       = reg['tipo'] as String;
+    final monto      = double.tryParse(reg['monto'].toString()) ?? 0.0;
+    final esGustito  = reg['origen_gustito_id'] != null;
+    final color = esGustito   ? AppTheme.primary
+        : tipo == 'fijo'      ? AppTheme.colorFijo
         : tipo == 'no_presupuestado' ? AppTheme.danger
         : AppTheme.warning;
-    final tipoLabel = tipo == 'fijo' ? 'Fijo'
+    final tipoLabel = esGustito ? 'Gustito'
+        : tipo == 'fijo'      ? 'Fijo'
         : tipo == 'no_presupuestado' ? 'No presup.'
         : 'Variable';
     final pagado = (reg['pagado'] as int? ?? 0) == 1;
@@ -1411,11 +1414,26 @@ class _RegistroTile extends StatelessWidget {
       leading: CircleAvatar(
         radius: 18,
         backgroundColor: color.withOpacity(0.12),
-        child: Icon(_iconCategoria(reg['categoria'] as String? ?? ''), color: color, size: 16),
+        child: esGustito
+            ? Icon(Icons.bolt, color: color, size: 16)
+            : Icon(_iconCategoria(reg['categoria'] as String? ?? ''), color: color, size: 16),
       ),
       title: Text(reg['nombre'] as String? ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
-      subtitle: Text('${reg['categoria']} · $tipoLabel',
-          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+      subtitle: Row(children: [
+        Text('${reg['categoria']} · $tipoLabel',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+        if (esGustito) ...[
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text('⚡', style: TextStyle(fontSize: 9)),
+          ),
+        ],
+      ]),
       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
         Text('\$${monto.toStringAsFixed(2)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
@@ -1428,11 +1446,30 @@ class _RegistroTile extends StatelessWidget {
   }
 
   void _opciones(BuildContext context) {
+    final esGustito = reg['origen_gustito_id'] != null;
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surface,
       builder: (_) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (esGustito)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.bolt, color: AppTheme.primary, size: 15),
+                SizedBox(width: 6),
+                Expanded(child: Text(
+                  'Este gasto viene de un Gustito. Para eliminarlo, hazlo desde la pantalla de Gustitos.',
+                  style: TextStyle(color: AppTheme.primary, fontSize: 11),
+                )),
+              ]),
+            ),
           ListTile(
             leading: const Icon(Icons.check_circle_outline, color: AppTheme.success),
             title: const Text('Marcar pagado/pendiente', style: TextStyle(color: AppTheme.textPrimary)),
@@ -1443,34 +1480,38 @@ class _RegistroTile extends StatelessWidget {
               onChanged();
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
-            title: const Text('Editar', style: TextStyle(color: AppTheme.textPrimary)),
-            onTap: () {
-              Navigator.pop(context);
-              _mostrarEditarSheet(context);
-            },
-          ),
-          if (reg['tipo'] == 'no_presupuestado') ListTile(
-            leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
-            title: const Text('Convertir a gasto variable base', style: TextStyle(color: AppTheme.textPrimary)),
-            onTap: () async {
-              Navigator.pop(context);
-              await RegistrosService.convertirAVariable(uid, reg['id'] as int);
-              onChanged();
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Agregado a tu presupuesto variable')));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_outline, color: AppTheme.danger),
-            title: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
-            onTap: () async {
-              Navigator.pop(context);
-              await RegistrosService.eliminar(uid, reg['id'] as int);
-              onChanged();
-            },
-          ),
+          if (!esGustito) ...[
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
+              title: const Text('Editar', style: TextStyle(color: AppTheme.textPrimary)),
+              onTap: () {
+                Navigator.pop(context);
+                _mostrarEditarSheet(context);
+              },
+            ),
+            if (reg['tipo'] == 'no_presupuestado') ListTile(
+              leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+              title: const Text('Convertir a gasto variable base', style: TextStyle(color: AppTheme.textPrimary)),
+              onTap: () async {
+                Navigator.pop(context);
+                await RegistrosService.convertirAVariable(uid, reg['id'] as int);
+                onChanged();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Agregado a tu presupuesto variable')));
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppTheme.danger),
+              title: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
+              onTap: () async {
+                Navigator.pop(context);
+                await RegistrosService.eliminar(uid, reg['id'] as int);
+                onChanged();
+              },
+            ),
+          ],
         ]),
       ),
     );

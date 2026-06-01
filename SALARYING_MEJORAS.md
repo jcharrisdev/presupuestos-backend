@@ -386,14 +386,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ## CATEGORÍA L — GUSTITOS
 
-### L1. Los Gustitos están completamente desconectados del presupuesto mensual
-**Problema:** Un Gustito es un gasto registrado en la tabla `gustitos`, no en `registros_gasto`. Por lo tanto, no aparece en el Tab Gastos del mes, no afecta el total real del mes, y no reduce ningún sobre de presupuesto. El usuario puede gastar $200 en gustitos y la app reporta ese mes como "sin gastos variables".
-
-**Impacto:** Alta. Es un agujero negro en el control financiero.
-
-**Solución:** Dos opciones (requiere aprobación):
-1. Opción simple: Hacer que al crear un Gustito también se cree un `registros_gasto` con `tipo='variable'` y `categoria` del gustito. Así aparece en el mes.
-2. Opción completa: Mostrar los Gustitos como una línea en el resumen del mes: "Gustitos este mes: $X" separado pero visible.
+### ✅ L1. Los Gustitos están completamente desconectados del presupuesto mensual
+**Estado:** IMPLEMENTADO — `POST /gustitos` ahora crea un `registros_gasto` vinculado (fire-and-forget, solo si el mes existe). `DELETE /gustitos/:id` elimina también el registro vinculado. Migración `origen_gustito_id` en `registros_gasto`. Tab Gastos muestra badge ⚡ y color azul primario para registros de origen gustito. Opciones del tile ocultan Editar/Eliminar y muestran banner explicativo.
 
 ---
 
@@ -935,4 +929,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-01 — AB2 + B3 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-01 — AB2 + B3 + L1 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

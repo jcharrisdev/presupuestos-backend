@@ -619,6 +619,16 @@ pool.getConnection(async (err, conn) => {
     }
   }
 
+  // Migración: origen_gustito_id en registros_gasto — vincula un registro con su gustito de origen
+  try {
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN origen_gustito_id INT DEFAULT NULL`);
+    console.log('✅ Migración origen_gustito_id en registros_gasto OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración origen_gustito_id:', e.message);
+    }
+  }
+
   // Migración: todos los registros_gasto existentes → día 15 para distribución quincenal 50/50
   try {
     const [res] = await db.execute(
@@ -5993,6 +6003,33 @@ app.post('/gustitos', async (req, res) => {
       `SELECT * FROM gustitos WHERE id = ?`, [result.insertId]
     );
     res.status(201).json(gustito);
+
+    // Fire-and-forget: crear registros_gasto vinculado si el mes existe en el estado financiero
+    (async () => {
+      try {
+        const fecha    = spentAtStr;
+        const anioReg  = parseInt(fecha.substring(0, 4));
+        const mesReg   = parseInt(fecha.substring(5, 7));
+        const [[mesRow]] = await db.execute(
+          `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+          [user_id, anioReg, mesReg]
+        );
+        if (!mesRow) return; // mes no generado todavía — no bloqueamos
+
+        const catReg = category || 'gustitos';
+        const esHormiga = Number(amount) <= 25 ? 1 : 0;
+        const [rg] = await db.execute(
+          `INSERT INTO registros_gasto
+             (firebase_uid, mes_id, anio, mes, tipo, categoria,
+              nombre, monto, fecha, pagado, origen_gustito_id, es_hormiga)
+           VALUES (?, ?, ?, ?, 'no_presupuestado', ?, ?, ?, ?, 1, ?, ?)`,
+          [user_id, mesRow.id, anioReg, mesReg, catReg,
+           name, Number(amount), fecha, result.insertId, esHormiga]
+        );
+        await _actualizarTotalesMes(mesRow.id, user_id);
+        _generarAlertasMes(user_id, anioReg, mesReg).catch(() => {});
+      } catch (_) { /* no bloquear si falla */ }
+    })();
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -6108,6 +6145,19 @@ app.delete('/gustitos/:id', async (req, res) => {
       `UPDATE gustitos SET deleted_at = NOW() WHERE id = ? AND user_id = ?`,
       [id, firebase_uid]
     );
+
+    // Eliminar el registros_gasto vinculado y recalcular totales del mes
+    try {
+      const [[rg]] = await db.execute(
+        `SELECT id, mes_id FROM registros_gasto WHERE origen_gustito_id = ? AND firebase_uid = ?`,
+        [id, firebase_uid]
+      );
+      if (rg) {
+        await db.execute(`DELETE FROM registros_gasto WHERE id = ?`, [rg.id]);
+        await _actualizarTotalesMes(rg.mes_id, firebase_uid);
+      }
+    } catch (_) { /* no bloquear el delete del gustito */ }
+
     res.json({ message: 'Gustito eliminado correctamente' });
   } catch (error) {
     console.error(error);
