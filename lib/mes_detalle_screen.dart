@@ -6,6 +6,7 @@ import 'services/api_client.dart';
 import 'services/estado_anual_service.dart';
 import 'services/pdf_service.dart';
 import 'services/registros_service.dart';
+import 'services/gastos_variables_service.dart';
 import 'services/productos_catalogo_service.dart';
 import 'widgets/ayuda_sheet.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
@@ -631,6 +632,59 @@ class _TabGastosState extends State<_TabGastos> {
     );
   }
 
+  Future<void> _mostrarOpcionesVariable(BuildContext context, String categoria) async {
+    // Cargar líneas de presupuesto variable para esta categoría
+    List<Map<String, dynamic>> lineas = [];
+    try {
+      final data = await GastosVariablesService.getAll(widget.uid);
+      final todas = (data['gastos'] as List? ?? []).cast<Map<String, dynamic>>();
+      lineas = todas.where((g) => g['categoria'] == categoria).toList();
+    } catch (_) {}
+
+    if (!context.mounted) return;
+
+    if (lineas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No hay líneas de presupuesto para esta categoría'),
+      ));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 14),
+            Text(
+              'Presupuesto · ${categoria[0].toUpperCase()}${categoria.substring(1)}',
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            const Text('Mantén presionado una línea para editarla',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            const SizedBox(height: 14),
+            ...lineas.map((g) => _LineaVariableRow(
+              g: g,
+              uid: widget.uid,
+              onChanged: () {
+                Navigator.pop(context);
+                widget.onChanged();
+              },
+            )),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Future<void> _marcarDeuda(Map<String, dynamic> d, bool pagado, int? registroId) async {
     if (_operando) return;
     setState(() => _operando = true);
@@ -730,7 +784,11 @@ class _TabGastosState extends State<_TabGastos> {
             ),
           ),
           if (_sobresExpandido)
-            ...sobres.map((c) => _SobreRow(cat: c)),
+            ...sobres.map((c) => _SobreRow(
+              cat: c,
+              onLongPress: () => _mostrarOpcionesVariable(
+                  context, c['categoria'] as String),
+            )),
           const Divider(color: AppTheme.border, height: 24),
         ],
 
@@ -794,9 +852,166 @@ class _TabGastosState extends State<_TabGastos> {
   }
 }
 
+class _LineaVariableRow extends StatefulWidget {
+  final Map<String, dynamic> g;
+  final String uid;
+  final VoidCallback onChanged;
+  const _LineaVariableRow({required this.g, required this.uid, required this.onChanged});
+  @override
+  State<_LineaVariableRow> createState() => _LineaVariableRowState();
+}
+
+class _LineaVariableRowState extends State<_LineaVariableRow> {
+  bool _editando = false;
+  bool _guardando = false;
+  late TextEditingController _nombreCtrl;
+  late TextEditingController _montoCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nombreCtrl = TextEditingController(text: widget.g['nombre'] as String? ?? '');
+    _montoCtrl  = TextEditingController(
+        text: double.tryParse(widget.g['monto_estimado'].toString())?.toStringAsFixed(2) ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _montoCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    final monto = double.tryParse(_montoCtrl.text);
+    if (monto == null || monto <= 0) return;
+    final nombre = _nombreCtrl.text.trim();
+    if (nombre.isEmpty) return;
+    setState(() => _guardando = true);
+    try {
+      await GastosVariablesService.editar(widget.uid, widget.g['id'] as int,
+          {'nombre': nombre, 'monto_estimado': monto});
+      setState(() { _editando = false; _guardando = false; });
+      widget.onChanged();
+    } catch (_) {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _eliminar() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('¿Eliminar línea?',
+            style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('Se eliminará "${widget.g['nombre']}" del presupuesto.',
+            style: const TextStyle(color: AppTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await GastosVariablesService.eliminar(widget.uid, widget.g['id'] as int);
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monto = double.tryParse(widget.g['monto_estimado'].toString()) ?? 0.0;
+    final frec  = widget.g['frecuencia'] as String? ?? 'mensual';
+
+    if (_editando) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceAlt,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: _nombreCtrl,
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Nombre', isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 8),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _montoCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Monto (\$)', prefixText: '\$ ', isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 8),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              onPressed: () => setState(() => _editando = false),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 8)),
+              child: const Text('Cancelar', style: TextStyle(fontSize: 12)),
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: ElevatedButton(
+              onPressed: _guardando ? null : _guardar,
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 8)),
+              child: _guardando
+                  ? const SizedBox(height: 14, width: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Text('Guardar', style: TextStyle(fontSize: 12, color: Colors.black)),
+            )),
+          ]),
+        ]),
+      );
+    }
+
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      title: Text(widget.g['nombre'] as String? ?? '',
+          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+      subtitle: Text('$frec',
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('\$${monto.toStringAsFixed(2)}',
+            style: const TextStyle(color: AppTheme.textSecondary,
+                fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => setState(() => _editando = true),
+          child: const Icon(Icons.edit_outlined, color: AppTheme.primary, size: 18),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: _eliminar,
+          child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+        ),
+      ]),
+    );
+  }
+}
+
 class _SobreRow extends StatelessWidget {
   final Map<String, dynamic> cat;
-  const _SobreRow({required this.cat});
+  final VoidCallback? onLongPress;
+  const _SobreRow({required this.cat, this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
@@ -814,33 +1029,39 @@ class _SobreRow extends StatelessWidget {
             ? AppTheme.warning
             : AppTheme.success;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text(nombre,
-              style: const TextStyle(color: AppTheme.textSecondary,
-                  fontSize: 12, fontWeight: FontWeight.w600))),
-          Text(
-            excede
-                ? '\$${total.toStringAsFixed(2)} · +\$${(total - presup).toStringAsFixed(2)} excedido'
-                : presup > 0
-                    ? '\$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}'
-                    : '\$${total.toStringAsFixed(2)}',
-            style: TextStyle(color: barColor, fontSize: 11),
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(nombre,
+                style: const TextStyle(color: AppTheme.textSecondary,
+                    fontSize: 12, fontWeight: FontWeight.w600))),
+            if (onLongPress != null)
+              const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 11),
+            const SizedBox(width: 4),
+            Text(
+              excede
+                  ? '\$${total.toStringAsFixed(2)} · +\$${(total - presup).toStringAsFixed(2)} excedido'
+                  : presup > 0
+                      ? '\$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}'
+                      : '\$${total.toStringAsFixed(2)}',
+              style: TextStyle(color: barColor, fontSize: 11),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: bar,
+              minHeight: 4,
+              color: barColor,
+              backgroundColor: AppTheme.surfaceAlt,
+            ),
           ),
         ]),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(
-            value: bar,
-            minHeight: 4,
-            color: barColor,
-            backgroundColor: AppTheme.surfaceAlt,
-          ),
-        ),
-      ]),
+      ),
     );
   }
 }
