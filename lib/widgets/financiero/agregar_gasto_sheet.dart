@@ -13,12 +13,14 @@ class AgregarGastoSheet extends StatefulWidget {
   final String firebaseUid;
   final int anio;
   final int mes;
+  final List<Map<String, dynamic>>? analisisCategorias;
 
   const AgregarGastoSheet({
     Key? key,
     required this.firebaseUid,
     required this.anio,
     required this.mes,
+    this.analisisCategorias,
   }) : super(key: key);
 
   @override
@@ -37,6 +39,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
   late DateTime _fecha;
   bool _guardando       = false;
   bool _guardarComoBase = false;
+  String _frecuenciaBase   = 'mensual';
   final _splitKey = GlobalKey<SplitSectionState>();
   int  _mesInicio          = 1;
   int  _mesFin             = 12;
@@ -45,6 +48,10 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
   List<Map<String, dynamic>> _definiciones = [];
   bool _loadingDefs = true;
   int? _defSeleccionada;
+
+  // Envelope tracking
+  Map<String, dynamic>? _catInfo;
+  bool _tipoAutoSet = false;
 
   static const _tipos = [
     {'value': 'fijo',             'label': 'Gasto fijo',       'icon': Icons.lock_clock,       'color': AppTheme.colorFijo},
@@ -83,6 +90,15 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
       }
     } catch (_) {}
     if (mounted) setState(() => _loadingDefs = false);
+  }
+
+  Map<String, dynamic>? _findCatInfo(String cat) {
+    final list = widget.analisisCategorias;
+    if (list == null) return null;
+    for (final c in list) {
+      if (c['categoria'] == cat) return c;
+    }
+    return {'categoria': cat, 'presupuestado': 0, 'total_gastado': 0};
   }
 
   void _seleccionarDefinicion(Map<String, dynamic> def) {
@@ -241,8 +257,24 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               onChanged: (cat, custom) => setState(() {
                 _categoria       = cat;
                 _categoriaCustom = custom;
+                final info = _findCatInfo(cat);
+                _catInfo = info;
+                if (info != null) {
+                  final presup = double.tryParse(info['presupuestado'].toString()) ?? 0.0;
+                  if (presup == 0 && _tipo == 'variable') {
+                    _tipo = 'no_presupuestado';
+                    _tipoAutoSet = true;
+                  } else if (presup > 0 && _tipoAutoSet && _tipo == 'no_presupuestado') {
+                    _tipo = 'variable';
+                    _tipoAutoSet = false;
+                  }
+                }
               }),
             ),
+            if (_catInfo != null) ...[
+              const SizedBox(height: 8),
+              _CatBalanceHint(cat: _catInfo!),
+            ],
             const SizedBox(height: 16),
 
             // ── Fecha ────────────────────────────────────────────────────
@@ -308,6 +340,47 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                     ),
                   ]),
                   if (_guardarComoBase) ...[
+                    const SizedBox(height: 12),
+                    const Text('Frecuencia',
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      for (final f in const [
+                        ('mensual',   'Mensual'),
+                        ('quincenal', 'Quincenal'),
+                        ('semanal',   'Semanal'),
+                        ('anual',     'Anual'),
+                      ])
+                        Expanded(child: GestureDetector(
+                          onTap: () => setState(() => _frecuenciaBase = f.$1),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            decoration: BoxDecoration(
+                              color: _frecuenciaBase == f.$1
+                                  ? AppTheme.primary.withValues(alpha: 0.12)
+                                  : AppTheme.surfaceAlt,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: _frecuenciaBase == f.$1
+                                    ? AppTheme.primary
+                                    : AppTheme.border,
+                              ),
+                            ),
+                            child: Text(f.$2,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _frecuenciaBase == f.$1
+                                      ? AppTheme.primary
+                                      : AppTheme.textSecondary,
+                                  fontSize: 10,
+                                  fontWeight: _frecuenciaBase == f.$1
+                                      ? FontWeight.w700
+                                      : FontWeight.normal,
+                                )),
+                          ),
+                        )),
+                    ]),
                     const SizedBox(height: 12),
                     MesRangoSelector(
                       mesInicio: _mesInicio,
@@ -387,6 +460,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
           uid: widget.firebaseUid, nombre: _nombre.text.trim(),
           categoria: categoriaFinal,
           montoEstimado: double.parse(_monto.text),
+          frecuencia: _frecuenciaBase,
           mesInicio: _mesInicio, mesFin: _mesFin,
         );
       }
@@ -408,6 +482,72 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+}
+
+class _CatBalanceHint extends StatelessWidget {
+  final Map<String, dynamic> cat;
+  const _CatBalanceHint({required this.cat});
+
+  @override
+  Widget build(BuildContext context) {
+    final presup = double.tryParse(cat['presupuestado'].toString()) ?? 0.0;
+    final total  = double.tryParse(cat['total_gastado'].toString()) ?? 0.0;
+
+    if (presup == 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppTheme.danger.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+        ),
+        child: const Row(children: [
+          Icon(Icons.info_outline, color: AppTheme.danger, size: 14),
+          SizedBox(width: 8),
+          Expanded(child: Text(
+            'Esta categoría no está en tu presupuesto',
+            style: TextStyle(color: AppTheme.danger, fontSize: 12),
+          )),
+        ]),
+      );
+    }
+
+    final quedan = presup - total;
+    final excede = quedan < 0;
+    final bar    = (total / presup).clamp(0.0, 1.0);
+    final color  = excede ? AppTheme.danger : bar > 0.8 ? AppTheme.warning : AppTheme.success;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.account_balance_wallet_outlined, size: 14, color: AppTheme.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(
+            excede
+                ? 'Excedido \$${(-quedan).toStringAsFixed(2)} · gastado \$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}'
+                : 'Te quedan \$${quedan.toStringAsFixed(2)} · gastado \$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}',
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+          )),
+        ]),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: bar,
+            minHeight: 3,
+            color: color,
+            backgroundColor: AppTheme.surfaceAlt,
+          ),
+        ),
+      ]),
+    );
   }
 }
 

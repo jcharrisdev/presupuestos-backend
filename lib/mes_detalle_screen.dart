@@ -9,6 +9,7 @@ import 'services/registros_service.dart';
 import 'services/productos_catalogo_service.dart';
 import 'widgets/ayuda_sheet.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
+import 'widgets/financiero/categoria_selector.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 
@@ -180,6 +181,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
   }
 
   void _abrirAgregarGasto() async {
+    final cats = (_data?['analisis_categorias'] as List?)?.cast<Map<String, dynamic>>();
     final res = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -188,6 +190,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
         firebaseUid: widget.firebaseUid,
         anio: widget.anio,
         mes: widget.mes,
+        analisisCategorias: cats,
       ),
     );
     if (res == true) _cargar();
@@ -516,6 +519,7 @@ class _TabGastos extends StatefulWidget {
 
 class _TabGastosState extends State<_TabGastos> {
   bool _operando = false;
+  bool _sobresExpandido = true;
 
   Future<void> _marcarFijo(Map<String, dynamic> g, bool pagado, int? registroId) async {
     if (_operando) return;
@@ -555,6 +559,40 @@ class _TabGastosState extends State<_TabGastos> {
 
   double _num(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
 
+  Future<void> _marcarDeuda(Map<String, dynamic> d, bool pagado, int? registroId) async {
+    if (_operando) return;
+    setState(() => _operando = true);
+    try {
+      if (!pagado) {
+        final hoy = DateTime.now();
+        final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+        await RegistrosService.crear(
+          uid: widget.uid,
+          anio: widget.anio,
+          mes: widget.mes,
+          tipo: 'fijo',
+          categoria: 'deudas',
+          nombre: d['nombre'] as String? ?? '',
+          monto: (d['cuota'] as num? ?? 0).toDouble(),
+          fecha: fecha,
+          origenDeudaId: d['id'] as int,
+          pagado: 1,
+        );
+      } else if (registroId != null) {
+        await RegistrosService.eliminar(widget.uid, registroId);
+      }
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _operando = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final registros   = (widget.data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
@@ -577,9 +615,53 @@ class _TabGastosState extends State<_TabGastos> {
       }
     }
 
+    // Mapa deudaId → registroId para saber qué registro borrar al desmarcar pago de deuda
+    final deudaARegistroId = <int, int>{};
+    final deudasPagadasIds = <int>{};
+    for (final r in registros) {
+      final origenDeudaId = r['origen_deuda_id'];
+      if (origenDeudaId != null) {
+        final deudaId = (origenDeudaId as num?)?.toInt() ?? -1;
+        final regId   = (r['id'] as num?)?.toInt() ?? -1;
+        if (deudaId >= 0 && regId >= 0) {
+          deudasPagadasIds.add(deudaId);
+          deudaARegistroId[deudaId] = regId;
+        }
+      }
+    }
+
+    final sobres = (widget.data['analisis_categorias'] as List? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((c) {
+          final p = double.tryParse(c['presupuestado'].toString()) ?? 0.0;
+          final t = double.tryParse(c['total_gastado'].toString()) ?? 0.0;
+          return p > 0 || t > 0;
+        }).toList();
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       children: [
+        // ── SOBRES POR CATEGORÍA ──────────────────────────────────
+        if (sobres.isNotEmpty) ...[
+          GestureDetector(
+            onTap: () => setState(() => _sobresExpandido = !_sobresExpandido),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(children: [
+                const Text('SOBRES DEL MES',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10,
+                        fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                const Spacer(),
+                Icon(_sobresExpandido ? Icons.expand_less : Icons.expand_more,
+                    color: AppTheme.textMuted, size: 18),
+              ]),
+            ),
+          ),
+          if (_sobresExpandido)
+            ...sobres.map((c) => _SobreRow(cat: c)),
+          const Divider(color: AppTheme.border, height: 24),
+        ],
+
         // ── COMPROMISOS FIJOS DEL MES ────────────────────────────
         if (gastosFijos.isNotEmpty || deudas.isNotEmpty) ...[
           _SeccionLabel('COMPROMISOS DEL MES',
@@ -596,14 +678,19 @@ class _TabGastosState extends State<_TabGastos> {
               onTap: (_operando || fijoId < 0) ? null : () => _marcarFijo(g, pagado, fijoARegistroId[fijoId]),
             );
           }),
-          ...deudas.map((d) => _PlanTile(
-            nombre: d['nombre'] as String? ?? '',
-            monto: (d['cuota'] as num? ?? 0).toDouble(),
-            tipo: 'deuda',
-            pagado: false,
-            esPago: true,
-            cuotasRestantes: d['cuotas_restantes'] as int?,
-          )),
+          ...deudas.map((d) {
+            final deudaId = (d['id'] as num?)?.toInt() ?? -1;
+            final pagado  = deudasPagadasIds.contains(deudaId);
+            return _PlanTile(
+              nombre: d['nombre'] as String? ?? '',
+              monto: (d['cuota'] as num? ?? 0).toDouble(),
+              tipo: 'deuda',
+              pagado: pagado,
+              esPago: true,
+              cuotasRestantes: d['cuotas_restantes'] as int?,
+              onTap: (_operando || deudaId < 0) ? null : () => _marcarDeuda(d, pagado, deudaARegistroId[deudaId]),
+            );
+          }),
           const Divider(color: AppTheme.border, height: 24),
         ],
 
@@ -630,6 +717,57 @@ class _TabGastosState extends State<_TabGastos> {
             ]),
           ),
       ],
+    );
+  }
+}
+
+class _SobreRow extends StatelessWidget {
+  final Map<String, dynamic> cat;
+  const _SobreRow({required this.cat});
+
+  @override
+  Widget build(BuildContext context) {
+    final rawCat = cat['categoria'] as String? ?? '';
+    final nombre = rawCat.isNotEmpty
+        ? '${rawCat[0].toUpperCase()}${rawCat.substring(1)}'
+        : rawCat;
+    final presup = double.tryParse(cat['presupuestado'].toString()) ?? 0.0;
+    final total  = double.tryParse(cat['total_gastado'].toString()) ?? 0.0;
+    final bar    = presup > 0 ? (total / presup).clamp(0.0, 1.0) : 0.0;
+    final excede = presup > 0 && total > presup;
+    final barColor = excede
+        ? AppTheme.danger
+        : bar > 0.8
+            ? AppTheme.warning
+            : AppTheme.success;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Text(nombre,
+              style: const TextStyle(color: AppTheme.textSecondary,
+                  fontSize: 12, fontWeight: FontWeight.w600))),
+          Text(
+            excede
+                ? '\$${total.toStringAsFixed(2)} · +\$${(total - presup).toStringAsFixed(2)} excedido'
+                : presup > 0
+                    ? '\$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}'
+                    : '\$${total.toStringAsFixed(2)}',
+            style: TextStyle(color: barColor, fontSize: 11),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: bar,
+            minHeight: 4,
+            color: barColor,
+            backgroundColor: AppTheme.surfaceAlt,
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -773,6 +911,14 @@ class _RegistroTile extends StatelessWidget {
               onChanged();
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
+            title: const Text('Editar', style: TextStyle(color: AppTheme.textPrimary)),
+            onTap: () {
+              Navigator.pop(context);
+              _mostrarEditarSheet(context);
+            },
+          ),
           if (reg['tipo'] == 'no_presupuestado') ListTile(
             leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
             title: const Text('Convertir a gasto variable base', style: TextStyle(color: AppTheme.textPrimary)),
@@ -812,6 +958,203 @@ class _RegistroTile extends StatelessWidget {
       case 'familia':      return Icons.family_restroom;
       default:             return Icons.receipt;
     }
+  }
+
+  void _mostrarEditarSheet(BuildContext context) {
+    final nombreCtrl = TextEditingController(text: reg['nombre'] as String? ?? '');
+    final montoCtrl  = TextEditingController(
+        text: double.tryParse(reg['monto'].toString())?.toStringAsFixed(2) ?? '');
+    final notasCtrl  = TextEditingController(text: reg['notas'] as String? ?? '');
+    String tipo      = reg['tipo'] as String? ?? 'variable';
+    String categoria = reg['categoria'] as String? ?? 'otro';
+    String? categoriaCustom;
+    DateTime fecha   = DateTime.tryParse(reg['fecha'] as String? ?? '') ?? DateTime.now();
+    bool guardando   = false;
+
+    String fmt(DateTime d) =>
+        '${d.day.toString().padLeft(2, '0')} '
+        '${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.month - 1]} '
+        '${d.year}';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppTheme.border,
+                      borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              const Text('Editar gasto',
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 17,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+
+              // Tipo
+              Row(children: [
+                for (final t in [
+                  ('fijo',             'Fijo',        AppTheme.colorFijo),
+                  ('variable',         'Variable',    AppTheme.warning),
+                  ('no_presupuestado', 'No presup.',  AppTheme.danger),
+                ])
+                  Expanded(child: GestureDetector(
+                    onTap: () => setS(() => tipo = t.$1),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: tipo == t.$1
+                            ? t.$3.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: tipo == t.$1 ? t.$3 : AppTheme.border),
+                      ),
+                      child: Text(t.$2, textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: tipo == t.$1 ? t.$3 : AppTheme.textMuted,
+                            fontSize: 11,
+                            fontWeight: tipo == t.$1
+                                ? FontWeight.w700 : FontWeight.normal,
+                          )),
+                    ),
+                  )),
+              ]),
+              const SizedBox(height: 12),
+
+              // Nombre
+              TextField(
+                controller: nombreCtrl,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(labelText: 'Nombre del gasto'),
+              ),
+              const SizedBox(height: 12),
+
+              // Monto
+              TextField(
+                controller: montoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(
+                    labelText: 'Monto', prefixText: '\$ '),
+              ),
+              const SizedBox(height: 16),
+
+              // Categoría
+              CategoriaSelector(
+                firebaseUid: uid,
+                categoriaActual: categoria,
+                color: AppTheme.primary,
+                onChanged: (cat, custom) =>
+                    setS(() { categoria = cat; categoriaCustom = custom; }),
+              ),
+              const SizedBox(height: 16),
+
+              // Fecha
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: fecha,
+                    firstDate: DateTime(fecha.year - 2),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    builder: (c, child) => Theme(
+                      data: Theme.of(c).copyWith(
+                          colorScheme: const ColorScheme.dark(
+                              primary: AppTheme.primary)),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null) setS(() => fecha = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today,
+                        color: AppTheme.textSecondary, size: 16),
+                    const SizedBox(width: 10),
+                    Text(fmt(fecha),
+                        style: const TextStyle(
+                            color: AppTheme.textPrimary, fontSize: 14)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Notas
+              TextField(
+                controller: notasCtrl,
+                style: const TextStyle(color: AppTheme.textPrimary),
+                decoration: const InputDecoration(
+                    labelText: 'Notas (opcional)'),
+              ),
+              const SizedBox(height: 20),
+
+              // Guardar
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: guardando ? null : () async {
+                    final nombre = nombreCtrl.text.trim();
+                    final monto  = double.tryParse(montoCtrl.text);
+                    if (nombre.isEmpty || monto == null) return;
+                    setS(() => guardando = true);
+                    try {
+                      final catFinal = (categoria == 'otro' &&
+                              categoriaCustom != null)
+                          ? categoriaCustom!
+                          : categoria;
+                      await RegistrosService.editar(uid, reg['id'] as int, {
+                        'nombre': nombre,
+                        'monto':  monto,
+                        'categoria': catFinal,
+                        'tipo':  tipo,
+                        'fecha': '${fecha.year}-'
+                            '${fecha.month.toString().padLeft(2, '0')}-'
+                            '${fecha.day.toString().padLeft(2, '0')}',
+                        'notas': notasCtrl.text.isEmpty
+                            ? null : notasCtrl.text.trim(),
+                      });
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      onChanged();
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: AppTheme.danger));
+                      }
+                    } finally {
+                      if (ctx.mounted) setS(() => guardando = false);
+                    }
+                  },
+                  child: guardando
+                      ? const SizedBox(height: 18, width: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.background))
+                      : const Text('Guardar cambios'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ).whenComplete(() {
+      nombreCtrl.dispose();
+      montoCtrl.dispose();
+      notasCtrl.dispose();
+    });
   }
 }
 
