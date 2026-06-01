@@ -284,6 +284,56 @@ No pasar al siguiente punto sin confirmar el anterior.
 
 ---
 
+---
+
+## Sesión 2026-06-01 — AB2 + B3 + L1 (Gustitos + Quincenas interactivas)
+
+---
+
+### L-20: Widget interactivo requiere que el API incluya IDs — verificar antes de convertir a StatefulWidget
+
+**Error:** `_QuincenaCard` era `StatelessWidget` de solo lectura. Para agregar un toggle de "marcar pagado" se convirtió a `StatefulWidget`, pero el API de quincenas no incluía `id` ni `registro_id` en los compromisos — solo `nombre`, `monto` y `tipo`. El toggle no tenía forma de saber qué registro crear ni cuál eliminar.
+
+**Causa raíz:** Se diseñó la UI antes de verificar que el API devuelve los datos necesarios para la interacción.
+
+**Fix:** Primero actualizar el backend (`GET /user/quincena`) para incluir `id`, `registro_id` y `categoria` en cada compromiso (LEFT JOIN con `registros_gasto`). Después convertir el widget.
+
+**Regla:** Antes de hacer un widget interactivo (toggle, swipe, acción), verificar que el response del API incluye todos los IDs necesarios: ID del origen para crear el registro, ID del registro existente para eliminarlo. Si no están, primero actualizar el backend.
+
+---
+
+### L-21: Fire-and-forget en backend para operaciones derivadas — no bloquear la respuesta
+
+**Situación:** Al crear un Gustito (`POST /gustitos`), también se necesita crear un `registros_gasto` vinculado. Pero ese proceso puede fallar si el mes no existe en `meses_financieros`. No debía bloquear la respuesta al cliente.
+
+**Patrón aplicado:**
+```javascript
+res.status(201).json(gustito); // responder primero
+
+(async () => {           // derivado fire-and-forget
+  try {
+    const [[mesRow]] = await db.execute(...);
+    if (!mesRow) return; // mes no generado — skip silencioso
+    await db.execute(`INSERT INTO registros_gasto ...`);
+    await _actualizarTotalesMes(mesRow.id, user_id);
+  } catch (_) { /* no bloquear */ }
+})();
+```
+
+**Regla:** Cuando una operación del backend tiene un efecto secundario que puede fallar sin consecuencias críticas (ej: crear un registro derivado, actualizar totales), responder al cliente primero y ejecutar el efecto secundario en un IIFE async fire-and-forget con try/catch silencioso. Aplica también a `_recalcular().catch(() => {})`.
+
+---
+
+### L-22: Código muerto detectado — widget definido pero nunca importado
+
+**Situación:** `CrearGustitoSheet` existía como clase completa en `lib/gustitos/crear_gustito_sheet.dart` con `required int budgetId`, pero nunca fue importada ni usada desde ninguna otra pantalla. Era dead code que generaba confusión sobre el estado real del módulo de gustitos.
+
+**Lección:** El hecho de que un archivo exista en `lib/` no significa que se use. Antes de modificar un widget pensando que "está roto en producción", buscar con grep si alguien lo importa. Si no hay imports → dead code → puede ser reescrito o simplificado sin riesgo de regresión.
+
+**Regla:** Cuando una clase parece "incorrecta" (ej: `required int budgetId` sin source), buscar primero: `grep -r "NombreClase" lib/`. Si no hay resultados fuera del archivo donde está definida, es dead code.
+
+---
+
 ## Patrones que funcionan bien (mantenerlos)
 
 - **Widget reutilizable**: cuando un feature se necesita en 2+ pantallas, extraer a `lib/widgets/financiero/`. Ejemplo: `SplitSection`.
@@ -291,3 +341,4 @@ No pasar al siguiente punto sin confirmar el anterior.
 - **Migración idempotente en `initDB()`**: `ALTER TABLE ... ADD COLUMN ...` con `.catch(() => {})` — se puede reejecutar sin errores.
 - **Auto-detección en backend**: calcular `es_hormiga` en el POST del servidor, no en el cliente. La lógica de negocio vive en el servidor.
 - **Brevo API reutilizable**: hay al menos 3 funciones que envían emails. Siempre reutilizar el patrón de `sendInvitationEmail` para nuevas notificaciones.
+- **Fire-and-forget para efectos secundarios**: responder al cliente primero, ejecutar derivados en IIFE async silencioso. Ver L-21.
