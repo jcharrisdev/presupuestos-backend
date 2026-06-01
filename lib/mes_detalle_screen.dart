@@ -1918,6 +1918,10 @@ class _TabQuincenasState extends State<_TabQuincenas> {
             data: _q1!,
             activa: esActual && esQ1,
             cerrada: !esQ1,
+            uid: widget.uid,
+            anio: widget.anio,
+            mes: widget.mes,
+            onRefresh: _cargar,
           ),
           const SizedBox(height: 12),
           if (_q2 != null) _QuincenaCard(
@@ -1927,6 +1931,10 @@ class _TabQuincenasState extends State<_TabQuincenas> {
             remanenteAnterior: _q1 != null
                 ? (double.tryParse(_q1!['disponible'].toString()) ?? 0.0)
                 : null,
+            uid: widget.uid,
+            anio: widget.anio,
+            mes: widget.mes,
+            onRefresh: _cargar,
           ),
           const SizedBox(height: 20),
           const Text(
@@ -1961,22 +1969,82 @@ class _TabQuincenasState extends State<_TabQuincenas> {
   }
 }
 
-class _QuincenaCard extends StatelessWidget {
+class _QuincenaCard extends StatefulWidget {
   final Map<String, dynamic> data;
   final bool activa;
   final bool cerrada;
   final double? remanenteAnterior;
+  final String uid;
+  final int anio;
+  final int mes;
+  final VoidCallback onRefresh;
   const _QuincenaCard({
     required this.data,
     required this.activa,
+    required this.uid,
+    required this.anio,
+    required this.mes,
+    required this.onRefresh,
     this.cerrada = false,
     this.remanenteAnterior,
   });
 
+  @override
+  State<_QuincenaCard> createState() => _QuincenaCardState();
+}
+
+class _QuincenaCardState extends State<_QuincenaCard> {
+  bool _operando = false;
+
   double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
+
+  Future<void> _toggleCompromiso(Map<String, dynamic> c) async {
+    if (_operando) return;
+    final id         = c['id'] as int?;
+    final registroId = c['id'] != null ? (c['registro_id'] as int?) : null;
+    final pagado     = registroId != null;
+    if (id == null) return;
+
+    setState(() => _operando = true);
+    try {
+      if (!pagado) {
+        final hoy   = DateTime.now();
+        final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+        final tipo  = c['tipo'] as String? ?? 'fijo';
+        await RegistrosService.crear(
+          uid: widget.uid,
+          anio: widget.anio,
+          mes: widget.mes,
+          tipo: tipo == 'deuda' ? 'fijo' : tipo,
+          categoria: (c['categoria'] as String? ?? '').isNotEmpty ? c['categoria'] as String : 'otros',
+          nombre: c['nombre'] as String? ?? '',
+          monto: _d(c['monto']),
+          fecha: fecha,
+          origenFijoId:    tipo == 'fijo'     ? id : null,
+          origenVariableId: tipo == 'variable' ? id : null,
+          origenDeudaId:   tipo == 'deuda'    ? id : null,
+          pagado: 1,
+        );
+      } else {
+        await RegistrosService.eliminar(widget.uid, registroId);
+      }
+      widget.onRefresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _operando = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final data       = widget.data;
+    final activa     = widget.activa;
+    final cerrada    = widget.cerrada;
     final q          = (data['quincena'] as num).toInt();
     final dias       = data['dias'] as String? ?? '';
     final ingQ       = _d(data['ingreso_quincenal']);
@@ -2002,28 +2070,28 @@ class _QuincenaCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Banner carry-over de Q1 (solo en Q2)
-        if (remanenteAnterior != null) ...[
+        if (widget.remanenteAnterior != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: (remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger)
+              color: (widget.remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger)
                   .withValues(alpha: 0.08),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               border: Border(bottom: BorderSide(color: AppTheme.border)),
             ),
             child: Row(children: [
               Icon(
-                remanenteAnterior! >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                color: remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
+                widget.remanenteAnterior! >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                color: widget.remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
                 size: 14,
               ),
               const SizedBox(width: 6),
               Text(
-                remanenteAnterior! >= 0
-                    ? 'Remanente Q1: +\$${remanenteAnterior!.toStringAsFixed(2)}'
-                    : 'Déficit Q1: \$${remanenteAnterior!.toStringAsFixed(2)}',
+                widget.remanenteAnterior! >= 0
+                    ? 'Remanente Q1: +\$${widget.remanenteAnterior!.toStringAsFixed(2)}'
+                    : 'Déficit Q1: \$${widget.remanenteAnterior!.toStringAsFixed(2)}',
                 style: TextStyle(
-                  color: remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
+                  color: widget.remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
                   fontSize: 12, fontWeight: FontWeight.w600,
                 ),
               ),
@@ -2099,22 +2167,62 @@ class _QuincenaCard extends StatelessWidget {
           const Divider(color: AppTheme.border, height: 20),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: const Text('COMPROMISOS DEL MES',
-                style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8, fontWeight: FontWeight.w700)),
+            child: Row(children: [
+              const Text('COMPROMISOS',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              if (_operando)
+                const SizedBox(width: 12, height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.primary)),
+            ]),
           ),
-          ...compromisos.map((c) => ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-            leading: Icon(
-              (c['tipo'] as String? ?? '') == 'fijo' ? Icons.lock_outline : Icons.repeat_outlined,
-              size: 15,
-              color: (c['tipo'] as String? ?? '') == 'fijo' ? AppTheme.colorFijo : AppTheme.warning,
-            ),
-            title: Text(c['nombre'] as String? ?? '—',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            trailing: Text('\$${_d(c['monto']).toStringAsFixed(2)}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-          )),
+          ...compromisos.map((c) {
+            final pagado = c['registro_id'] != null;
+            final tipo   = c['tipo'] as String? ?? 'fijo';
+            final iconColor = tipo == 'fijo'     ? AppTheme.colorFijo
+                            : tipo == 'deuda'    ? AppTheme.danger
+                            : AppTheme.warning;
+            final leadingIcon = tipo == 'fijo'  ? Icons.lock_outline
+                              : tipo == 'deuda' ? Icons.credit_card_outlined
+                              : Icons.repeat_outlined;
+            return ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              leading: Icon(leadingIcon, size: 15, color: pagado ? AppTheme.success : iconColor),
+              title: Text(c['nombre'] as String? ?? '—',
+                  style: TextStyle(
+                    color: pagado ? AppTheme.textMuted : AppTheme.textSecondary,
+                    fontSize: 13,
+                    decoration: pagado ? TextDecoration.lineThrough : null,
+                  )),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('\$${_d(c['monto']).toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: pagado ? AppTheme.textMuted : AppTheme.textSecondary,
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                    )),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _operando ? null : () => _toggleCompromiso(c),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 22, height: 22,
+                    decoration: BoxDecoration(
+                      color: pagado ? AppTheme.success : Colors.transparent,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: pagado ? AppTheme.success : AppTheme.border,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: pagado
+                        ? const Icon(Icons.check, size: 14, color: Colors.black)
+                        : null,
+                  ),
+                ),
+              ]),
+            );
+          }),
         ],
         if (registros.isNotEmpty) ...[
           const Divider(color: AppTheme.border, height: 20),

@@ -72,8 +72,8 @@ Esto permite pagar en partes. El indicador del gasto muestra "Pagado $100 de $20
 
 ---
 
-### ❌ B3. Tab Quincenas no tiene acciones — solo es lectura
-**Estado:** PENDIENTE — Discutido con el usuario: quiere poder marcar gastos como pagados directamente desde el Tab Quincenas (mismo toggle que existe en Tab Gastos). Actualmente solo es vista de lectura.
+### ✅ B3. Tab Quincenas no tiene acciones — solo es lectura
+**Estado:** IMPLEMENTADO — `_QuincenaCard` convertido a `StatefulWidget`. Backend actualizado: `GET /user/quincena` ahora incluye `id`, `registro_id` y `categoria` en cada compromiso. Toggle circular en cada compromiso: tap crea/elimina `registros_gasto` igual que en Tab Gastos. Compromisos pagados muestran tachado y check verde.
 
 **Problema:** El Tab Quincenas muestra compromisos y gastos de cada quincena pero el usuario no puede hacer nada desde ahí. Para marcar un gasto como pagado tiene que ir al Tab Gastos, buscarlo, y actuar. Los flujos están separados.
 
@@ -935,4 +935,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-01 — AB2 implementado: Gustitos desacoplados del sistema viejo. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-01 — AB2 + B3 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

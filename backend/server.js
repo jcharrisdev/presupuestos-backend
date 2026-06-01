@@ -9341,18 +9341,33 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     const totalNoPres= registros.filter(r => r.tipo === 'no_presupuestado').reduce((s, r) => s + Number(r.monto), 0);
     const totalGasto = totalFijos + totalVar + totalNoPres;
     const [compFijos] = await db.execute(
-      `SELECT descripcion AS nombre, monto_mensual AS monto FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
-      [firebase_uid]);
+      `SELECT ugf.id, ugf.descripcion AS nombre, ugf.monto_mensual AS monto, ugf.categoria,
+              rg.id AS registro_id
+       FROM user_gastos_fijos ugf
+       LEFT JOIN registros_gasto rg
+         ON rg.origen_fijo_id = ugf.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
+       WHERE ugf.firebase_uid = ? AND ugf.activo = 1`,
+      [firebase_uid, anio, mes, firebase_uid]);
     const [compVariables] = await db.execute(
-      `SELECT nombre, monto_estimado AS monto FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`,
-      [firebase_uid]);
+      `SELECT gvb.id, gvb.nombre, gvb.monto_estimado AS monto, gvb.categoria,
+              rg.id AS registro_id
+       FROM gastos_variables_base gvb
+       LEFT JOIN registros_gasto rg
+         ON rg.origen_variable_id = gvb.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
+       WHERE gvb.firebase_uid = ? AND gvb.activo = 1`,
+      [firebase_uid, anio, mes, firebase_uid]);
     const [compDeudas] = await db.execute(
-      `SELECT nombre, IF(es_letra=1, cuota_fija, pago_minimo) AS monto FROM deudas WHERE firebase_uid = ? AND activa = 1`,
-      [firebase_uid]);
+      `SELECT d.id, d.nombre, IF(d.es_letra=1, d.cuota_fija, d.pago_minimo) AS monto,
+              rg.id AS registro_id
+       FROM deudas d
+       LEFT JOIN registros_gasto rg
+         ON rg.origen_deuda_id = d.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
+       WHERE d.firebase_uid = ? AND d.activa = 1`,
+      [firebase_uid, anio, mes, firebase_uid]);
     const todosCompromisos = [
-      ...compFijos.map(c => ({ nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'fijo' })),
-      ...compVariables.map(c => ({ nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'variable' })),
-      ...compDeudas.map(d => ({ nombre: d.nombre, monto: parseFloat((Number(d.monto) / 2).toFixed(2)), tipo: 'deuda' })),
+      ...compFijos.map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'fijo', categoria: c.categoria || 'otros', registro_id: c.registro_id || null })),
+      ...compVariables.map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'variable', categoria: c.categoria || 'otros', registro_id: c.registro_id || null })),
+      ...compDeudas.map(d => ({ id: d.id, nombre: d.nombre, monto: parseFloat((Number(d.monto) / 2).toFixed(2)), tipo: 'deuda', categoria: 'deudas', registro_id: d.registro_id || null })),
     ];
     res.json({
       quincena: Number(num),
