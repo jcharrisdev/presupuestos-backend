@@ -523,6 +523,7 @@ class _TabGastosState extends State<_TabGastos> {
   bool _sobresExpandido = true;
   String _busqueda = '';
   String? _filtroTipo;
+  String _orden = 'fecha_desc';
   final _buscadorCtrl = TextEditingController();
 
   @override
@@ -916,11 +917,56 @@ class _TabGastosState extends State<_TabGastos> {
               final matchTipo = _filtroTipo == null || r['tipo'] == _filtroTipo;
               return matchBusq && matchTipo;
             }).toList();
+            // sort client-side
+            filtrados.sort((a, b) {
+              if (_orden == 'monto_desc') {
+                return (double.tryParse(b['monto'].toString()) ?? 0)
+                    .compareTo(double.tryParse(a['monto'].toString()) ?? 0);
+              }
+              final fa = (a['fecha'] as String? ?? '');
+              final fb = (b['fecha'] as String? ?? '');
+              return _orden == 'fecha_asc' ? fa.compareTo(fb) : fb.compareTo(fa);
+            });
             final label = (filtrados.length == registros.length)
                 ? '${registros.length} transacciones'
                 : '${filtrados.length} de ${registros.length}';
+            // cycle: fecha_desc → fecha_asc → monto_desc → fecha_desc
+            final nextOrden = _orden == 'fecha_desc'
+                ? 'fecha_asc'
+                : _orden == 'fecha_asc'
+                    ? 'monto_desc'
+                    : 'fecha_desc';
+            final ordenIcon = _orden == 'monto_desc'
+                ? Icons.attach_money
+                : _orden == 'fecha_asc'
+                    ? Icons.arrow_upward
+                    : Icons.arrow_downward;
+            final ordenLabel = _orden == 'monto_desc'
+                ? 'Mayor monto'
+                : _orden == 'fecha_asc'
+                    ? 'Más antiguo'
+                    : 'Más reciente';
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _SeccionLabel('GASTOS REGISTRADOS', label),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(children: [
+                  Expanded(child: Text('GASTOS REGISTRADOS',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11,
+                          fontWeight: FontWeight.w600, letterSpacing: 0.6))),
+                  GestureDetector(
+                    onTap: () => setState(() => _orden = nextOrden),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(ordenIcon, size: 11, color: AppTheme.primary),
+                      const SizedBox(width: 3),
+                      Text(ordenLabel,
+                          style: const TextStyle(color: AppTheme.primary, fontSize: 11)),
+                      const SizedBox(width: 6),
+                      Text(label,
+                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    ]),
+                  ),
+                ]),
+              ),
               if (filtrados.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
