@@ -521,6 +521,15 @@ class _TabGastos extends StatefulWidget {
 class _TabGastosState extends State<_TabGastos> {
   bool _operando = false;
   bool _sobresExpandido = true;
+  String _busqueda = '';
+  String? _filtroTipo;
+  final _buscadorCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _buscadorCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _marcarFijo(Map<String, dynamic> g, bool pagado, int? registroId) async {
     if (_operando) return;
@@ -827,9 +836,102 @@ class _TabGastosState extends State<_TabGastos> {
 
         // ── REGISTROS REALES ────────────────────────────────────
         if (registros.isNotEmpty) ...[
-          _SeccionLabel('GASTOS REGISTRADOS', '${registros.length} transacciones'),
-          ...registros.map((r) => _RegistroTile(
-              reg: r, uid: widget.uid, onChanged: widget.onChanged)),
+          // Búsqueda + chips (solo si hay suficientes registros)
+          if (registros.length > 3) ...[
+            TextField(
+              controller: _buscadorCtrl,
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+              onChanged: (v) => setState(() => _busqueda = v),
+              decoration: InputDecoration(
+                hintText: 'Buscar gasto…',
+                hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+                suffixIcon: _busqueda.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () => setState(() {
+                          _busqueda = '';
+                          _buscadorCtrl.clear();
+                        }),
+                        child: const Icon(Icons.clear, color: AppTheme.textMuted, size: 16),
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppTheme.surfaceAlt,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                for (final entry in const [
+                  (null,               'Todos'),
+                  ('fijo',             'Fijos'),
+                  ('variable',         'Variable'),
+                  ('no_presupuestado', 'No presup.'),
+                ])
+                  GestureDetector(
+                    onTap: () => setState(() => _filtroTipo = entry.$1),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _filtroTipo == entry.$1
+                            ? AppTheme.primary.withValues(alpha: 0.15)
+                            : AppTheme.surfaceAlt,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _filtroTipo == entry.$1
+                              ? AppTheme.primary
+                              : AppTheme.border,
+                          width: _filtroTipo == entry.$1 ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Text(entry.$2,
+                          style: TextStyle(
+                            color: _filtroTipo == entry.$1
+                                ? AppTheme.primary
+                                : AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: _filtroTipo == entry.$1
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          )),
+                    ),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+          ],
+          // Lista filtrada
+          Builder(builder: (_) {
+            final filtrados = registros.where((r) {
+              final matchBusq = _busqueda.isEmpty ||
+                  (r['nombre'] as String? ?? '').toLowerCase().contains(_busqueda.toLowerCase()) ||
+                  (r['categoria'] as String? ?? '').toLowerCase().contains(_busqueda.toLowerCase());
+              final matchTipo = _filtroTipo == null || r['tipo'] == _filtroTipo;
+              return matchBusq && matchTipo;
+            }).toList();
+            final label = (filtrados.length == registros.length)
+                ? '${registros.length} transacciones'
+                : '${filtrados.length} de ${registros.length}';
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _SeccionLabel('GASTOS REGISTRADOS', label),
+              if (filtrados.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Sin resultados para "$_busqueda"',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                )
+              else
+                ...filtrados.map((r) => _RegistroTile(
+                    reg: r, uid: widget.uid, onChanged: widget.onChanged)),
+            ]);
+          }),
         ] else
           Container(
             padding: const EdgeInsets.all(16),
