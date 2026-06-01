@@ -1545,9 +1545,20 @@ class _TabQuincenasState extends State<_TabQuincenas> {
         children: [
           _infoBanner(esActual, esQ1),
           const SizedBox(height: 16),
-          if (_q1 != null) _QuincenaCard(data: _q1!, activa: esActual && esQ1),
+          if (_q1 != null) _QuincenaCard(
+            data: _q1!,
+            activa: esActual && esQ1,
+            cerrada: !esQ1,
+          ),
           const SizedBox(height: 12),
-          if (_q2 != null) _QuincenaCard(data: _q2!, activa: esActual && !esQ1),
+          if (_q2 != null) _QuincenaCard(
+            data: _q2!,
+            activa: esActual && !esQ1,
+            cerrada: !esActual,
+            remanenteAnterior: _q1 != null
+                ? (double.tryParse(_q1!['disponible'].toString()) ?? 0.0)
+                : null,
+          ),
           const SizedBox(height: 20),
           const Text(
             'Tus gastos fijos y variables aparecen automáticamente en cada quincena. '
@@ -1584,7 +1595,14 @@ class _TabQuincenasState extends State<_TabQuincenas> {
 class _QuincenaCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool activa;
-  const _QuincenaCard({required this.data, required this.activa});
+  final bool cerrada;
+  final double? remanenteAnterior;
+  const _QuincenaCard({
+    required this.data,
+    required this.activa,
+    this.cerrada = false,
+    this.remanenteAnterior,
+  });
 
   double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
 
@@ -1600,16 +1618,50 @@ class _QuincenaCard extends StatelessWidget {
     final dispColor  = disponible > ingQ * 0.2 ? AppTheme.success
                      : disponible > 0           ? AppTheme.warning
                      : AppTheme.danger;
+    final resultadoColor = disponible >= 0 ? AppTheme.success : AppTheme.danger;
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: activa ? AppTheme.primary : AppTheme.border,
+          color: activa ? AppTheme.primary
+              : cerrada ? AppTheme.border.withValues(alpha: 0.5)
+              : AppTheme.border,
           width: activa ? 1.5 : 1,
         ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Banner carry-over de Q1 (solo en Q2)
+        if (remanenteAnterior != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: (remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger)
+                  .withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(bottom: BorderSide(color: AppTheme.border)),
+            ),
+            child: Row(children: [
+              Icon(
+                remanenteAnterior! >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                color: remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                remanenteAnterior! >= 0
+                    ? 'Remanente Q1: +\$${remanenteAnterior!.toStringAsFixed(2)}'
+                    : 'Déficit Q1: \$${remanenteAnterior!.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                ),
+              ),
+            ]),
+          ),
+        ],
+
         // Header
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -1617,16 +1669,27 @@ class _QuincenaCard extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Text('Quincena $q', style: TextStyle(
-                  color: activa ? AppTheme.primary : AppTheme.textPrimary,
+                  color: activa ? AppTheme.primary
+                      : cerrada ? AppTheme.textSecondary
+                      : AppTheme.textPrimary,
                   fontSize: 15, fontWeight: FontWeight.w700)),
-                if (activa) ...[
-                  const SizedBox(width: 8),
+                const SizedBox(width: 8),
+                if (activa)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(4)),
                     child: const Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
                   ),
-                ],
+                if (cerrada)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: resultadoColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text('CERRADA', style: TextStyle(
+                        color: resultadoColor, fontSize: 9, fontWeight: FontWeight.w800)),
+                  ),
               ]),
               Text('Días $dias', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
@@ -1634,7 +1697,8 @@ class _QuincenaCard extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('\$${disponible.toStringAsFixed(2)}',
                   style: TextStyle(color: dispColor, fontSize: 22, fontWeight: FontWeight.w800)),
-              const Text('disponible', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+              Text(cerrada ? 'resultado final' : 'disponible',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             ]),
           ]),
         ),
