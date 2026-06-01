@@ -139,6 +139,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final pct      = ingreso > 0 ? (gastos / ingreso).clamp(0.0, 1.0) : 0.0;
     final mesNombre = _mesLabel(_now.month);
 
+    // Compromisos pendientes
+    final gastosFijos = ((_mes?['compromisos_fijos']?['gastos_fijos']) as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    final registros = (_mes?['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+    final pagadosIds = registros
+        .where((r) => r['origen_fijo_id'] != null)
+        .map((r) => (r['origen_fijo_id'] as num).toInt())
+        .toSet();
+    final pendientes = gastosFijos.where((g) {
+      final id = (g['id'] as num?)?.toInt() ?? -1;
+      return !pagadosIds.contains(id);
+    }).toList();
+    final totalPendiente = pendientes.fold(0.0, (s, g) => s + _d(g['monto']));
+
+    // Sobres por categoría
+    final sobres = (_mes?['analisis_categorias'] as List? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((c) => _d(c['presupuestado']) > 0 || _d(c['total_gastado']) > 0)
+        .toList();
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -216,6 +236,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ]),
           ),
         ),
+
+        // ── COMPROMISOS PENDIENTES ────────────────────────────────────────
+        if (pendientes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => MesDetalleScreen(
+                firebaseUid: widget.firebaseUid,
+                anio: _now.year, mes: _now.month, label: mesNombre,
+              ),
+            )).then((_) => _cargar()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.warning.withValues(alpha: 0.4)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.pending_actions, color: AppTheme.warning, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  '${pendientes.length} ${pendientes.length == 1 ? 'compromiso' : 'compromisos'} por pagar · \$${totalPendiente.toStringAsFixed(2)}',
+                  style: const TextStyle(color: AppTheme.warning,
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                )),
+                const Icon(Icons.chevron_right, color: AppTheme.warning, size: 16),
+              ]),
+            ),
+          ),
+        ],
+
+        // ── SOBRES DEL MES ────────────────────────────────────────────────
+        if (sobres.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _SectionLabel('SOBRES DEL MES', Icons.account_balance_wallet_outlined, AppTheme.primary),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: sobres.map((c) {
+                final rawCat = c['categoria'] as String? ?? '';
+                final nombre = rawCat.isNotEmpty
+                    ? '${rawCat[0].toUpperCase()}${rawCat.substring(1)}'
+                    : rawCat;
+                final presup = _d(c['presupuestado']);
+                final total  = _d(c['total_gastado']);
+                final bar    = presup > 0 ? (total / presup).clamp(0.0, 1.0) : 0.0;
+                final excede = presup > 0 && total > presup;
+                final color  = excede ? AppTheme.danger
+                    : bar > 0.8 ? AppTheme.warning
+                    : AppTheme.success;
+                return Container(
+                  width: 130,
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: excede
+                        ? AppTheme.danger.withValues(alpha: 0.5)
+                        : AppTheme.border),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(nombre,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppTheme.textPrimary,
+                            fontSize: 11, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: bar,
+                        minHeight: 4,
+                        color: color,
+                        backgroundColor: AppTheme.surfaceAlt,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      excede
+                          ? '+\$${(total - presup).toStringAsFixed(2)} excedido'
+                          : presup > 0
+                              ? '\$${(presup - total).toStringAsFixed(2)} restante'
+                              : '\$${total.toStringAsFixed(2)}',
+                      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+                    ),
+                  ]),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
 
         // ── ALERTAS ───────────────────────────────────────────────────────
         if (_alertas.isNotEmpty) ...[
@@ -358,6 +471,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         firebaseUid: widget.firebaseUid,
         anio: _now.year,
         mes: _now.month,
+        analisisCategorias: (_mes?['analisis_categorias'] as List?)
+            ?.cast<Map<String, dynamic>>(),
       ),
     );
     if (res == true) _cargar();
