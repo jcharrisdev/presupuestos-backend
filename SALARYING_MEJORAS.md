@@ -888,8 +888,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-### ❌ AB2. CrearGustitoSheet requiere budget_id del sistema viejo como parámetro obligatorio
-**Estado:** PENDIENTE — `crear_gustito_sheet.dart` línea 11 aún tiene `required int budgetId` y lo pasa a la API. `gustitos_service.dart` sigue usando `/presupuestos/$budgetId/gustitos`.
+### ✅ AB2. CrearGustitoSheet requiere budget_id del sistema viejo como parámetro obligatorio
+**Estado:** IMPLEMENTADO — `budgetId` ahora es `int?` opcional en `CrearGustitoSheet`. `GustitosService` reemplaza métodos viejos por `listar(uid)` usando `GET /gustitos`. Nueva `GustitosScreen` con lista y FAB para crear gustitos standalone. Card "Gustitos" agregada al Tab Más en HomeShell.
 
 **Problema:** `CrearGustitoSheet.show()` recibe `required int budgetId`. Este campo se pasa a `GustitosService.crear({'budget_id': budgetId, ...})`. Si el gustito se crea desde un contexto donde no hay un `budget_id` real (ej: desde el tab Más, directamente), este valor es incorrecto o forzado. Crea un acoplamiento artificial con el sistema antiguo de presupuestos.
 
@@ -935,4 +935,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-01 — Auditoría de 9 paquetes implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-01 — AB2 implementado: Gustitos desacoplados del sistema viejo. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

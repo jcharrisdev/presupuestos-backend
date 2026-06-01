@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/gustitos_service.dart';
-
-const _categorias = [
-  'supermercado', 'gasolina', 'educación', 'entretenimiento',
-  'salud', 'restaurantes', 'ropa', 'transporte',
-  'mantenimiento', 'tecnología', 'hogar', 'otros',
-];
+import '../widgets/financiero/categoria_selector.dart';
 
 const _emociones = ['antojo', 'premio', 'social', 'impulso', 'estrés', 'otro'];
 
 class CrearGustitoSheet {
   static void show(
     BuildContext context, {
-    required int budgetId,
+    int? budgetId,
     required String firebaseUid,
     required VoidCallback onCreado,
   }) {
     final nameCtrl     = TextEditingController();
     final montoCtrl    = TextEditingController();
     final merchantCtrl = TextEditingController();
-    String? categoria;
+    String categoria = 'alimentacion';
     String? emocion;
     DateTime spentAt = DateTime.now();
 
@@ -151,38 +146,17 @@ class CrearGustitoSheet {
                 const SizedBox(height: 20),
 
                 // Categoría
-                const Text('Categoría (opcional)',
+                const Text('Categoría',
                     style: TextStyle(
                         color: AppTheme.textSecondary, fontSize: 12)),
                 const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: [
-                  ..._categorias.map((c) => GestureDetector(
-                    onTap: () => setS(() => categoria = categoria == c ? null : c),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: categoria == c
-                            ? AppTheme.primary.withOpacity(0.15)
-                            : AppTheme.surfaceAlt,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: categoria == c
-                              ? AppTheme.primary
-                              : AppTheme.border,
-                        ),
-                      ),
-                      child: Text(c,
-                          style: TextStyle(
-                            color: categoria == c
-                                ? AppTheme.primary
-                                : AppTheme.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          )),
-                    ),
-                  )),
-                ]),
+                CategoriaSelector(
+                  firebaseUid: firebaseUid,
+                  categoriaActual: categoria,
+                  color: AppTheme.primary,
+                  onChanged: (cat, custom) =>
+                      setS(() => categoria = custom ?? cat),
+                ),
 
                 const SizedBox(height: 20),
 
@@ -236,7 +210,7 @@ class CrearGustitoSheet {
                       try {
                         await GustitosService.crear({
                           'user_id': firebaseUid,
-                          'budget_id': budgetId,
+                          if (budgetId != null) 'budget_id': budgetId,
                           'name': name,
                           'amount': monto,
                           'merchant': merchantCtrl.text.trim().isEmpty

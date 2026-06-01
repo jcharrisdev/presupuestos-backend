@@ -19,6 +19,7 @@ import 'patrimonio_screen.dart';
 import 'objetivos_screen.dart';
 import 'widgets/widgets.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
+import 'gustitos/gustitos_screen.dart';
 
 class HomeShell extends StatefulWidget {
   final String firebaseUid;
@@ -346,6 +347,15 @@ class _MasTab extends StatelessWidget {
                   color: AppTheme.info,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => PatrimonioScreen(firebaseUid: firebaseUid),
+                  )),
+                ),
+                _ModuloCard(
+                  icon: Icons.bolt,
+                  title: 'Gustitos',
+                  subtitle: 'Compras conscientes',
+                  color: AppTheme.primary,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => GustitosScreen(firebaseUid: firebaseUid),
                   )),
                 ),
                 if (modoNegocio)

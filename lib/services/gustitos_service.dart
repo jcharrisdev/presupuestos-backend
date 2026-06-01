@@ -2,16 +2,20 @@ import 'dart:convert';
 import 'api_client.dart';
 
 class GustitosService {
-  static Future<List<dynamic>> listarPorPresupuesto(int budgetId, String uid) async {
-    final res = await ApiClient.get('/presupuestos/$budgetId/gustitos?firebase_uid=$uid');
+  static Future<List<dynamic>> listar(String uid) async {
+    final res = await ApiClient.get('/gustitos?firebase_uid=$uid');
     if (res.statusCode == 200) return json.decode(res.body) as List;
     throw Exception('Error al cargar Gustitos');
   }
 
-  static Future<Map<String, dynamic>> resumen(int budgetId, String uid) async {
-    final res = await ApiClient.get('/presupuestos/$budgetId/gustitos/summary?firebase_uid=$uid');
-    if (res.statusCode == 200) return json.decode(res.body) as Map<String, dynamic>;
-    return {'total': 0.0, 'count': 0, 'promedio': 0.0, 'ultimos': []};
+  static Future<List<dynamic>> listarDelMes(String uid, int anio, int mes) async {
+    final res = await ApiClient.get('/gustitos?firebase_uid=$uid');
+    if (res.statusCode != 200) throw Exception('Error al cargar Gustitos');
+    final todos = json.decode(res.body) as List;
+    return todos.where((g) {
+      final fecha = DateTime.tryParse(g['spent_at'] ?? '');
+      return fecha != null && fecha.year == anio && fecha.month == mes;
+    }).toList();
   }
 
   static Future<Map<String, dynamic>> crear(Map<String, dynamic> body) async {
