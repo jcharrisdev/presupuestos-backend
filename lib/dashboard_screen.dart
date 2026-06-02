@@ -153,6 +153,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
     final totalPendiente = pendientes.fold(0.0, (s, g) => s + _d(g['monto']));
 
+    final deudas = ((_mes?['compromisos_fijos']?['deudas']) as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    final quincena = _now.day <= 15 ? 1 : 2;
+
     // Sobres por categoría
     final sobres = (_mes?['analisis_categorias'] as List? ?? [])
         .cast<Map<String, dynamic>>()
@@ -236,6 +240,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ]),
           ),
         ),
+
+        // ── DISPONIBLE QUINCENAL ─────────────────────────────────────────
+        if (ingreso > 0) ...[
+          const SizedBox(height: 12),
+          _QuincenalCard(
+            quincena: quincena,
+            mesNombre: mesNombre,
+            ingreso: ingreso,
+            gastosFijos: gastosFijos,
+            deudas: deudas,
+          ),
+        ],
 
         // ── COMPROMISOS PENDIENTES ────────────────────────────────────────
         if (pendientes.isNotEmpty) ...[
@@ -546,4 +562,121 @@ class _SectionLabel extends StatelessWidget {
     Text(label, style: TextStyle(color: color,
         fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
   ]);
+}
+
+class _QuincenalCard extends StatelessWidget {
+  final int quincena;
+  final String mesNombre;
+  final double ingreso;
+  final List<Map<String, dynamic>> gastosFijos;
+  final List<Map<String, dynamic>> deudas;
+
+  const _QuincenalCard({
+    required this.quincena,
+    required this.mesNombre,
+    required this.ingreso,
+    required this.gastosFijos,
+    required this.deudas,
+  });
+
+  double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0.0;
+
+  double _compromisosQuincena() {
+    double total = 0;
+    for (final g in gastosFijos) {
+      final diaPago  = g['dia_pago'] as int?;
+      final diaPago2 = g['dia_pago_2'] as int?;
+      final monto = _d(g['monto']);
+      final tieneDos = diaPago != null && diaPago2 != null;
+      final montoQ = tieneDos ? monto / 2 : monto;
+
+      if (diaPago == null) {
+        total += monto / 2;
+      } else if (diaPago == 15) {
+        total += monto / 2;
+      } else {
+        if (quincena == 1 && diaPago >= 1 && diaPago <= 14) total += montoQ;
+        if (quincena == 2 && diaPago >= 16) total += montoQ;
+        if (diaPago2 != null) {
+          if (quincena == 1 && diaPago2 >= 1 && diaPago2 <= 14) total += montoQ;
+          if (quincena == 2 && diaPago2 >= 16) total += montoQ;
+        }
+      }
+    }
+    for (final d in deudas) {
+      total += _d(d['cuota']) / 2;
+    }
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ingresoQ   = ingreso / 2;
+    final compQ      = _compromisosQuincena();
+    final disponible = ingresoQ - compQ;
+    final color = disponible > ingresoQ * 0.3 ? AppTheme.success
+        : disponible > 0 ? AppTheme.warning
+        : AppTheme.danger;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.calendar_view_week, color: color, size: 15),
+          const SizedBox(width: 7),
+          Text(
+            'Q$quincena · $mesNombre'.toUpperCase(),
+            style: TextStyle(color: color, fontSize: 11,
+                fontWeight: FontWeight.w700, letterSpacing: 0.6),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        _FilaQ('Cobro estimado', ingresoQ, AppTheme.success),
+        _FilaQ('Compromisos Q$quincena', -compQ, AppTheme.textSecondary),
+        const Divider(color: AppTheme.border, height: 14),
+        _FilaQ('Disponible libre', disponible, color, bold: true),
+        const SizedBox(height: 4),
+        Text(
+          disponible > 0
+              ? 'Después de compromisos fijos de esta quincena'
+              : 'Compromisos superan el cobro quincenal',
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
+        ),
+      ]),
+    );
+  }
+}
+
+class _FilaQ extends StatelessWidget {
+  final String label;
+  final double valor;
+  final Color color;
+  final bool bold;
+  const _FilaQ(this.label, this.valor, this.color, {this.bold = false});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(children: [
+      Expanded(child: Text(label,
+          style: TextStyle(
+            color: AppTheme.textSecondary, fontSize: 12,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+          ))),
+      Text(
+        valor < 0
+            ? '−\$${(-valor).toStringAsFixed(2)}'
+            : '\$${valor.toStringAsFixed(2)}',
+        style: TextStyle(
+          color: color, fontSize: 12,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+        ),
+      ),
+    ]),
+  );
 }

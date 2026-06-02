@@ -100,7 +100,8 @@ Esto permite pagar en partes. El indicador del gasto muestra "Pagado $100 de $20
 
 ---
 
-### C2. No hay indicador de disponible por quincena en ningún lado
+### ✅ C2. No hay indicador de disponible por quincena en ningún lado
+**Estado:** IMPLEMENTADO — `_QuincenalCard` en Dashboard muestra cobro quincenal estimado, compromisos Q1/Q2 (con lógica dia_pago/dia_pago_2), y disponible libre con color semafórico.
 **Problema:** Un usuario que cobra $800 quincenal quiere saber: "De mis $800 de esta quincena, ¿cuánto tengo libre después de compromisos fijos?" Esto no existe en ninguna pantalla.
 
 **Impacto:** Alta para el perfil de usuario objetivo (cobran quincenal).
@@ -800,7 +801,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ## CATEGORÍA Z — PRESUPUESTO COMPARTIDO (problemas específicos)
 
-### Z1. Pagar tu parte en Compartido no crea registro en tu presupuesto personal
+### ✅ Z1. Pagar tu parte en Compartido no crea registro en tu presupuesto personal
+**Estado:** IMPLEMENTADO (previo) — `POST /shared-expenses/:id/confirm-payment` ya crea `registros_gasto` con `shared_expense_id` para el usuario confirmante. Migración de columna existe en server.js línea 533.
 **Problema:** Cuando el usuario hace tap en "Pagar" dentro de un presupuesto compartido, se llama a `SharedBudgetService.confirmarMiParte()` que marca `mi_parte_pagada=1` en la tabla `shared_budget_expenses`. Pero nunca se crea un `registros_gasto` en el presupuesto personal. El usuario gastó dinero real (ej: pagó su 50% de la cena = $25) y eso no aparece en ningún lado en su mes de mayo.
 
 **Impacto:** Alta. El dinero sale del bolsillo del usuario y la app no lo registra. El disponible mensual queda incorrecto.
@@ -930,4 +932,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-02 — U1 implementado. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-02 — U1, Z1 (ya existía), C2 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
