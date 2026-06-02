@@ -601,7 +601,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ## CATEGORÍA U — NAVEGACIÓN Y FLUJO GLOBAL
 
-### U1. El FAB siempre registra en el mes ACTUAL aunque el usuario esté viendo un mes pasado
+### ✅ U1. El FAB siempre registra en el mes ACTUAL aunque el usuario esté viendo un mes pasado
+**Estado:** IMPLEMENTADO — FAB de HomeShell oculto en Tab 1 (MesDetalleScreen ya tiene el suyo con el mes correcto). AgregarGastoSheet ahora muestra badge "Registrando en: [Mes] [Año]" en el título.
 **Problema:** Si el usuario navega a "Enero 2025" para revisar algo, y abre el FAB para agregar un gasto, el sheet se abre con mayo 2026 (mes actual), no con enero 2025 que estaba viendo. El gasto se guarda en el mes equivocado sin ningún aviso.
 
 **Impacto:** Crítica. El usuario puede contaminar datos históricos sin saberlo.
@@ -929,4 +930,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-01 — AB2 + B3 + L1 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-02 — U1 implementado. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

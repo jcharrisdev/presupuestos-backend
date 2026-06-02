@@ -132,8 +132,26 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             Center(child: Container(width: 36, height: 4,
                 decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
-            const Text('Agregar gasto',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text('Agregar gasto',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.35)),
+                  ),
+                  child: Text(
+                    'Registrando en: ${const ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][widget.mes]} ${widget.anio}',
+                    style: const TextStyle(color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
 
             // ── GASTOS ANTERIORES ─────────────────────────────────────────────
