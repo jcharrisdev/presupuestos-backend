@@ -367,7 +367,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### K2. El "Consejero Financiero IA" no explica su lógica
+### ✅ K2. El "Consejero Financiero IA" no explica su lógica
+**Estado:** IMPLEMENTADO — El score ahora muestra su desglose visual (Deudas/Ahorro/Fijos/Control, máx 25 c/u con barras de color) para que el usuario entienda de dónde sale el número. El header del enfoque cambió de "Enfoque de [mes]" a "TU ACCIÓN PRIORITARIA · [mes]" para comunicar que es accionable. Los insights del backend (server.js:9942) ya incluían qué detectó + por qué importa + acción.
 **Problema:** La sección del consejero muestra un "Enfoque de X" sin explicar qué significa ese enfoque para el usuario. ¿Debo hacer algo? ¿Es bueno o malo?
 
 **Impacto:** Media.

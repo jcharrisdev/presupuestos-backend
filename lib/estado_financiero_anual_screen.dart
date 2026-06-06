@@ -393,6 +393,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     final color    = _scoreColor(score);
     final label    = _scoreLabel(score);
     final m        = c['metricas'] as Map<String, dynamic>;
+    final bd       = c['score_breakdown'] as Map<String, dynamic>?;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -400,32 +401,69 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
       ),
-      child: Row(children: [
-        // Score circle
-        Container(
-          width: 60, height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: 0.12),
-            border: Border.all(color: color, width: 2),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          // Score circle
+          Container(
+            width: 60, height: 60,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.12),
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Center(child: Text('$score',
+                style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800))),
           ),
-          child: Center(child: Text('$score',
-              style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800))),
-        ),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Text('Salud financiera: ', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 4),
+            Text('Fijos+deudas: ${m['pct_fijos']}%  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+            Text('Te sobran \$${m['remanente']}/mes  ·  \$${m['remanente_quincenal']}/quincena',
+                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          ])),
+        ]),
+        // ── Desglose del score: explica de dónde sale el número ──────────
+        if (bd != null) ...[
+          const SizedBox(height: 12),
+          const Divider(color: AppTheme.border, height: 1),
+          const SizedBox(height: 10),
+          const Text('CÓMO SE CALCULA (máx 25 c/u)',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 9, letterSpacing: 0.6)),
+          const SizedBox(height: 8),
           Row(children: [
-            const Text('Salud financiera: ', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+            _scoreSeg('Deudas',  (bd['dti'] as num?)?.toInt() ?? 0),
+            _scoreSeg('Ahorro',  (bd['ahorro'] as num?)?.toInt() ?? 0),
+            _scoreSeg('Fijos',   (bd['fijos'] as num?)?.toInt() ?? 0),
+            _scoreSeg('Control', (bd['control'] as num?)?.toInt() ?? 0),
           ]),
-          const SizedBox(height: 4),
-          Text('Fijos+deudas: ${m['pct_fijos']}%  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-          Text('Te sobran \$${m['remanente']}/mes  ·  \$${m['remanente_quincenal']}/quincena',
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-        ])),
+        ],
       ]),
     );
+  }
+
+  Widget _scoreSeg(String label, int pts) {
+    final c = pts >= 20 ? AppTheme.success : pts >= 12 ? AppTheme.warning : AppTheme.danger;
+    return Expanded(child: Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+        const SizedBox(height: 3),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: (pts / 25).clamp(0.0, 1.0),
+            minHeight: 4, color: c, backgroundColor: AppTheme.surfaceAlt,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text('$pts', style: TextStyle(color: c, fontSize: 10, fontWeight: FontWeight.w700)),
+      ]),
+    ));
   }
 
   Widget _buildEnfoqueCard(Map<String, dynamic> c) {
@@ -447,7 +485,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         Icon(icon, color: color, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Enfoque de $mesLabel'.toUpperCase(),
+          Text('TU ACCIÓN PRIORITARIA · $mesLabel'.toUpperCase(),
               style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
           const SizedBox(height: 2),
           Text(ef['titulo'] as String,
