@@ -388,6 +388,54 @@ class _TabSituacion extends StatelessWidget {
                 ]),
             ]),
           ),
+          const SizedBox(height: 12),
+
+          // ── I4: progreso consolidado (cuánto llevo pagado del total) ───────
+          Builder(builder: (_) {
+            double orig = 0;
+            for (final d in deudas) {
+              final mt = _d(d['monto_total']);
+              final mp = _d(d['monto_pendiente']);
+              orig += mt > 0 ? mt : mp; // si no hay original, usa el pendiente
+            }
+            if (orig <= 0) return const SizedBox.shrink();
+            final pagado = (orig - totalPendiente).clamp(0.0, orig);
+            final pct = (pagado / orig).clamp(0.0, 1.0);
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Progreso total de tus deudas',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  Text('${(pct * 100).toStringAsFixed(0)}% pagado',
+                      style: const TextStyle(color: AppTheme.success,
+                          fontSize: 12, fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: pct, minHeight: 8,
+                    color: AppTheme.success, backgroundColor: AppTheme.surfaceAlt,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text('Original: \$${orig.toStringAsFixed(2)}',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  Text('Pagado: \$${pagado.toStringAsFixed(2)}',
+                      style: const TextStyle(color: AppTheme.success, fontSize: 11)),
+                  Text('Falta: \$${totalPendiente.toStringAsFixed(2)}',
+                      style: const TextStyle(color: AppTheme.danger, fontSize: 11)),
+                ]),
+              ]),
+            );
+          }),
           const SizedBox(height: 16),
           // Banner de deudas con información incompleta (creadas desde el perfil)
           Builder(builder: (_) {
@@ -396,6 +444,15 @@ class _TabSituacion extends StatelessWidget {
               d['tasa_interes'] == null
             ).toList();
             if (incompletas.isEmpty) return const SizedBox.shrink();
+            final primera = incompletas.first as Map<String, dynamic>;
+            // I1 — decir exactamente qué falta en la primera deuda incompleta
+            final faltantes = <String>[];
+            if (primera['monto_pendiente'] == null || primera['monto_pendiente'] == 0) {
+              faltantes.add('saldo pendiente');
+            }
+            if (primera['tasa_interes'] == null) faltantes.add('tasa de interés');
+            final nombrePrimera = primera['nombre'] as String? ?? 'una deuda';
+            final detalleFalta = faltantes.join(' y ');
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
@@ -404,16 +461,31 @@ class _TabSituacion extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppTheme.warning.withOpacity(0.4)),
               ),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.info_outline, color: AppTheme.warning, size: 18),
-                const SizedBox(width: 10),
-                Expanded(child: Text(
-                  '${incompletas.length} deuda${incompletas.length > 1 ? 's' : ''} '
-                  'creada${incompletas.length > 1 ? 's' : ''} desde el perfil '
-                  '${incompletas.length > 1 ? 'tienen' : 'tiene'} información incompleta. '
-                  'Agrega el saldo total y la tasa de interés para poder proyectarlas correctamente.',
-                  style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
-                )),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.info_outline, color: AppTheme.warning, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(
+                    incompletas.length > 1
+                        ? '${incompletas.length} deudas tienen información incompleta. A "$nombrePrimera" le falta: $detalleFalta.'
+                        : 'A "$nombrePrimera" le falta: $detalleFalta. Complétalo para proyectarla correctamente.',
+                    style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
+                  )),
+                ]),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => onEditar(primera),
+                    icon: const Icon(Icons.edit_outlined, size: 15, color: AppTheme.warning),
+                    label: Text('Completar "$nombrePrimera"',
+                        style: const TextStyle(color: AppTheme.warning, fontSize: 12, fontWeight: FontWeight.w700)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
               ]),
             );
           }),

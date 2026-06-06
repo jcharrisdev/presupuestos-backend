@@ -21,6 +21,7 @@ import 'objetivos_screen.dart';
 import 'widgets/widgets.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
+import 'eventos/eventos_screen.dart';
 
 class HomeShell extends StatefulWidget {
   final String firebaseUid;
@@ -380,6 +381,18 @@ class _MasTab extends StatelessWidget {
                   color: AppTheme.primary,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => GustitosScreen(firebaseUid: firebaseUid),
+                  )),
+                ),
+                _ModuloCard(
+                  icon: Icons.celebration_outlined,
+                  title: 'Eventos',
+                  subtitle: 'Vacaciones, bodas, metas',
+                  color: AppTheme.colorAhorro,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => EventosScreen(
+                      firebaseUid: firebaseUid,
+                      anio: DateTime.now().year,
+                    ),
                   )),
                 ),
                 if (modoNegocio)

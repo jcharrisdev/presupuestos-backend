@@ -166,7 +166,8 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ---
 
-### E2. Gastos "no presupuestados" no tienen categoría visible en la lista
+### ✅ E2. Gastos "no presupuestados" no tienen categoría visible en la lista
+**Estado:** IMPLEMENTADO — Línea de totales al final del Tab Gastos: Comprometido (fijos+deudas), Variable registrado, No presupuestado (impulso) — este último es el indicador de gasto hormiga/impulso. Usa Money.fmt.
 **Problema:** Los gastos marcados como `no_presupuestado` aparecen en la lista pero sin contexto de presupuesto. El usuario no puede ver fácilmente cuánto de su gasto mensual es "no planeado" vs "planeado".
 
 **Impacto:** Media.
@@ -203,7 +204,8 @@ Todo lo demás va al Tab Análisis donde tiene sentido.
 
 ---
 
-### F2. Los estados vacíos no guían al usuario
+### ⚠️ F2. Los estados vacíos no guían al usuario
+**Estado:** PARCIAL — Tab Gastos ahora usa el widget reutilizable EmptyState (ícono + título + subtítulo + botón "Registrar primer gasto" que abre el sheet). El widget EmptyState ya existe en lib/widgets/empty_state.dart para replicar en otras pantallas con estados vacíos pendientes.
 **Problema:** Si el usuario no tiene registros, gastos fijos, o datos, muchas pantallas simplemente muestran vacío o un spinner infinito. No hay instrucciones de "qué hacer ahora".
 
 **Impacto:** Media para usuarios nuevos.
@@ -287,7 +289,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ## CATEGORÍA I — DEUDAS
 
-### I1. El banner de "deuda incompleta" no explica qué falta ni cómo completarla
+### ✅ I1. El banner de "deuda incompleta" no explica qué falta ni cómo completarla
+**Estado:** IMPLEMENTADO — El banner ahora dice exactamente qué falta (saldo pendiente y/o tasa de interés) nombrando la deuda, y tiene botón "Completar [nombre]" que abre directo el sheet de edición (onEditar).
 **Problema:** Las deudas creadas desde el perfil financiero (sin información completa) muestran un banner de advertencia en la pantalla de deudas, pero el texto es genérico. El usuario no sabe qué campo falta ni dónde ir para completarlo.
 
 **Impacto:** Alta. El usuario ve una advertencia pero no puede actuar.
@@ -316,7 +319,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### I4. No hay vista de progreso total de deudas en un solo lugar
+### ✅ I4. No hay vista de progreso total de deudas en un solo lugar
+**Estado:** IMPLEMENTADO — Card de progreso consolidado en Tab Situación: original total, pagado, falta, y barra de progreso con % pagado. Calculado desde monto_total vs monto_pendiente de todas las deudas.
 **Problema:** El usuario tiene 3 deudas. No puede ver de un vistazo: "En total debo $4,500. Llevo pagado $1,200 (27%). Me quedan $3,300." Solo ve cada deuda individualmente.
 
 **Impacto:** Media.
@@ -873,7 +877,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-### AA3. La pantalla de Eventos no es accesible desde la navegación principal ni del tab Más
+### ✅ AA3. La pantalla de Eventos no es accesible desde la navegación principal ni del tab Más
+**Estado:** IMPLEMENTADO — Card "Eventos" agregada al grid de módulos del Tab Más en HomeShell (navega a EventosScreen con el año actual).
 **Problema:** `EventosScreen` existe pero no tiene entrada en HomeShell ni en el grid del tab Más. El único acceso es desde `EstadoFinancieroAnualScreen` (donde se ve como opción de menú). El 90% de los usuarios nunca la descubre.
 
 **Impacto:** Alta. Un módulo que nadie usa no sirve de nada, y este tiene potencial real para planificar gastos de eventos.

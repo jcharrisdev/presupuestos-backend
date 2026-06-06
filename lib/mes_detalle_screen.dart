@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
 import 'utils/money.dart';
+import 'widgets/empty_state.dart';
 import 'services/api_client.dart';
 import 'services/estado_anual_service.dart';
 import 'services/pdf_service.dart';
@@ -158,6 +159,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                         anio: widget.anio,
                         mes: widget.mes,
                         onChanged: _cargar,
+                        onAgregar: _abrirAgregarGasto,
                       ),
                       _TabQuincenas(
                         uid: widget.firebaseUid,
@@ -528,6 +530,7 @@ class _TabGastos extends StatefulWidget {
   final int anio;
   final int mes;
   final VoidCallback onChanged;
+  final VoidCallback onAgregar;
   const _TabGastos({
     required this.data,
     required this.alertas,
@@ -535,6 +538,7 @@ class _TabGastos extends StatefulWidget {
     required this.anio,
     required this.mes,
     required this.onChanged,
+    required this.onAgregar,
   });
 
   @override
@@ -1035,25 +1039,64 @@ class _TabGastosState extends State<_TabGastos> {
             ]);
           }),
         ] else
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.border),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: EmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'Aún no tienes gastos este mes',
+              subtitle: 'Registra tu primer gasto o escanea una factura QR',
+              actionLabel: 'Registrar primer gasto',
+              onAction: widget.onAgregar,
             ),
-            child: const Row(children: [
-              Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
-              SizedBox(width: 10),
-              Expanded(child: Text(
-                'Aún no registraste gastos reales. Presiona + para agregar o escanea una factura QR.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
-              )),
-            ]),
           ),
+
+        // ── E2: totales del mes por tipo ──────────────────────────────
+        if (registros.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Builder(builder: (_) {
+            double comprometido = 0, variable = 0, noPres = 0;
+            for (final r in registros) {
+              final m = _num(r['monto']);
+              switch (r['tipo'] as String? ?? '') {
+                case 'fijo': comprometido += m; break;
+                case 'no_presupuestado': noPres += m; break;
+                default: variable += m;
+              }
+            }
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(children: [
+                _totalRow('Comprometido (fijos + deudas)', comprometido, AppTheme.colorFijo),
+                const SizedBox(height: 6),
+                _totalRow('Variable registrado', variable, AppTheme.warning),
+                const SizedBox(height: 6),
+                _totalRow('No presupuestado (impulso)', noPres, AppTheme.danger),
+              ]),
+            );
+          }),
+        ],
       ],
     );
   }
+
+  Widget _totalRow(String label, double monto, Color color) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Row(children: [
+        Container(width: 8, height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+      ]),
+      Text(Money.fmt(monto),
+          style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+    ],
+  );
 }
 
 class _LineaVariableRow extends StatefulWidget {
