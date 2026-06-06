@@ -152,6 +152,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                       ),
                       _TabGastos(
                         data: _data!,
+                        alertas: _alertas,
                         uid: widget.firebaseUid,
                         anio: widget.anio,
                         mes: widget.mes,
@@ -502,12 +503,14 @@ class _BarraUso extends StatelessWidget {
 
 class _TabGastos extends StatefulWidget {
   final Map<String, dynamic> data;
+  final List<Map<String, dynamic>> alertas;
   final String uid;
   final int anio;
   final int mes;
   final VoidCallback onChanged;
   const _TabGastos({
     required this.data,
+    required this.alertas,
     required this.uid,
     required this.anio,
     required this.mes,
@@ -774,9 +777,42 @@ class _TabGastosState extends State<_TabGastos> {
           return p > 0 || t > 0;
         }).toList();
 
+    final alertasCriticas = widget.alertas
+        .where((a) => (a['nivel'] as String? ?? '') == 'danger')
+        .toList();
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       children: [
+        // ── BANNER DE ALERTAS CRÍTICAS ────────────────────────────
+        if (alertasCriticas.isNotEmpty) ...[
+          ...alertasCriticas.take(2).map((a) => Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.danger.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.danger.withValues(alpha: 0.35)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(a['titulo'] as String? ?? '',
+                    style: const TextStyle(color: AppTheme.danger,
+                        fontSize: 12, fontWeight: FontWeight.w700)),
+                if ((a['accion_sugerida'] as String? ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(a['accion_sugerida'] as String,
+                      style: const TextStyle(color: AppTheme.textSecondary,
+                          fontSize: 11, height: 1.3)),
+                ],
+              ])),
+            ]),
+          )),
+          const SizedBox(height: 4),
+        ],
+
         // ── SOBRES POR CATEGORÍA ──────────────────────────────────
         if (sobres.isNotEmpty) ...[
           GestureDetector(

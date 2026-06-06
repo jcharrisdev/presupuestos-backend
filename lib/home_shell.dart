@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
 import 'services/user_settings_service.dart';
 import 'services/user_profile_service.dart';
+import 'services/estado_anual_service.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
 import 'tutorial_screen.dart';
@@ -44,6 +45,7 @@ class _HomeShellState extends State<HomeShell> {
   String _periodo = 'mensual'; // 'mensual' | 'quincenal'
   bool _loadingSettings = true;
   bool _togglingNegocio = false;
+  int _alertasCount = 0;
 
   static const _mesesLabel = [
     '', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
@@ -69,6 +71,8 @@ class _HomeShellState extends State<HomeShell> {
       _loadingSettings = false;
     });
 
+    _cargarAlertasCount();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (income == null) {
@@ -88,6 +92,16 @@ class _HomeShellState extends State<HomeShell> {
         ));
       }
     });
+  }
+
+  Future<void> _cargarAlertasCount() async {
+    final now = DateTime.now();
+    try {
+      final al = await EstadoAnualService.getAlertas(
+          widget.firebaseUid, anio: now.year, mes: now.month);
+      final count = (al['alertas'] as List? ?? []).length;
+      if (mounted) setState(() => _alertasCount = count);
+    } catch (_) {}
   }
 
   Future<void> _toggleNegocio(bool valor) async {
@@ -178,15 +192,25 @@ class _HomeShellState extends State<HomeShell> {
         indicatorColor: AppTheme.primary.withValues(alpha: 0.15),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (i) => setState(() { _idx = i; _initializedTabs.add(i); }),
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined),
             selectedIcon: Icon(Icons.bar_chart_rounded),
             label: 'Estado',
           ),
           NavigationDestination(
-            icon: Icon(Icons.calendar_today_outlined),
-            selectedIcon: Icon(Icons.calendar_today),
+            icon: Badge.count(
+              count: _alertasCount,
+              isLabelVisible: _alertasCount > 0,
+              backgroundColor: AppTheme.danger,
+              child: const Icon(Icons.calendar_today_outlined),
+            ),
+            selectedIcon: Badge.count(
+              count: _alertasCount,
+              isLabelVisible: _alertasCount > 0,
+              backgroundColor: AppTheme.danger,
+              child: const Icon(Icons.calendar_today),
+            ),
             label: 'Mes actual',
           ),
           NavigationDestination(

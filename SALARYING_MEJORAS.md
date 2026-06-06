@@ -613,7 +613,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ---
 
-### U2. Las alertas financieras existen pero el usuario nunca las ve
+### ✅ U2. Las alertas financieras existen pero el usuario nunca las ve
+**Estado:** IMPLEMENTADO — (1) Badge rojo con conteo en pestaña "Mes actual" de HomeShell (`Badge.count` cargado desde getAlertas del mes activo). (2) Banner de alertas críticas (nivel danger) al tope del Tab Gastos con título + acción sugerida. (3) Ya existían en Tab Resumen y Dashboard. El motor de alertas (server.js _generarAlertasMes) ya estaba completo.
 **Problema:** El sistema genera alertas (gastos altos, presupuesto excedido, deudas vencidas) pero solo aparecen como un banner pequeño en el Estado Financiero, que es una pantalla que muchos usuarios no visitan regularmente. En MesDetalleScreen, las alertas se cargan pero nunca se muestran en ningún tab.
 
 **Impacto:** Alta. Las alertas son la forma en que la app responde proactivamente "¿por qué no te alcanza?" y nadie las ve.
