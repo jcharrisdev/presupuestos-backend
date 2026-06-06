@@ -650,6 +650,16 @@ pool.getConnection(async (err, conn) => {
     console.error('⚠️ Migración unificación categorías:', e.message);
   }
 
+  // Migración: origen_evento_id en registros_gasto — vincula un registro con su evento de origen (AA1)
+  try {
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN origen_evento_id INT DEFAULT NULL`);
+    console.log('✅ Migración origen_evento_id en registros_gasto OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración origen_evento_id:', e.message);
+    }
+  }
+
   // Migración: todos los registros_gasto existentes → día 15 para distribución quincenal 50/50
   try {
     const [res] = await db.execute(
@@ -10190,7 +10200,9 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         ingreso_estimado:    Number(mesRow.ingreso_estimado),
         fijos_estimados:     parseFloat(totalFijosEstimado.toFixed(2)),
         variables_estimados: Number(mesRow.variables_estimados),
-        remanente_estimado:  parseFloat((Number(mesRow.ingreso_estimado) - totalFijosEstimado - Number(mesRow.variables_estimados)).toFixed(2)),
+        eventos_estimados:   parseFloat(totalEventosMes.toFixed(2)),
+        // AA2 — la cuota mensual de eventos reduce el disponible estimado del mes
+        remanente_estimado:  parseFloat((Number(mesRow.ingreso_estimado) - totalFijosEstimado - Number(mesRow.variables_estimados) - totalEventosMes).toFixed(2)),
         ingreso_real:        parseFloat(ingresoReal.toFixed(2)),
         fijos_reales:        parseFloat(fijosReales.toFixed(2)),
         variables_reales:    parseFloat(variablesReales.toFixed(2)),
@@ -11195,6 +11207,28 @@ app.post('/user/eventos/:id/gastos', async (req, res) => {
     );
     _logInfo(`/user/eventos/${id}/gastos`, `Gasto evento: ${nombre} $${monto}`, firebase_uid);
     res.status(201).json({ id: result.insertId });
+
+    // AA1 — fire-and-forget: crear registros_gasto vinculado para que el gasto
+    // del evento reduzca el disponible del mes correspondiente.
+    (async () => {
+      try {
+        const fechaReg = (fecha ?? new Date().toISOString().split('T')[0]).substring(0, 10);
+        const anioReg  = parseInt(fechaReg.substring(0, 4));
+        const mesReg   = parseInt(fechaReg.substring(5, 7));
+        const [[mesRow]] = await db.execute(
+          `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+          [firebase_uid, anioReg, mesReg]);
+        if (!mesRow) return;
+        await db.execute(
+          `INSERT INTO registros_gasto
+             (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, origen_evento_id)
+           VALUES (?, ?, ?, ?, 'variable', 'eventos', ?, ?, ?, 1, ?)`,
+          [firebase_uid, mesRow.id, anioReg, mesReg,
+           `${ev.nombre}: ${nombre}`, Number(monto), fechaReg, result.insertId]);
+        await _actualizarTotalesMes(mesRow.id, firebase_uid);
+        _generarAlertasMes(firebase_uid, anioReg, mesReg).catch(() => {});
+      } catch (_) { /* no bloquear */ }
+    })();
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -11204,6 +11238,18 @@ app.delete('/user/eventos/:id/gastos/:gastoId', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // AA1 — eliminar también el registros_gasto vinculado y recalcular el mes
+    const [vinculados] = await db.execute(
+      `SELECT id, mes_id, anio, mes FROM registros_gasto WHERE firebase_uid = ? AND origen_evento_id = ?`,
+      [firebase_uid, gastoId]);
+    if (vinculados.length > 0) {
+      await db.execute(`DELETE FROM registros_gasto WHERE firebase_uid = ? AND origen_evento_id = ?`,
+        [firebase_uid, gastoId]);
+      for (const v of vinculados) {
+        _actualizarTotalesMes(v.mes_id, firebase_uid).catch(() => {});
+        _generarAlertasMes(firebase_uid, v.anio, v.mes).catch(() => {});
+      }
+    }
     await db.execute(
       `DELETE FROM eventos_gastos WHERE id = ? AND evento_id = ? AND firebase_uid = ?`,
       [gastoId, id, firebase_uid]);

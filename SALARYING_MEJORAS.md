@@ -864,7 +864,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ## CATEGORÍA AA — EVENTOS (módulo desconectado)
 
-### AA1. Los gastos de un evento no afectan el presupuesto mensual
+### ✅ AA1. Los gastos de un evento no afectan el presupuesto mensual
+**Estado:** IMPLEMENTADO — `POST /user/eventos/:id/gastos` ahora crea un `registros_gasto` vinculado (tipo='variable', categoria='eventos', origen_evento_id) fire-and-forget si el mes existe. `DELETE` elimina también el registro y recalcula totales+alertas. Migración `origen_evento_id` en registros_gasto.
 **Problema:** `EventoDetalleScreen` permite registrar gastos en un evento (ej: vuelo $300 para las vacaciones). Estos gastos van a la tabla `eventos_gastos` o similar, pero no a `registros_gasto`. Cuando el usuario paga un gasto de vacaciones, eso no aparece en su mes de junio. Su disponible mensual no se reduce.
 
 **Impacto:** Alta. El usuario puede gastar toda su "cuota de evento" en un mes y la app reporta ese mes como sano porque los datos están en silos distintos.
@@ -873,7 +874,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-### AA2. La cuota mensual de un evento no se agrega automáticamente al perfil financiero
+### ✅ AA2. La cuota mensual de un evento no se agrega automáticamente al perfil financiero
+**Estado:** IMPLEMENTADO — El `remanente_estimado` de cada mes ahora resta la cuota mensual de eventos activos (`totalEventosMes`). Nuevo campo `eventos_estimados` en el resumen. Así el disponible estimado refleja que hay que separar dinero para el evento. (Parallelo estimado/real con AA1 que cubre el gasto real.)
 **Problema:** El usuario crea un evento "Vacaciones julio" con presupuesto $600 en 3 meses. La app calcula `cuota_mensual = $200`. Pero esos $200 nunca aparecen en el estimado de gastos de los meses de mayo, junio y julio. El estado financiero no los ve.
 
 **Impacto:** Alta. El usuario cree que tiene $500 disponibles en mayo cuando en realidad le quedan $300 (porque tiene que separar $200 para vacaciones).
