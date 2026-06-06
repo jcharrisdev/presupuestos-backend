@@ -256,7 +256,8 @@ Todo lo demás va al Tab Análisis donde tiene sentido.
 
 ---
 
-### H2. Disponible negativo en el onboarding no da dirección al usuario
+### ✅ H2. Disponible negativo en el onboarding no da dirección al usuario
+**Estado:** IMPLEMENTADO — Cuando el disponible es negativo, el aviso ahora incluye mensaje de apoyo ("No estás solo/a en esto. Salarying te ayudará a entender dónde ajustar...") + botón "Revisar mis gastos" que lleva directo al paso de gastos fijos (onIrAGastos). El botón "Comenzar..." permite continuar de todos modos.
 **Problema:** Si el usuario ingresa sus gastos y el disponible resulta negativo, el paso 5 muestra una advertencia pero no dice qué hacer. El usuario entra en pánico o abandona la app.
 
 **Impacto:** Alta. Es el momento más crítico del onboarding.
@@ -951,4 +952,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-02 — Sesión Opus: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1 implementados; F3 parcial. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-02 — Sesión Opus: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2 implementados; F3 y F2 parciales. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

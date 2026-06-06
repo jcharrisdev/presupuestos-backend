@@ -377,6 +377,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onGenerar:     _generarEstado,
                   onIrAPaso1:    () => _pageCtrl.animateToPage(0,
                       duration: const Duration(milliseconds: 350), curve: Curves.easeInOut),
+                  onIrAGastos:   () => _pageCtrl.animateToPage(1,
+                      duration: const Duration(milliseconds: 350), curve: Curves.easeInOut),
                 ),
               ],
             ),
@@ -1385,12 +1387,13 @@ class _Paso5Resumen extends StatelessWidget {
   final bool generando;
   final VoidCallback onGenerar;
   final VoidCallback onIrAPaso1;
+  final VoidCallback onIrAGastos;
   const _Paso5Resumen({
     required this.ingresoNeto, required this.totalFijos, required this.totalDeudas,
     required this.totalVariables, required this.remanente,
     required this.cantGastos, required this.cantDeudas, required this.cantVariables,
     required this.fmt, required this.generando, required this.onGenerar,
-    required this.onIrAPaso1,
+    required this.onIrAPaso1, required this.onIrAGastos,
   });
 
   @override
@@ -1483,13 +1486,32 @@ class _Paso5Resumen extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppTheme.warning.withValues(alpha: 0.4)),
             ),
-            child: const Row(children: [
-              Icon(Icons.warning_amber_outlined, color: AppTheme.warning, size: 18),
-              SizedBox(width: 8),
-              Expanded(child: Text(
-                'Tus compromisos superan tu ingreso. Te recomendamos revisar tus gastos fijos y deudas.',
-                style: TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
-              )),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.warning_amber_outlined, color: AppTheme.warning, size: 18),
+                SizedBox(width: 8),
+                Expanded(child: Text(
+                  'Tus compromisos superan tu ingreso.',
+                  style: TextStyle(color: AppTheme.warning, fontSize: 13, fontWeight: FontWeight.w700),
+                )),
+              ]),
+              const SizedBox(height: 6),
+              const Text(
+                'No estás solo/a en esto. Salarying te ayudará a entender dónde ajustar. Puedes revisar tus gastos ahora o continuar y ajustarlos después.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: onIrAGastos,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.warning,
+                    side: const BorderSide(color: AppTheme.warning),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  child: const Text('Revisar mis gastos', style: TextStyle(fontSize: 12)),
+                )),
+              ]),
             ]),
           )
         else if (remanente < ingresoNeto * 0.15 && ingresoNeto > 0)
