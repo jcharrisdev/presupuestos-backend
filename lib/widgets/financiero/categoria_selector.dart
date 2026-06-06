@@ -19,19 +19,14 @@ class CategoriaSelector extends StatefulWidget {
     this.color = AppTheme.primary,
   }) : super(key: key);
 
-  @override
-  State<CategoriaSelector> createState() => _CategoriaSelectorState();
-}
-
-class _CategoriaSelectorState extends State<CategoriaSelector> {
-  final _customCtrl = TextEditingController();
-  List<String> _categoriasCustom = [];
-  bool _mostrarCustom = false;
-
-  static const _categoriasBase = [
+  /// Lista canónica de categorías de Salarying — fuente única de verdad.
+  /// Usada en este selector, en el perfil financiero y como referencia
+  /// para el match presupuesto↔real del motor de alertas.
+  static const List<Map<String, Object>> canonicas = [
     {'value': 'alimentacion', 'label': 'Alimentación', 'icon': Icons.restaurant},
     {'value': 'transporte',   'label': 'Transporte',   'icon': Icons.directions_car},
     {'value': 'vivienda',     'label': 'Vivienda',     'icon': Icons.home},
+    {'value': 'servicios',    'label': 'Servicios',    'icon': Icons.lightbulb_outline},
     {'value': 'salud',        'label': 'Salud',        'icon': Icons.local_hospital},
     {'value': 'educacion',    'label': 'Educación',    'icon': Icons.school},
     {'value': 'ocio',         'label': 'Ocio',         'icon': Icons.sports_esports},
@@ -43,6 +38,17 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
     {'value': 'emergencias',  'label': 'Emergencias',  'icon': Icons.warning_amber},
     {'value': 'otro',         'label': 'Otro...',      'icon': Icons.add_circle_outline},
   ];
+
+  @override
+  State<CategoriaSelector> createState() => _CategoriaSelectorState();
+}
+
+class _CategoriaSelectorState extends State<CategoriaSelector> {
+  final _customCtrl = TextEditingController();
+  List<String> _categoriasCustom = [];
+  bool _mostrarCustom = false;
+
+  static const _categoriasBase = CategoriaSelector.canonicas;
 
   @override
   void initState() {

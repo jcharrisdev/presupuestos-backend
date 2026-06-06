@@ -459,7 +459,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### O2. Las categorías están desalineadas entre pantallas
+### ✅ O2. Las categorías están desalineadas entre pantallas
+**Estado:** IMPLEMENTADO — Lista canónica única `CategoriaSelector.canonicas` (13 categorías + servicios). Perfil financiero deriva sus tipos de esa lista (corrige `deuda`→`deudas`). Strays del backend arreglados: pago compartido `'Compartido'`→`'compartido'`, scanner QR fallback `'General'`→`'otro'`. Migración idempotente normaliza datos existentes en registros_gasto, gastos_variables_base y user_gastos_fijos. Ver también V1.
 **Problema:** El selector de categorías tiene 13 opciones. El formulario de gastos fijos en Perfil tiene 8 diferentes. Un gasto guardado como "ocio" en el Tab Gastos no coincide con ninguna categoría del Perfil. La app muestra los mismos datos con nombres distintos.
 
 **Impacto:** Alta. El usuario pierde confianza en los números.
@@ -681,7 +682,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ## CATEGORÍA V — COHERENCIA DE DATOS Y CONFIABILIDAD
 
-### V1. Categorías inconsistentes entre pantallas
+### ✅ V1. Categorías inconsistentes entre pantallas
+**Estado:** IMPLEMENTADO — junto con O2. Lista canónica única en toda la app + migración con tabla de equivalencias (deuda→deudas, General→otro, Compartido→compartido). Esto reactiva el match presupuesto↔real del motor de alertas para categorías que antes no cuadraban.
 **Problema:** (Ver también O2) El Tab Gastos muestra categorías en español minúscula (`alimentacion`, `ocio`). El Perfil Financiero usa otros nombres. El Tab Análisis puede mostrar categorías que no existen en el Perfil. El usuario ve "Tecnología $80" en análisis pero no puede encontrar ese gasto porque en el Perfil se llama diferente.
 
 **Impacto:** Alta. El usuario no puede trazar sus gastos.
@@ -932,4 +934,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-02 — U1, Z1 (ya existía), C2 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-02 — U1, Z1 (ya existía), C2, V1/O2 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

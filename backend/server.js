@@ -629,6 +629,27 @@ pool.getConnection(async (err, conn) => {
     }
   }
 
+  // Migración: unificación de categorías (V1/O2) — normaliza valores stray a la lista canónica.
+  // Idempotente: re-ejecutarla no tiene efecto una vez normalizados los datos.
+  // Equivalencias: deuda→deudas, General→otro, Compartido→compartido
+  try {
+    let total = 0;
+    const [r1] = await db.execute(
+      `UPDATE registros_gasto SET categoria = 'deudas' WHERE categoria = 'deuda'`);
+    const [r2] = await db.execute(
+      `UPDATE registros_gasto SET categoria = 'otro' WHERE categoria = 'General'`);
+    const [r3] = await db.execute(
+      `UPDATE registros_gasto SET categoria = 'compartido' WHERE categoria = 'Compartido'`);
+    const [r4] = await db.execute(
+      `UPDATE gastos_variables_base SET categoria = 'deudas' WHERE categoria = 'deuda'`);
+    const [r5] = await db.execute(
+      `UPDATE user_gastos_fijos SET categoria = 'deudas' WHERE categoria = 'deuda'`);
+    total = r1.affectedRows + r2.affectedRows + r3.affectedRows + r4.affectedRows + r5.affectedRows;
+    if (total > 0) console.log(`✅ Migración unificación categorías: ${total} filas normalizadas`);
+  } catch (e) {
+    console.error('⚠️ Migración unificación categorías:', e.message);
+  }
+
   // Migración: todos los registros_gasto existentes → día 15 para distribución quincenal 50/50
   try {
     const [res] = await db.execute(
@@ -5261,7 +5282,7 @@ app.post('/shared-budgets/:id/expenses', async (req, res) => {
           if (montoRegistro > 0) {
             await conn.execute(
               `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, shared_expense_id)
-               VALUES (?, ?, ?, ?, 'no_presupuestado', 'Compartido', ?, ?, ?, 1, ?)`,
+               VALUES (?, ?, ?, ?, 'no_presupuestado', 'compartido', ?, ?, ?, 1, ?)`,
               [pagado_por, mesRow.id, anioHoy, mesHoy, descripcion, montoRegistro, fecha, expenseId]
             );
             _actualizarTotalesMes(mesRow.id, pagado_por).catch(() => {});
@@ -5438,7 +5459,7 @@ app.post('/shared-expenses/:expenseId/confirm-payment', async (req, res) => {
         if (!existing) {
           await db.execute(
             `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, shared_expense_id)
-             VALUES (?, ?, ?, ?, 'no_presupuestado', 'Compartido', ?, ?, ?, 1, ?)`,
+             VALUES (?, ?, ?, ?, 'no_presupuestado', 'compartido', ?, ?, ?, 1, ?)`,
             [firebase_uid, mesRow.id, anioHoy, mesHoy, split.descripcion,
              Number(split.monto_responsabilidad), split.fecha || hoy.toISOString().split('T')[0], expenseId]
           );
@@ -6533,7 +6554,7 @@ app.post('/invoice-scanner/:id/registrar-en-mes', async (req, res) => {
         const [r] = await db.execute(
           `INSERT INTO registros_gasto
              (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, ${origenCol}, scanned_invoice_id)
-           VALUES (?, ?, ?, ?, ?, 'General', ?, ?, ?, 1, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, 'otro', ?, ?, ?, 1, ?, ?)`,
           [firebase_uid, mesRow.id, anioHoy, mesHoy, esFijo ? 'fijo' : 'variable',
            gastoOrigen.nombre, montoReal, fechaGasto, origen_id, id]
         );

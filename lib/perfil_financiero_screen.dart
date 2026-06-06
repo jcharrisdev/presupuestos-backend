@@ -824,10 +824,12 @@ class _GastoTile extends StatelessWidget {
   }
 
   static String _labelTipo(String t) {
-    const map = {'vivienda': 'Vivienda', 'transporte': 'Transporte', 'deuda': 'Deuda',
-      'servicios': 'Servicios', 'educacion': 'Educación', 'salud': 'Salud',
-      'alimentacion': 'Alimentación', 'otro': 'Otro'};
-    return map[t] ?? 'Otro';
+    for (final c in CategoriaSelector.canonicas) {
+      if (c['value'] == t) return (c['label'] as String).replaceAll('...', '');
+    }
+    // Compatibilidad con datos antiguos previos a la unificación
+    if (t == 'deuda') return 'Deudas';
+    return t.isNotEmpty ? '${t[0].toUpperCase()}${t.substring(1)}' : 'Otro';
   }
 }
 
@@ -1182,11 +1184,13 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
   bool _recordatorio = false;
   bool _guardando = false;
 
-  static const _tipos = ['vivienda','transporte','deuda','servicios','educacion','salud','alimentacion','otro'];
-  static const _labelsTipo = {
-    'vivienda': 'Vivienda', 'transporte': 'Transporte', 'deuda': 'Deuda',
-    'servicios': 'Servicios', 'educacion': 'Educación', 'salud': 'Salud',
-    'alimentacion': 'Alimentación', 'otro': 'Otro',
+  // Lista canónica única (CategoriaSelector.canonicas) — corrige el antiguo
+  // 'deuda' (singular) → 'deudas' y alinea con el resto de la app.
+  static final _tipos = CategoriaSelector.canonicas
+      .map((c) => c['value'] as String).toList();
+  static final _labelsTipo = {
+    for (final c in CategoriaSelector.canonicas)
+      c['value'] as String: (c['label'] as String).replaceAll('...', ''),
   };
 
   @override
@@ -1335,7 +1339,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
             GestureDetector(
               onTap: () => setState(() {
                 _tipo = t;
-                if (t == 'deuda') _esDeuda = true;
+                if (t == 'deudas') _esDeuda = true;
               }),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
