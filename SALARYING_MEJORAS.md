@@ -582,7 +582,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ## CATEGORÍA T — FLUJOS HUÉRFANOS (Sin siguiente paso claro)
 
-### T1. Registrar un gasto "no presupuestado" no tiene continuidad
+### ✅ T1. Registrar un gasto "no presupuestado" no tiene continuidad
+**Estado:** IMPLEMENTADO — Al guardar un gasto no_presupuestado (sin "guardar como base"), AgregarGastoSheet muestra un diálogo: "Registraste $X en [cat] que no estaba presupuestado. ¿Agregar al presupuesto?" Si acepta, llama convertirAVariable y confirma con snackbar.
 **Problema:** El usuario registra un gasto fuera del presupuesto. Se guarda. No pasa nada más. No hay sugerencia de "¿Quieres ajustar tu presupuesto de esta categoría?" ni aviso de cuánto acumula en no-presupuestados este mes.
 
 **Impacto:** Alta. El gasto queda como un punto ciego en el control financiero.
@@ -707,7 +708,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ## CATEGORÍA W — ONBOARDING (Detalle de flujo y textos)
 
-### W1. El paso de ingreso se puede saltar — la app queda sin base de cálculo
+### ✅ W1. El paso de ingreso se puede saltar — la app queda sin base de cálculo
+**Estado:** IMPLEMENTADO — Eliminado el botón "Saltar por ahora" del paso de ingreso (campo onSkip removido de _Paso1Income). Reemplazado por mensaje amable: "Necesitamos saber cuánto recibes... Puedes ajustarlo después."
 **Problema:** El paso 1 (ingresos) tiene botón "Saltar por ahora". Si el usuario lo salta, llega al paso 5 sin ingreso y la app no puede generar el estado financiero. Muestra un error y le dice que vuelva al paso 1, pero el usuario ya está confundido.
 
 **Impacto:** Crítica. El ingreso es la base de todo. Sin él, ningún cálculo funciona.

@@ -493,12 +493,56 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
           registroGastoId: creado['id'] as int?,
         );
       }
+      // T1 — continuidad: si fue no presupuestado y no se guardó como base,
+      // ofrecer agregarlo al presupuesto para que no quede como punto ciego.
+      if (mounted && _tipo == 'no_presupuestado' && !_guardarComoBase) {
+        await _ofrecerAgregarPresupuesto(categoriaFinal, creado['id'] as int?);
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger));
     } finally {
       if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _ofrecerAgregarPresupuesto(String categoria, int? registroId) async {
+    if (registroId == null) return;
+    final monto = double.tryParse(_monto.text.replaceAll(',', '')) ?? 0;
+    final catLabel = categoria.isNotEmpty
+        ? '${categoria[0].toUpperCase()}${categoria.substring(1)}'
+        : categoria;
+    final agregar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Gasto fuera de tu plan',
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+        content: Text(
+          'Registraste \$${monto.toStringAsFixed(2)} en "$catLabel" que no estaba presupuestado.\n\n'
+          '¿Quieres agregar esta categoría a tu presupuesto para controlarla cada mes?',
+          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Ahora no', style: TextStyle(color: AppTheme.textMuted))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+            child: const Text('Agregar al presupuesto',
+                style: TextStyle(color: AppTheme.background)),
+          ),
+        ],
+      ),
+    );
+    if (agregar == true) {
+      try {
+        await RegistrosService.convertirAVariable(widget.firebaseUid, registroId);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('"$catLabel" agregada a tu presupuesto base'),
+                backgroundColor: AppTheme.success));
+      } catch (_) {}
     }
   }
 }

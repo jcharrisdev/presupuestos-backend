@@ -331,7 +331,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onCssChanged:        (v) => setState(() => _aplicarCss = v),
                   onFrecuenciaChanged: (v) => setState(() => _frecuencia = v),
                   onContinuar: _guardarIncome,
-                  onSkip:      _irSiguiente,
                 ),
                 _Paso2Gastos(
                   gastosFijos:      _gastosFijos,
@@ -403,7 +402,6 @@ class _Paso1Income extends StatefulWidget {
   final ValueChanged<bool>   onCssChanged;
   final ValueChanged<String> onFrecuenciaChanged;
   final VoidCallback onContinuar;
-  final VoidCallback onSkip;
   const _Paso1Income({
     required this.tipoIngreso, required this.aplicarCss,
     required this.brutoCtrl, required this.netoCtrl,
@@ -411,7 +409,7 @@ class _Paso1Income extends StatefulWidget {
     required this.fmt, required this.guardando,
     required this.onTipoChanged, required this.onCssChanged,
     required this.onFrecuenciaChanged,
-    required this.onContinuar, required this.onSkip,
+    required this.onContinuar,
   });
   @override
   State<_Paso1Income> createState() => _Paso1IncomeState();
@@ -530,10 +528,11 @@ class _Paso1IncomeState extends State<_Paso1Income> {
           onPressed: widget.onContinuar,
         ),
         const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: widget.onSkip,
-            child: const Text('Saltar por ahora', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+        const Center(
+          child: Text(
+            'Necesitamos saber cuánto recibes para mostrarte tu panorama financiero. Puedes ajustarlo después.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
           ),
         ),
       ]),
