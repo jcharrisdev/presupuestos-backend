@@ -414,7 +414,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ## CATEGORÍA M — FACTURAS QR / INVOICE SCANNER
 
-### M1. El flujo post-escaneo tiene 7 opciones — demasiadas para el usuario promedio
+### ✅ M1. El flujo post-escaneo tiene 7 opciones — demasiadas para el usuario promedio
+**Estado:** IMPLEMENTADO — SelectTargetScreen ahora tiene 2 niveles. Nivel 1: dos opciones grandes — "Gasto personal" (flujo feliz → CreateExpenseFromInvoiceScreen) y "Más opciones". Nivel 2: grid con las 6 especializadas + guardar sin asignar y botón Volver.
 **Problema:** Después de escanear una factura, el usuario ve una grilla de 7 opciones: Gasto existente, Gasto nuevo, Gustito, Presupuesto compartido, Gasto operativo, Gasto empresarial, Compra de inventario. Para el 90% de los usuarios que solo quieren registrar un gasto, esto es abrumador.
 
 **Impacto:** Alta. El exceso de opciones paraliza al usuario.
@@ -835,7 +836,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-### Z2. Los nombres de participantes se muestran como email antes del @
+### ✅ Z2. Los nombres de participantes se muestran como email antes del @
+**Estado:** IMPLEMENTADO — Columna `display_name` en shared_budget_members (migración). Se captura del displayName de Google (AuthService.currentUser) al crear y al aceptar invitación. El SELECT de miembros lo devuelve. `_shortUid` en el detail consulta el display_name del miembro y hace fallback al email-antes-del-@.
 **Problema:** En SharedBudgetDetailScreen, todos los participantes se muestran con `_shortUid(uid)` que hace `uid.split('@')[0]`. Si el email es `juan.rodriguez@gmail.com`, aparece como "juan.rodriguez". Nunca como "Juan Rodríguez" ni ningún nombre real.
 
 **Impacto:** Media. La experiencia de "presupuesto con mi pareja" se degrada cuando no ves el nombre de la persona sino el inicio de su email.
@@ -940,7 +942,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ## CATEGORÍA AD — COHERENCIA VISUAL DEL TEMA OSCURO
 
-### AD1. SelectTargetScreen usa colores raw que rompen el tema oscuro
+### ✅ AD1. SelectTargetScreen usa colores raw que rompen el tema oscuro
+**Estado:** IMPLEMENTADO — Reemplazados todos los Colors.*Accent/cyan/lime por colores de AppTheme (primary, info, colorAhorro, success, warning, colorNoFijo, textSecondary). Se hizo junto con M1 al reescribir la pantalla.
 **Problema:** `select_target_screen.dart` usa colores hardcodeados: `Colors.blueAccent`, `Colors.purpleAccent`, `Colors.tealAccent`, `Colors.orangeAccent`, `Colors.cyan`, `Colors.lime`. Estos colores no están definidos en `AppTheme` y pueden verse muy distintos en algunos dispositivos. Rompe la paleta Binance-style del tema oscuro.
 
 **Impacto:** Baja/Media. Visual inconsistente en una pantalla que se ve frecuentemente.

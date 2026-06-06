@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'api_client.dart';
+import 'auth_service.dart';
 
 class SharedBudgetService {
   static Future<List<dynamic>> getAll(String uid) async {
@@ -15,6 +16,8 @@ class SharedBudgetService {
   }
 
   static Future<Map<String, dynamic>?> create(Map<String, dynamic> body) async {
+    // Z2 — adjuntar nombre real del usuario para mostrarlo a los demás miembros
+    body['display_name'] ??= AuthService.currentUser?.displayName;
     final res = await ApiClient.post('/shared-budgets', body);
     if (res.statusCode == 201) return json.decode(res.body);
     return null;
@@ -43,6 +46,8 @@ class SharedBudgetService {
   static Future<bool> acceptInvitation(String token, String uid, {double? ingresoDeclarado}) async {
     final body = <String, dynamic>{'firebase_uid': uid};
     if (ingresoDeclarado != null) body['ingreso_declarado'] = ingresoDeclarado;
+    final nombre = AuthService.currentUser?.displayName;
+    if (nombre != null && nombre.isNotEmpty) body['display_name'] = nombre;
     final res = await ApiClient.post('/shared-budget-invitations/$token/accept', body);
     return res.statusCode == 200;
   }

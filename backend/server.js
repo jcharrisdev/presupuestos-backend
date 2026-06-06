@@ -555,8 +555,15 @@ pool.getConnection(async (err, conn) => {
     console.log('✅ Migración roles shared_budget OK');
   } catch (e) {
     // Silencioso si las columnas ya existen
+  }
+
+  // Migración Z2: display_name en miembros de shared budget (nombre real del usuario)
+  try {
+    await db.execute(`ALTER TABLE shared_budget_members ADD COLUMN display_name VARCHAR(255) DEFAULT NULL`);
+    console.log('✅ Migración display_name shared_budget_members OK');
+  } catch (e) {
     if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
-      console.error('⚠️ Migración roles shared_budget:', e.message);
+      console.error('⚠️ Migración display_name shared_budget_members:', e.message);
     }
   }
 
@@ -4802,7 +4809,7 @@ async function _hasSharedRole(budgetId, uid, minRole) {
 
 // POST /shared-budgets
 app.post('/shared-budgets', async (req, res) => {
-  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, contribucion_owner, aporte_periodo_owner = 0, firebase_uid } = req.body;
+  const { nombre, tipo_periodo, dia_inicio_periodo, regla_reparto, porcentaje_owner, ingreso_owner, contribucion_owner, aporte_periodo_owner = 0, firebase_uid, display_name } = req.body;
   if (!nombre || !firebase_uid) return res.status(400).json({ error: 'Datos incompletos' });
   const conn = await db.getConnection();
   await conn.beginTransaction();
@@ -4817,9 +4824,9 @@ app.post('/shared-budgets', async (req, res) => {
     const ingreso = regla_reparto === 'proporcional' ? (ingreso_owner || null) : null;
     const contribucion = regla_reparto === 'pool_contribucion' ? (contribucion_owner || null) : null;
     await conn.execute(
-      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual, aporte_periodo)
-       VALUES (?, ?, 'creador', ?, ?, ?, ?)`,
-      [budgetId, firebase_uid, pct, ingreso, contribucion, Number(aporte_periodo_owner) || 0]
+      `INSERT INTO shared_budget_members (shared_budget_id, firebase_uid, display_name, rol, porcentaje, ingreso_declarado, contribucion_mensual, aporte_periodo)
+       VALUES (?, ?, ?, 'creador', ?, ?, ?, ?)`,
+      [budgetId, firebase_uid, display_name || null, pct, ingreso, contribucion, Number(aporte_periodo_owner) || 0]
     );
     await conn.execute(
       `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
@@ -4885,7 +4892,7 @@ app.get('/shared-budgets/:id', async (req, res) => {
     );
     if (!budget) return res.status(404).json({ error: 'No encontrado' });
     const [members] = await db.execute(
-      `SELECT firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual, joined_at FROM shared_budget_members WHERE shared_budget_id = ?`,
+      `SELECT firebase_uid, display_name, rol, porcentaje, ingreso_declarado, contribucion_mensual, joined_at FROM shared_budget_members WHERE shared_budget_id = ?`,
       [id]
     );
 
@@ -5052,7 +5059,7 @@ app.get('/shared-budget-invitations', async (req, res) => {
 // POST /shared-budget-invitations/:token/accept
 app.post('/shared-budget-invitations/:token/accept', async (req, res) => {
   const { token } = req.params;
-  const { firebase_uid, ingreso_declarado } = req.body;
+  const { firebase_uid, ingreso_declarado, display_name } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   const conn = await db.getConnection();
   await conn.beginTransaction();
@@ -5071,9 +5078,9 @@ app.post('/shared-budget-invitations/:token/accept', async (req, res) => {
     const rolNuevo = inv.rol_invitado || 'participante';
     const contribucionNuevo = budget.regla_reparto === 'pool_contribucion' ? (ingreso_declarado || null) : null;
     await conn.execute(
-      `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, rol, porcentaje, ingreso_declarado, contribucion_mensual)
-       VALUES (?, ?, ?, 0, ?, ?)`,
-      [inv.shared_budget_id, firebase_uid, rolNuevo, ingreso_declarado || null, contribucionNuevo]
+      `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, display_name, rol, porcentaje, ingreso_declarado, contribucion_mensual)
+       VALUES (?, ?, ?, ?, 0, ?, ?)`,
+      [inv.shared_budget_id, firebase_uid, display_name || null, rolNuevo, ingreso_declarado || null, contribucionNuevo]
     );
     await conn.execute(
       `UPDATE shared_budgets SET estado = 'active' WHERE id = ?`, [inv.shared_budget_id]

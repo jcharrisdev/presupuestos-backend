@@ -66,6 +66,15 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   }
 
   String _shortUid(String uid) {
+    // Z2 — preferir el nombre real (display_name) del miembro si existe
+    final members = _budget?['members'] as List? ?? [];
+    for (final m in members) {
+      if (m['firebase_uid'] == uid) {
+        final dn = m['display_name'] as String?;
+        if (dn != null && dn.trim().isNotEmpty) return dn;
+        break;
+      }
+    }
     final parts = uid.split('@');
     return parts.isNotEmpty ? parts[0] : uid;
   }
