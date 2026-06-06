@@ -215,7 +215,8 @@ Todo lo demás va al Tab Análisis donde tiene sentido.
 
 ---
 
-### F3. Los montos no tienen formato consistente
+### ⚠️ F3. Los montos no tienen formato consistente
+**Estado:** PARCIAL — Creado el helper canónico `Money.fmt()` en lib/utils/money.dart (separador de miles + 2 decimales, símbolo en un solo lugar para futura migración a B/.). Aplicado en los números héroe de máxima visibilidad: Dashboard (ingreso/gastado/remanente + card quincenal) y disponible del Tab Resumen. Quedan ~250 `.toStringAsFixed(2)` sueltos por migrar gradualmente al helper.
 **Problema:** En distintas partes de la app el mismo monto aparece como: `$1200`, `$1,200.00`, `1200.00`, `B/. 1,200`. No hay un estándar.
 
 **Impacto:** Baja/Media. Afecta confianza.
@@ -941,4 +942,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-02 — U1, Z1 (ya existía), C2, V1/O2 implementados. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-02 — Sesión Opus: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1 implementados; F3 parcial. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

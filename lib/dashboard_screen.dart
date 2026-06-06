@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'utils/money.dart';
 import 'services/estado_anual_service.dart';
 import 'services/calendar_service.dart';
 import 'services/savings_service.dart';
@@ -198,10 +199,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ]),
               const SizedBox(height: 16),
               Row(children: [
-                Expanded(child: _MiniStat('Ingreso', '\$${ingreso.toStringAsFixed(2)}', AppTheme.success)),
-                Expanded(child: _MiniStat('Gastado', '\$${gastos.toStringAsFixed(2)}',
+                Expanded(child: _MiniStat('Ingreso', Money.fmt(ingreso), AppTheme.success)),
+                Expanded(child: _MiniStat('Gastado', Money.fmt(gastos),
                     pct > 0.9 ? AppTheme.danger : pct > 0.7 ? AppTheme.warning : AppTheme.textPrimary)),
-                Expanded(child: _MiniStat('Remanente', '\$${remReal.toStringAsFixed(2)}',
+                Expanded(child: _MiniStat('Remanente', Money.fmt(remReal),
                     remReal >= 0 ? AppTheme.success : AppTheme.danger)),
               ]),
               const SizedBox(height: 14),
@@ -669,9 +670,7 @@ class _FilaQ extends StatelessWidget {
             fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
           ))),
       Text(
-        valor < 0
-            ? '−\$${(-valor).toStringAsFixed(2)}'
-            : '\$${valor.toStringAsFixed(2)}',
+        valor < 0 ? '−${Money.fmt(-valor)}' : Money.fmt(valor),
         style: TextStyle(
           color: color, fontSize: 12,
           fontWeight: bold ? FontWeight.w700 : FontWeight.w600,

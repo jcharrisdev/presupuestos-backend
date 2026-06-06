@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
+import 'utils/money.dart';
 import 'services/api_client.dart';
 import 'services/estado_anual_service.dart';
 import 'services/pdf_service.dart';
@@ -264,7 +265,7 @@ class _TabResumen extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '\$${disponible.toStringAsFixed(2)}',
+              Money.fmt(disponible),
               style: TextStyle(color: dispColor, fontSize: 38, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 4),
