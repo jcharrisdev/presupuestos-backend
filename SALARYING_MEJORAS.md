@@ -189,7 +189,8 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ## CATEGORÍA F — VISUAL Y UX
 
-### F1. Demasiada información comprimida en Tab Resumen
+### ✅ F1. Demasiada información comprimida en Tab Resumen
+**Estado:** IMPLEMENTADO — La tabla comparativa, uso del ingreso y compromisos se movieron a un ExpansionTile "Detalle del mes" colapsado por defecto. El Tab Resumen muestra arriba solo lo esencial: disponible (número grande), banner sano/déficit, ingreso real, alertas. El detalle queda a un tap sin perder datos.
 **Problema:** El Tab Resumen muestra: tabla de categorías, alertas, gastos hormiga, compromisos, todo junto. Se siente como un reporte, no como una pantalla de app.
 
 **Impacto:** Media. El usuario se siente abrumado.
@@ -449,7 +450,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ## CATEGORÍA O — FORMULARIO DE GASTOS (AgregarGastoSheet)
 
-### O1. Demasiadas decisiones antes de guardar un gasto simple
+### ✅ O1. Demasiadas decisiones antes de guardar un gasto simple
+**Estado:** IMPLEMENTADO — AgregarGastoSheet ahora tiene modo rápido (default): solo gastos anteriores, nombre, monto, categoría + balance hint. El tipo se auto-detecta (variable→no_presupuestado si la categoría no tiene presupuesto). Toggle "Más opciones" revela modo detalle: tipo, fecha, notas, guardar como base, split.
 **Problema:** El usuario debe tomar 7 decisiones antes de guardar: tipo (fijo/variable/no presupuestado), nombre, monto, categoría, fecha, ¿guardar como base?, ¿compartir? Para alguien que solo quiere registrar "$30 supermercado", es excesivo.
 
 **Impacto:** Alta. Es el formulario que más se usa. Complejidad = abandono o datos incorrectos.

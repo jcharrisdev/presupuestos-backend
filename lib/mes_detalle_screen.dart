@@ -328,54 +328,73 @@ class _TabResumen extends StatelessWidget {
           ...alertas.map((a) => _AlertaMesCard(alerta: a)),
         ],
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
 
-        // Tabla planificado vs real
-        _seccion('LO QUE PLANIFICASTE VS LO QUE GASTASTE'),
-        _FilaComparativa('Ingreso', ingEst, ingReal, AppTheme.success),
-        _FilaComparativa('Gastos fijos', fijosEst, fijosReal, AppTheme.colorFijo),
-        _FilaComparativa('Gastos variables', varEst, varReal, AppTheme.warning),
-        if (noPres > 0) _FilaComparativa('No presupuestados', 0, noPres, AppTheme.danger),
-        if (hormigaCount > 0 && hormigaTotal > 0) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppTheme.warning.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.warning.withValues(alpha: 0.25)),
-            ),
-            child: Row(children: [
-              const Text('🐜', style: TextStyle(fontSize: 14)),
-              const SizedBox(width: 8),
-              Expanded(child: Text(
-                '$hormigaCount pequeña${hormigaCount == 1 ? '' : 's'} compra${hormigaCount == 1 ? '' : 's'} '
-                '— \$${hormigaTotal.toStringAsFixed(2)} en total este mes',
-                style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
-              )),
-              if (ingresoRef > 0)
-                Text(
-                  '${(hormigaTotal / ingresoRef * 100).toStringAsFixed(1)}%\ndel ingreso',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w700),
+        // F1 — detalle colapsable: reduce la sobrecarga visual del Resumen.
+        // Lo principal (disponible, banner, alertas) queda arriba siempre visible.
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            iconColor: AppTheme.primary,
+            collapsedIconColor: AppTheme.textMuted,
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
+            title: const Text('Detalle del mes',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+            subtitle: const Text('Comparación, uso del ingreso y compromisos',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            children: [
+              const SizedBox(height: 8),
+              // Tabla planificado vs real
+              _seccion('LO QUE PLANIFICASTE VS LO QUE GASTASTE'),
+              _FilaComparativa('Ingreso', ingEst, ingReal, AppTheme.success),
+              _FilaComparativa('Gastos fijos', fijosEst, fijosReal, AppTheme.colorFijo),
+              _FilaComparativa('Gastos variables', varEst, varReal, AppTheme.warning),
+              if (noPres > 0) _FilaComparativa('No presupuestados', 0, noPres, AppTheme.danger),
+              if (hormigaCount > 0 && hormigaTotal > 0) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.warning.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(children: [
+                    const Text('🐜', style: TextStyle(fontSize: 14)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(
+                      '$hormigaCount pequeña${hormigaCount == 1 ? '' : 's'} compra${hormigaCount == 1 ? '' : 's'} '
+                      '— \$${hormigaTotal.toStringAsFixed(2)} en total este mes',
+                      style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
+                    )),
+                    if (ingresoRef > 0)
+                      Text(
+                        '${(hormigaTotal / ingresoRef * 100).toStringAsFixed(1)}%\ndel ingreso',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w700),
+                      ),
+                  ]),
                 ),
-            ]),
+              ],
+              const Divider(color: AppTheme.border, height: 24),
+              _FilaComparativa('Te sobra', remEst, remReal,
+                  remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
+              const SizedBox(height: 24),
+
+              // Barra de progreso de uso del mes
+              _seccion('USO DEL INGRESO'),
+              const SizedBox(height: 8),
+              _BarraUso(ingreso: ingReal > 0 ? ingReal : ingEst,
+                  fijos: fijosReal, variables: varReal, noPres: noPres),
+              const SizedBox(height: 24),
+
+              // Compromisos fijos del mes
+              _CompromisosSection(data: data),
+            ],
           ),
-        ],
-        const Divider(color: AppTheme.border, height: 24),
-        _FilaComparativa('Te sobra', remEst, remReal,
-            remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
-        const SizedBox(height: 24),
-
-        // Barra de progreso de uso del mes
-        _seccion('USO DEL INGRESO'),
-        const SizedBox(height: 8),
-        _BarraUso(ingreso: ingReal > 0 ? ingReal : ingEst,
-            fijos: fijosReal, variables: varReal, noPres: noPres),
-        const SizedBox(height: 24),
-
-        // Compromisos fijos del mes
-        _CompromisosSection(data: data),
+        ),
 
         // Botón cierre mensual (solo si el mes está activo)
         if ((data['mes']?['estado'] as String? ?? '') == 'activo') ...[

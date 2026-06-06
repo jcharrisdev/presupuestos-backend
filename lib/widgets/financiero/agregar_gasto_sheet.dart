@@ -53,6 +53,9 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
   Map<String, dynamic>? _catInfo;
   bool _tipoAutoSet = false;
 
+  // O1 — modo rápido (default) vs modo detalle
+  bool _modoDetalle = false;
+
   static const _tipos = [
     {'value': 'fijo',             'label': 'Gasto fijo',       'icon': Icons.lock_clock,       'color': AppTheme.colorFijo},
     {'value': 'variable',         'label': 'Variable',          'icon': Icons.shopping_bag,     'color': AppTheme.warning},
@@ -209,37 +212,40 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               const SizedBox(height: 16),
             ],
 
-            // ── Tipo ─────────────────────────────────────────────────────────
-            const Text('TIPO', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
-            const SizedBox(height: 8),
-            Row(children: _tipos.map((t) {
-              final sel = _tipo == t['value'];
-              final color = t['color'] as Color;
-              return Expanded(child: GestureDetector(
-                onTap: () => setState(() {
-                  _tipo = t['value'] as String;
-                  _defSeleccionada = null; // deselect si cambia tipo manualmente
-                }),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: sel ? color.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: sel ? color : AppTheme.border, width: sel ? 1.5 : 1),
+            // ── Tipo (solo en modo detalle; en rápido se auto-detecta) ───────
+            if (_modoDetalle) ...[
+              const Text('TIPO', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+              const SizedBox(height: 8),
+              Row(children: _tipos.map((t) {
+                final sel = _tipo == t['value'];
+                final color = t['color'] as Color;
+                return Expanded(child: GestureDetector(
+                  onTap: () => setState(() {
+                    _tipo = t['value'] as String;
+                    _tipoAutoSet = false;
+                    _defSeleccionada = null; // deselect si cambia tipo manualmente
+                  }),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: sel ? color.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: sel ? color : AppTheme.border, width: sel ? 1.5 : 1),
+                    ),
+                    child: Column(children: [
+                      Icon(t['icon'] as IconData, color: sel ? color : AppTheme.textMuted, size: 18),
+                      const SizedBox(height: 4),
+                      Text(t['label'] as String,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: sel ? color : AppTheme.textMuted,
+                              fontSize: 10, fontWeight: sel ? FontWeight.w700 : FontWeight.normal)),
+                    ]),
                   ),
-                  child: Column(children: [
-                    Icon(t['icon'] as IconData, color: sel ? color : AppTheme.textMuted, size: 18),
-                    const SizedBox(height: 4),
-                    Text(t['label'] as String,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: sel ? color : AppTheme.textMuted,
-                            fontSize: 10, fontWeight: sel ? FontWeight.w700 : FontWeight.normal)),
-                  ]),
-                ),
-              ));
-            }).toList()),
-            const SizedBox(height: 16),
+                ));
+              }).toList()),
+              const SizedBox(height: 16),
+            ],
 
             // ── Nombre ───────────────────────────────────────────────────────
             TextFormField(
@@ -294,6 +300,25 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               _CatBalanceHint(cat: _catInfo!),
             ],
             const SizedBox(height: 16),
+
+            // ── Toggle modo rápido / detalle ─────────────────────────────
+            GestureDetector(
+              onTap: () => setState(() => _modoDetalle = !_modoDetalle),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(_modoDetalle ? Icons.expand_less : Icons.tune,
+                      color: AppTheme.primary, size: 16),
+                  const SizedBox(width: 6),
+                  Text(_modoDetalle ? 'Menos opciones' : 'Más opciones (fecha, tipo, compartir…)',
+                      style: const TextStyle(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // ── Opciones avanzadas (modo detalle) ────────────────────────
+            if (_modoDetalle) ...[
 
             // ── Fecha ────────────────────────────────────────────────────
             GestureDetector(
@@ -417,6 +442,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               getTotal: () => double.tryParse(_monto.text.replaceAll(',', '')) ?? 0,
             ),
             const SizedBox(height: 16),
+            ], // fin modo detalle
 
             // ── Botón guardar ────────────────────────────────────────────
             SizedBox(
