@@ -6,7 +6,7 @@ import 'services/auth_service.dart';
 
 /// Pantalla de inicio de sesión — solo Google/Gmail.
 ///
-/// Al autenticarse correctamente navega a [MainMenu] con el email
+/// Al autenticarse correctamente navega a [HomeShell] con el email
 /// de la cuenta Google como `firebaseUid`, preservando todos los
 /// datos existentes en la base de datos sin necesidad de migración.
 class LoginScreen extends StatefulWidget {

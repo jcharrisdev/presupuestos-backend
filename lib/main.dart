@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
 /// Decide la pantalla inicial revisando si hay sesión activa de Google.
 ///
 /// - Muestra un splash mientras resuelve el silent sign-in.
-/// - Si hay sesión → va directo a [MainMenu] (evita el login manual).
+/// - Si hay sesión → va directo a [HomeShell] (evita el login manual).
 /// - Si no → muestra [LoginScreen].
 class _AuthGate extends StatelessWidget {
   const _AuthGate();

@@ -628,7 +628,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ---
 
-### U3. main_menu.dart existe pero nunca se usa
+### ✅ U3. main_menu.dart existe pero nunca se usa
+**Estado:** IMPLEMENTADO — Verificado cero imports/instanciaciones de MainMenu en código activo (solo comentarios doc obsoletos). Archivo eliminado. Comentarios en main.dart y login_screen.dart actualizados de [MainMenu] a [HomeShell].
 **Problema:** Hay una pantalla `main_menu.dart` con menú de módulos completo que no es la entrada real de la app. `home_shell.dart` es la entrada real. Las dos tienen lógica similar pero divergente, creando duplicidad de mantenimiento invisible.
 
 **Impacto:** Media. Código muerto que confunde a quien trabaje en el proyecto.
