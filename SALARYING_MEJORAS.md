@@ -269,7 +269,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### H3. Los gastos variables en el onboarding parecen gastos reales, no estimados
+### ✅ H3. Los gastos variables en el onboarding parecen gastos reales, no estimados
+**Estado:** IMPLEMENTADO — Paso 4 cambió de "¿Cuánto gastas al mes?" a "¿Cuánto quieres presupuestar al mes?" + línea: "Este es tu tope objetivo por categoría, no lo que ya gastaste. Puedes ajustarlo después."
 **Problema:** El paso de variables base dice "¿Cuánto gastas en comida?" El usuario lo interpreta como "registrar lo que gasté" cuando en realidad es "cuánto presupuesto para ese mes". La diferencia es crítica para entender la app.
 
 **Impacto:** Media. Crea expectativas incorrectas desde el inicio.
@@ -278,7 +279,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### H4. El botón final del onboarding no transmite que la app está lista para usar
+### ✅ H4. El botón final del onboarding no transmite que la app está lista para usar
+**Estado:** IMPLEMENTADO — Botón cambió de "Generar mi Estado Financiero" a "Comenzar a controlar mi dinero →" (lenguaje del usuario, no técnico).
 **Problema:** El botón del paso 5 dice "Generar mi Estado Financiero". Para un usuario no financiero, "estado financiero" suena a algo técnico y ajeno. No sabe qué va a ver después.
 
 **Impacto:** Media.
@@ -310,7 +312,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### I3. El campo "próximo pago" en AbonoDeudaSheet no explica para qué sirve
+### ✅ I3. El campo "próximo pago" en AbonoDeudaSheet no explica para qué sirve
+**Estado:** IMPLEMENTADO — Label cambió a "¿Cuándo es tu próximo pago? (actualiza tu calendario)" para que el usuario entienda el efecto.
 **Problema:** Al registrar un abono, hay un campo opcional "Actualizar fecha próximo pago". El usuario no entiende si esto afecta el calendario, la proyección, o solo es informativo.
 
 **Impacto:** Baja/Media.
@@ -793,7 +796,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ## CATEGORÍA Y — SELECTOR Y WIDGETS MENORES
 
-### Y1. El selector de rango de meses usa flechas en lugar de etiquetas claras
+### ✅ Y1. El selector de rango de meses usa flechas en lugar de etiquetas claras
+**Estado:** YA RESUELTO — MesRangoSelector ya tiene labels explícitos "Desde"/"Hasta" en los dropdowns + header "PERÍODO DE VIGENCIA" + línea "Aplica de X a Y (N meses)" / "Aplica todo el año". La flecha es decorativa entre dos campos ya etiquetados.
 **Problema:** El `MesRangoSelector` muestra `[Ene] → [Dic]` con flechas. Para un usuario sin experiencia financiera, no es claro si la flecha significa "desde/hasta" o si se puede seleccionar un rango no contiguo.
 
 **Impacto:** Baja.

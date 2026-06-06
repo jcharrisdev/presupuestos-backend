@@ -73,7 +73,7 @@ class AbonoDeudaSheet {
                 Text(
                   fechaProximoPago != null
                       ? 'Próximo pago: ${fechaProximoPago!.toIso8601String().substring(0, 10)}'
-                      : 'Actualizar fecha próximo pago (opcional)',
+                      : '¿Cuándo es tu próximo pago? (actualiza tu calendario)',
                   style: TextStyle(
                     color: fechaProximoPago != null ? AppTheme.textPrimary : AppTheme.textMuted,
                     fontSize: 13,

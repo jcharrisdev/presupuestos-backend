@@ -1267,10 +1267,10 @@ class _Paso4Variables extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Paso 4 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('¿Cuánto gastas al mes?',
+        const Text('¿Cuánto quieres presupuestar al mes?',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text('Estos son gastos variables — lo que gastas en comida, ocio, etc. Ponle un estimado y ajusta cuando quieras.',
+        const Text('Este es tu tope objetivo por categoría (comida, ocio, etc.), no lo que ya gastaste. Puedes ajustarlo después.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
         const SizedBox(height: 20),
 
@@ -1518,7 +1518,7 @@ class _Paso5Resumen extends StatelessWidget {
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                 : const Icon(Icons.rocket_launch_outlined, color: Colors.black, size: 20),
             label: Text(
-              generando ? 'Generando...' : 'Generar mi Estado Financiero',
+              generando ? 'Preparando tu plan...' : 'Comenzar a controlar mi dinero →',
               style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
             ),
             style: ElevatedButton.styleFrom(
