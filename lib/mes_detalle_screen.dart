@@ -16,6 +16,18 @@ import 'widgets/financiero/categoria_selector.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 
+/// Categoría canónica para un compromiso (gasto fijo/deuda) al marcarlo pagado.
+/// Prefiere `categoria`; si no, usa `tipo` cuando es una categoría canónica
+/// (transporte, servicios, vivienda…); si no, 'otro' (singular, canónico).
+/// Antes caía en 'otros' (plural) y fragmentaba el envelope y las alertas.
+String categoriaCanonicaCompromiso(Map<String, dynamic> g) {
+  final cat = (g['categoria'] as String? ?? '').trim();
+  if (cat.isNotEmpty) return cat;
+  final tipo = (g['tipo'] as String? ?? '').trim();
+  final esCanonica = CategoriaSelector.canonicas.any((c) => c['value'] == tipo);
+  return esCanonica ? tipo : 'otro';
+}
+
 class MesDetalleScreen extends StatefulWidget {
   final String firebaseUid;
   final int anio;
@@ -571,9 +583,7 @@ class _TabGastosState extends State<_TabGastos> {
           anio: widget.anio,
           mes: widget.mes,
           tipo: 'fijo',
-          categoria: (g['categoria'] as String? ?? '').isNotEmpty
-              ? g['categoria'] as String
-              : 'otros',
+          categoria: categoriaCanonicaCompromiso(g),
           nombre: g['nombre'] as String? ?? '',
           monto: _num(g['monto']),
           fecha: fecha,
@@ -2156,7 +2166,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
           anio: widget.anio,
           mes: widget.mes,
           tipo: tipo == 'deuda' ? 'fijo' : tipo,
-          categoria: (c['categoria'] as String? ?? '').isNotEmpty ? c['categoria'] as String : 'otros',
+          categoria: tipo == 'deuda' ? 'deudas' : categoriaCanonicaCompromiso(c),
           nombre: c['nombre'] as String? ?? '',
           monto: _d(c['monto']),
           fecha: fecha,

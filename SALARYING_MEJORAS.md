@@ -700,7 +700,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 ## CATEGORÍA V — COHERENCIA DE DATOS Y CONFIABILIDAD
 
 ### ✅ V1. Categorías inconsistentes entre pantallas
-**Estado:** IMPLEMENTADO — junto con O2. Lista canónica única en toda la app + migración con tabla de equivalencias (deuda→deudas, General→otro, Compartido→compartido). Esto reactiva el match presupuesto↔real del motor de alertas para categorías que antes no cuadraban.
+**Estado:** IMPLEMENTADO — junto con O2. Lista canónica única en toda la app + migración con tabla de equivalencias (deuda→deudas, General→otro, Compartido→compartido, **otros→otro**). Esto reactiva el match presupuesto↔real del motor de alertas para categorías que antes no cuadraban.
+**Fix QA 2026-06:** se detectó vía QA que `_marcarFijo`/`_marcarDeuda` escribían `'otros'` (plural) al marcar pagado un compromiso, fragmentando el envelope. Ahora usan `categoriaCanonicaCompromiso()` que prefiere `categoria`, luego el `tipo` del fijo si es canónico (transporte/servicios/vivienda…), si no 'otro'. Migración normaliza datos viejos.
 **Problema:** (Ver también O2) El Tab Gastos muestra categorías en español minúscula (`alimentacion`, `ocio`). El Perfil Financiero usa otros nombres. El Tab Análisis puede mostrar categorías que no existen en el Perfil. El usuario ve "Tecnología $80" en análisis pero no puede encontrar ese gasto porque en el Perfil se llama diferente.
 
 **Impacto:** Alta. El usuario no puede trazar sus gastos.

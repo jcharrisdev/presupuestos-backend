@@ -651,7 +651,13 @@ pool.getConnection(async (err, conn) => {
       `UPDATE gastos_variables_base SET categoria = 'deudas' WHERE categoria = 'deuda'`);
     const [r5] = await db.execute(
       `UPDATE user_gastos_fijos SET categoria = 'deudas' WHERE categoria = 'deuda'`);
-    total = r1.affectedRows + r2.affectedRows + r3.affectedRows + r4.affectedRows + r5.affectedRows;
+    // otros (plural) → otro (canónico singular) — fix QA 2026-06
+    const [r6] = await db.execute(
+      `UPDATE registros_gasto SET categoria = 'otro' WHERE categoria = 'otros'`);
+    const [r7] = await db.execute(
+      `UPDATE gastos_variables_base SET categoria = 'otro' WHERE categoria = 'otros'`);
+    total = r1.affectedRows + r2.affectedRows + r3.affectedRows + r4.affectedRows
+          + r5.affectedRows + r6.affectedRows + r7.affectedRows;
     if (total > 0) console.log(`✅ Migración unificación categorías: ${total} filas normalizadas`);
   } catch (e) {
     console.error('⚠️ Migración unificación categorías:', e.message);
