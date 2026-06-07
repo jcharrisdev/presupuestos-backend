@@ -427,7 +427,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### M2. Las facturas escaneadas sin asignar no tienen recordatorio visible
+### ✅ M2. Las facturas escaneadas sin asignar no tienen recordatorio visible
+**Estado:** IMPLEMENTADO — Nuevo endpoint `GET /invoice-scanner/invoices/pending-count` (cuenta status != 'assigned'). HomeShell lo carga y muestra un badge rojo con el número en la card "Facturas QR" del Tab Más.
 **Problema:** El usuario escanea 3 facturas y elige "Guardar sin asignar". Esas facturas quedan en el historial pero no hay ningún badge ni alerta que diga "tienes 3 facturas pendientes de asignar".
 
 **Impacto:** Media. Las facturas se olvidan y nunca se registran.
@@ -957,4 +958,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-02 — Sesión Opus: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2 implementados; F3 y F2 parciales. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-02 — Sesión Opus (extendida): +AA1, AA2, M1, AD1, Z2, M2. Total sesión: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

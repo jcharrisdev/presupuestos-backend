@@ -4,6 +4,8 @@ import 'services/auth_service.dart';
 import 'services/user_settings_service.dart';
 import 'services/user_profile_service.dart';
 import 'services/estado_anual_service.dart';
+import 'services/api_client.dart';
+import 'dart:convert';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
 import 'tutorial_screen.dart';
@@ -47,6 +49,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _loadingSettings = true;
   bool _togglingNegocio = false;
   int _alertasCount = 0;
+  int _facturasPendientes = 0;
 
   static const _mesesLabel = [
     '', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
@@ -102,6 +105,15 @@ class _HomeShellState extends State<HomeShell> {
           widget.firebaseUid, anio: now.year, mes: now.month);
       final count = (al['alertas'] as List? ?? []).length;
       if (mounted) setState(() => _alertasCount = count);
+    } catch (_) {}
+    // M2 — facturas escaneadas sin asignar
+    try {
+      final res = await ApiClient.get(
+          '/invoice-scanner/invoices/pending-count?firebase_uid=${widget.firebaseUid}');
+      if (res.statusCode == 200) {
+        final n = (jsonDecode(res.body)['pendientes'] as num?)?.toInt() ?? 0;
+        if (mounted) setState(() => _facturasPendientes = n);
+      }
     } catch (_) {}
   }
 
@@ -171,6 +183,7 @@ class _HomeShellState extends State<HomeShell> {
         togglingNegocio: _togglingNegocio,
         onToggleNegocio: _toggleNegocio,
         onLogout: _logout,
+        facturasPendientes: _facturasPendientes,
       ),
     ];
 
@@ -241,6 +254,7 @@ class _MasTab extends StatelessWidget {
   final bool togglingNegocio;
   final ValueChanged<bool> onToggleNegocio;
   final VoidCallback onLogout;
+  final int facturasPendientes;
 
   const _MasTab({
     required this.firebaseUid,
@@ -251,6 +265,7 @@ class _MasTab extends StatelessWidget {
     required this.togglingNegocio,
     required this.onToggleNegocio,
     required this.onLogout,
+    this.facturasPendientes = 0,
   });
 
   @override
@@ -352,6 +367,7 @@ class _MasTab extends StatelessWidget {
                   title: 'Facturas QR',
                   subtitle: 'Escanea recibos DGI',
                   color: AppTheme.primary,
+                  badge: facturasPendientes,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => InvoiceHistoryScreen(firebaseUid: firebaseUid),
                   )),
@@ -472,10 +488,11 @@ class _ModuloCard extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
+  final int badge;
 
   const _ModuloCard({
     required this.icon, required this.title, required this.subtitle,
-    required this.color, required this.onTap,
+    required this.color, required this.onTap, this.badge = 0,
   });
 
   @override
@@ -490,14 +507,26 @@ class _ModuloCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Container(
-          width: 32, height: 32,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 17),
           ),
-          child: Icon(icon, color: color, size: 17),
-        ),
+          if (badge > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.danger,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text('$badge',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+            ),
+        ]),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: const TextStyle(
               color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 12)),

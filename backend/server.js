@@ -6883,6 +6883,19 @@ app.post('/invoice-scanner/process', async (req, res) => {
   }
 });
 
+// GET /invoice-scanner/invoices/pending-count — M2: facturas sin asignar (badge)
+app.get('/invoice-scanner/invoices/pending-count', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[row]] = await db.query(
+      `SELECT COUNT(*) AS pendientes FROM scanned_invoices
+       WHERE firebase_uid = ? AND (status IS NULL OR status != 'assigned')`,
+      [firebase_uid]);
+    res.json({ pendientes: Number(row.pendientes) || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /invoice-scanner/invoices
 app.get('/invoice-scanner/invoices', async (req, res) => {
   const { firebase_uid, status, date_from, date_to, merchant } = req.query;
