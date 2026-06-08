@@ -292,36 +292,43 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                   const SizedBox(height: 8),
                 ],
                 if (_deudas.isNotEmpty) ...[
+                  // N1 — las deudas se gestionan SOLO en "Mis Deudas" (fuente única).
+                  // Aquí solo se muestra cuánto pesan en los compromisos + link.
                   _SeccionHeader('DEUDAS', _deudas.length,
                       '\$${_deudas.fold(0.0, (s, g) => s + _d(g['monto_mensual'])).toStringAsFixed(2)}/mes',
                       AppTheme.danger),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.info.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: _irADeudas,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: AppTheme.danger.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.credit_card, color: AppTheme.danger, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${_deudas.length} deuda${_deudas.length == 1 ? '' : 's'} activa${_deudas.length == 1 ? '' : 's'}',
+                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          const Text('Ver y gestionar mis deudas →',
+                              style: TextStyle(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.w600)),
+                        ])),
+                        const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+                      ]),
                     ),
-                    child: Row(children: [
-                      const Icon(Icons.touch_app_outlined, color: AppTheme.info, size: 14),
-                      const SizedBox(width: 8),
-                      const Expanded(child: Text(
-                        'Toca una deuda para ir a Mis Deudas y completar su información.',
-                        style: TextStyle(color: AppTheme.info, fontSize: 11),
-                      )),
-                    ]),
                   ),
-                  ..._deudas.map((g) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _GastoTile(
-                      gasto: g as Map<String, dynamic>,
-                      onEdit: () => _mostrarFormGasto(gasto: g),
-                      onDelete: () => _eliminarGasto((g)['id'] as int),
-                      onTapDeuda: _irADeudas,
-                    ),
-                  )),
                   const SizedBox(height: 8),
                 ],
                 if (_variables.isNotEmpty) ...[
@@ -1124,7 +1131,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
                 ]),
               ),
           ] else ...[
-            _buildCampo('Monto mensual que recibes (neto)', _netoCtrl),
+            _buildCampo('¿Cuánto recibes al mes? (neto)', _netoCtrl),
             // Q1 — pista quincenal para que el que cobra quincenal valide su monto
             if (_frecuencia == 'quincenal' && _parseD(_netoCtrl.text) > 0) ...[
               const SizedBox(height: 6),

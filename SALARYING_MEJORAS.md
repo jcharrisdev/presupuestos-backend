@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 38 ✅ implementadas · 6 ⚠️ parciales · 41 ❌ pendientes** (85 ítems)
+**Progreso: 40 ✅ implementadas · 6 ⚠️ parciales · 39 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (38)
-A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, O1, O2, P1, P2, P3, T1, U1, U2, U3, V1, V2, G2, W1, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
+### ✅ Implementadas (40)
+A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, P1, P2, P3, T1, U1, U2, U3, V1, V2, G2, W1, W2, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
 
 ### ⚠️ Parciales (6) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -25,8 +25,6 @@ A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, O1, O2, P1, P2, 
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
-- **N1** — deudas en Perfil vs "Mis Deudas" con comportamiento distinto
-- **W2** — errores al guardar variables se ignoran en silencio
 - **U6** — módulos aún como silos (Patrimonio, Ventas)
 
 **🟠 Media / valor de uso**
@@ -36,7 +34,7 @@ A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, O1, O2, P1, P2, 
 - Navegación: **D1** (modo diario), **D2** (shortcut categoría), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
 - Patrimonio: **R1/R2** (conectar al presupuesto), **AC1/AC2** (editar pasivos, actualizar valor activos)
-- Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado)
+- Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
 - Gastos/formulario: **O3** (contexto "guardar base"), **O4** (explicar no presupuestado), **O5** (recencia), **T2** (confirmar guardado base)
 - Otros: **A3** (promover análisis), **B2** (división dos días pago), **E1** (historial pagos fijo), **E3** (prominencia alertas), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
 
@@ -482,7 +480,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ## CATEGORÍA N — PERFIL FINANCIERO
 
-### N1. Las deudas aparecen en dos lugares distintos con comportamiento diferente
+### ✅ N1. Las deudas aparecen en dos lugares distintos con comportamiento diferente
+**Estado:** IMPLEMENTADO — En Perfil Financiero, la lista editable de deudas se reemplazó por una card-resumen ("N deudas activas · $X/mes · Ver y gestionar mis deudas →") que lleva a DeudasScreen. "Mis Deudas" queda como fuente única; el perfil solo muestra cuánto pesan.
 **Problema:** Las deudas se pueden ver y editar en "Perfil Financiero → Tab Fijos" (vista básica) y también en "Mis Deudas" (vista completa con estrategias). Editar en un lado no siempre refleja en el otro, y el usuario no sabe cuál es el lugar "correcto".
 
 **Impacto:** Alta. Genera confusión y desconfianza en los datos.
@@ -781,7 +780,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### W2. Los errores al guardar gastos variables se ignoran silenciosamente
+### ✅ W2. Los errores al guardar gastos variables se ignoran silenciosamente
+**Estado:** YA RESUELTO (verificado) — Los catch en `_guardarVariables` y `_guardarDeuda` del onboarding muestran snackbar ("No pudimos guardar algunos gastos estimados..." / "Error al guardar deuda") antes de continuar. No hay swallow silencioso.
 **Problema:** En el paso 4 del onboarding, si el backend falla al guardar los gastos variables, el código captura el error con `catch (_) { _irSiguiente(); }` — avanza igual sin avisar al usuario. Los gastos no se guardaron, pero el paso 5 muestra un resumen como si todo estuviera bien.
 
 **Impacto:** Alta. El usuario toma decisiones basadas en un resumen incompleto.
@@ -1007,4 +1007,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-08 — Sesión Opus (extendida): +G2(verif), V2(verif+tooltip), P1, P2, P3, fix otros→otro; Q1 parcial. Acumulado: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2, G2, V2, P1, P2, P3 ✅; F3, F2, Q1 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-08 — Sesión Opus (extendida): +G2(verif), V2(verif+tooltip), P1, P2, P3, N1, W2(verif), fix otros→otro; Q1 parcial. Acumulado: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2, G2, V2, P1, P2, P3 ✅; F3, F2, Q1 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
