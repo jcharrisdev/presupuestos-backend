@@ -273,10 +273,23 @@ class _TabResumen extends StatelessWidget {
             border: Border.all(color: dispColor.withValues(alpha: 0.35), width: 1.5),
           ),
           child: Column(children: [
-            Text(
-              hayReal ? 'Te queda disponible' : 'Estimado disponible',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(
+                hayReal ? 'Te queda disponible' : 'Estimado disponible',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(width: 6),
+              // V2 — define qué compone el total para que cuadre en todas las pantallas
+              Tooltip(
+                triggerMode: TooltipTriggerMode.tap,
+                showDuration: const Duration(seconds: 6),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                message: 'Lo gastado incluye todo lo registrado este mes: '
+                    'gastos fijos, deudas pagadas, variables, no presupuestados, '
+                    'gustitos, compartido y eventos. Es el mismo total en Dashboard y Estado Anual.',
+                child: const Icon(Icons.info_outline, size: 13, color: AppTheme.textMuted),
+              ),
+            ]),
             const SizedBox(height: 6),
             Text(
               Money.fmt(disponible),

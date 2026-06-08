@@ -953,7 +953,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
       _netoCtrl.text = _f(inc['ingreso_neto_mensual']);
     }
     _brutoCtrl.addListener(() { if (_autoCalc) _calcular(); setState(() {}); });
-    for (final c in [_seguroCtrl, _pensionCtrl, _impuestoCtrl, _otrosCtrl]) {
+    for (final c in [_seguroCtrl, _pensionCtrl, _impuestoCtrl, _otrosCtrl, _netoCtrl]) {
       c.addListener(() => setState(() {}));
     }
   }
@@ -1125,6 +1125,12 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
               ),
           ] else ...[
             _buildCampo('Monto mensual que recibes (neto)', _netoCtrl),
+            // Q1 — pista quincenal para que el que cobra quincenal valide su monto
+            if (_frecuencia == 'quincenal' && _parseD(_netoCtrl.text) > 0) ...[
+              const SizedBox(height: 6),
+              Text('≈ \$${(_parseD(_netoCtrl.text) / 2).toStringAsFixed(2)} por quincena · ingresa el total del mes',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            ],
           ],
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(

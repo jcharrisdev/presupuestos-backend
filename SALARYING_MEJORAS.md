@@ -236,7 +236,8 @@ Todo lo demás va al Tab Análisis donde tiene sentido.
 
 ---
 
-### G2. Los gastos variables base sin `origen_variable_id` en un registro no se cuentan en el envelope
+### ✅ G2. Los gastos variables base sin `origen_variable_id` en un registro no se cuentan en el envelope
+**Estado:** YA RESUELTO (verificado QA) — El envelope (`porCategoria` en getMes) agrupa los registros por `categoria` directamente, sin depender de `origen_variable_id`. Confirmado en vivo: "alimentacion" matcheó presupuesto 200 vs gastado 3.5 con un registro sin origen_variable_id.
 **Problema:** Si el usuario registra un gasto variable de categoría "Comida" sin vincularlo a un `gastos_variables_base`, ese registro sí cuenta en el total real pero puede no matchear contra el presupuesto base si la categoría tiene nombres distintos.
 
 **Estado:** Identificado. El matching debe hacerse por `categoria` además de `origen_variable_id`.
@@ -541,7 +542,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ## CATEGORÍA Q — PERFIL FINANCIERO / INGRESOS
 
-### Q1. "Salario bruto mensual" es el campo más importante y el más confuso
+### ⚠️ Q1. "Salario bruto mensual" es el campo más importante y el más confuso
+**Estado:** PARCIAL — El editor de ingreso del perfil ya tiene título "¿Cuánto recibes?" + selector quincenal/mensual + el neto salario muestra equivalente quincenal. Añadido (2026-06): pista quincenal también en la rama no-salario (informal/ocasional) — "≈ $X por quincena · ingresa el total del mes". FALTA (decisión consciente, toca el motor de cálculo del ingreso base = crítico): permitir ingresar el monto POR QUINCENA y que la app multiplique ×2 internamente, en vez de pedir siempre el mensual. Requiere sesión enfocada con verificación cuidadosa (un error ×2 corrompe TODOS los cálculos).
 **Problema:** Un usuario que cobra $600 quincenal piensa en "$600", no en "$1,200 mensual". Además, para trabajadores informales "bruto" no tiene significado claro. Muchos ingresan la mitad del valor real, haciendo que todo el presupuesto esté mal desde el inicio.
 
 **Impacto:** Crítica. Si el ingreso base está mal, TODOS los cálculos están mal.
@@ -710,7 +712,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### V2. Los totales del mes no siempre coinciden entre pantallas
+### ✅ V2. Los totales del mes no siempre coinciden entre pantallas
+**Estado:** RESUELTO (verificado QA) — Tras L1/Z1/AA1, gustitos/compartido/eventos crean `registros_gasto`, así que todo cuenta uniformemente. Verificado: `getMes` resumen (SUM por tipo en vivo) == `_actualizarTotalesMes` (mismas columnas) == Estado Anual (lee esas columnas + total_registrado = SUM de todos los registros). Añadido tooltip en el card "disponible" del Tab Resumen que documenta qué compone el total (fijos+deudas+variables+no presup+gustitos+compartido+eventos), construyendo confianza.
 **Problema:** El total de gastos del mes puede verse diferente en: Dashboard, Tab Resumen de MesDetalle, y Estado Financiero Anual. Depende de si incluye Gustitos, gastos compartidos, o solo `registros_gasto`. El usuario ve números distintos y no sabe cuál es correcto.
 
 **Impacto:** Alta. La desconfianza en los números hace que el usuario deje de usar la app.
