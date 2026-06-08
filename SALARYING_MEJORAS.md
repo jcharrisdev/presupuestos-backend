@@ -6,6 +6,48 @@
 
 ---
 
+## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
+
+**Progreso: 38 ✅ implementadas · 6 ⚠️ parciales · 41 ❌ pendientes** (85 ítems)
+
+### ✅ Implementadas (38)
+A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, O1, O2, P1, P2, P3, T1, U1, U2, U3, V1, V2, G2, W1, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
+
+### ⚠️ Parciales (6) — falta una pieza concreta
+- **B1** — toggle pagado existe; falta mini-sheet de pago parcial
+- **C1** — Dashboard mejorado; falta "próximos pagos de la semana"
+- **D3** — long-press editar fijo/variable existe; falta preview de impacto
+- **F2** — EmptyState aplicado solo en Tab Gastos; falta en otras pantallas
+- **F3** — `Money.fmt` solo en números héroe; quedan ~250 `toStringAsFixed`
+- **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
+
+### ❌ Pendientes (41) — agrupadas por prioridad
+
+**🔴 Alta / coherencia y datos**
+- **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
+- **N1** — deudas en Perfil vs "Mis Deudas" con comportamiento distinto
+- **W2** — errores al guardar variables se ignoran en silencio
+- **U6** — módulos aún como silos (Patrimonio, Ventas)
+
+**🟠 Media / valor de uso**
+- Deudas: **I2** (estrategias con números reales), **X3** (guía tasa interés)
+- Calendario: **J1** (tabs Lista/Flujo), **J2** (conectar con Quincenas), **J3** (vincular eventos)
+- Estado anual: **K1** (mes actual expandido), **K3** (tooltip vista quincenal)
+- Navegación: **D1** (modo diario), **D2** (shortcut categoría), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
+- Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
+- Patrimonio: **R1/R2** (conectar al presupuesto), **AC1/AC2** (editar pasivos, actualizar valor activos)
+- Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado)
+- Gastos/formulario: **O3** (contexto "guardar base"), **O4** (explicar no presupuestado), **O5** (recencia), **T2** (confirmar guardado base)
+- Otros: **A3** (promover análisis), **B2** (división dos días pago), **E1** (historial pagos fijo), **E3** (prominencia alertas), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
+
+**📦 Features grandes de la visión (aún no empezadas)**
+- Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
+- Base de datos de productos y precios (historial: "el arroz subió 10%")
+- Notificaciones push
+- Metas de ahorro completas con barra de progreso
+
+---
+
 ## CATEGORÍA A — ENVELOPE TRACKING (Presupuestado vs Real)
 
 ### ✅ A1. No existe vista de saldo por categoría
