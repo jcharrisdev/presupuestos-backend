@@ -432,8 +432,8 @@ class _TabResumen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              icon: const Icon(Icons.lock_outline, size: 16),
-              label: const Text('Cerrar mes'),
+              icon: const Icon(Icons.insights_outlined, size: 16),
+              label: Text('Ver cómo me fue en $labelMes'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.textSecondary,
                 side: const BorderSide(color: AppTheme.border),
@@ -466,7 +466,7 @@ class _TabResumen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'El cierre guarda un snapshot del mes y lo marca como histórico.',
+            'Guarda un resumen de cómo te fue. Tu historial se conserva — no pierdes acceso.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
           ),

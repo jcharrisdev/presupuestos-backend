@@ -95,9 +95,9 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Row(
               children: [
-                const Icon(Icons.lock_outline, color: AppTheme.primary, size: 20),
+                const Icon(Icons.insights_outlined, color: AppTheme.primary, size: 20),
                 const SizedBox(width: 8),
-                Text('Cerrar ${widget.labelMes}',
+                Text('Cómo te fue en ${widget.labelMes}',
                     style: const TextStyle(
                         color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
                 const Spacer(),
@@ -196,6 +196,8 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
             ],
           ),
         ),
+        // P3 — explicar POR QUÉ gastó de más, no solo el número
+        ..._buildInsightDesviacion(remEst, remReal),
         const SizedBox(height: 20),
         _botonSiguiente(
           label: _pendientes.isEmpty && widget.alertas.isEmpty ? 'Ir a confirmar' : 'Siguiente',
@@ -205,15 +207,55 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
     );
   }
 
+  /// P3 — bajo la tabla: si gastó más de lo planeado, decir en qué categorías.
+  List<Widget> _buildInsightDesviacion(double remEst, double remReal) {
+    final cats = (widget.data['analisis_categorias'] as List? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((c) => _d(c['desviacion']) > 0.5)
+        .toList()
+      ..sort((a, b) => _d(b['desviacion']).compareTo(_d(a['desviacion'])));
+    if (cats.isEmpty) return [];
+    final diferencia = remEst - remReal; // cuánto menos te quedó vs lo planeado
+    final top = cats.take(2).map((c) {
+      final cat = (c['categoria'] as String? ?? '');
+      final nombre = cat.isNotEmpty ? '${cat[0].toUpperCase()}${cat.substring(1)}' : cat;
+      return '$nombre +\$${_d(c['desviacion']).toStringAsFixed(0)}';
+    }).join(', ');
+    return [
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.warning.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.lightbulb_outline, color: AppTheme.warning, size: 15),
+            const SizedBox(width: 6),
+            Text(diferencia > 0.5
+                ? 'Te quedó \$${diferencia.toStringAsFixed(0)} menos de lo planeado'
+                : 'Dónde te pasaste del plan',
+                style: const TextStyle(color: AppTheme.warning, fontSize: 12, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Fue principalmente en: $top. El próximo mes podrías ajustar esas categorías.',
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+        ]),
+      ),
+    ];
+  }
+
   // ─── PASO 1: PENDIENTES ──────────────────────────────────────────────────────
 
   Widget _buildPendientes() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _seccion('Pagos pendientes (${_pendientes.length})'),
+        _seccion('Gastos por confirmar (${_pendientes.length})'),
         const SizedBox(height: 4),
-        const Text('Puedes marcarlos como pagados antes de cerrar el mes.',
+        const Text('¿Ya pagaste estos? Confírmalos para que tu resumen sea exacto. Los que no, déjalos así.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 12),
         if (_pendientes.isEmpty)
@@ -272,7 +314,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppTheme.success.withOpacity(0.4)),
               ),
-              child: const Text('Pagar',
+              child: const Text('Sí, lo pagué',
                   style: TextStyle(color: AppTheme.success, fontSize: 11, fontWeight: FontWeight.w600)),
             ),
           ),
@@ -350,11 +392,11 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _seccion('Confirmar cierre'),
+        _seccion('Guardar resumen del mes'),
         const SizedBox(height: 10),
         _infoBox(
-          'Al cerrar el mes, se guarda un snapshot del estado financiero. '
-          'Los registros del mes quedan preservados en el historial.',
+          'Se guarda una foto de cómo te fue este mes. Tu historial queda preservado '
+          'y puedes seguir consultándolo después — no pierdes acceso a nada.',
           AppTheme.info,
         ),
         if (_pendientes.isNotEmpty) ...[
@@ -379,7 +421,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
             child: _cerrando
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                : const Text('Confirmar cierre del mes',
+                : const Text('Guardar y ver mi resumen',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           ),
         ),

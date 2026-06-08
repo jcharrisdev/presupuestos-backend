@@ -513,7 +513,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ## CATEGORÍA P — CIERRE DE MES
 
-### P1. El concepto "cierre de mes" es incomprensible para el usuario informal
+### ✅ P1. El concepto "cierre de mes" es incomprensible para el usuario informal
+**Estado:** IMPLEMENTADO — "Cerrar [mes]" → "Cómo te fue en [mes]" (ícono insights, no candado). Botón de entrada: "Ver cómo me fue en [mes]". Confirmación: "Guardar y ver mi resumen" + texto "Tu historial queda preservado — no pierdes acceso a nada."
 **Problema:** La pantalla de cierre tiene un candado y dice "Cerrar [mes]". Para alguien que nunca ha hecho finanzas, "cerrar" suena a "perder acceso a los datos". Muchos nunca lo usan por miedo.
 
 **Impacto:** Alta. El cierre activa análisis y comparaciones que el usuario nunca ve.
@@ -522,7 +523,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### P2. "Pagos pendientes" en el cierre no explica si el usuario realmente pagó o no
+### ✅ P2. "Pagos pendientes" en el cierre no explica si el usuario realmente pagó o no
+**Estado:** IMPLEMENTADO — "Pagos pendientes" → "Gastos por confirmar" con texto "¿Ya pagaste estos? Confírmalos... Los que no, déjalos así." Botón "Pagar" → "Sí, lo pagué" (lenguaje activo).
 **Problema:** El paso 2 del wizard muestra N "pagos pendientes" — que son registros sin `pagado=1`. Pero el usuario no sabe si eso significa "ya lo pagué pero no lo marqué" o "realmente no lo pagué". El lenguaje crea pánico.
 
 **Impacto:** Media.
@@ -531,7 +533,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### P3. El resumen del cierre no explica por qué el usuario gastó más de lo planeado
+### ✅ P3. El resumen del cierre no explica por qué el usuario gastó más de lo planeado
+**Estado:** IMPLEMENTADO — Bajo la tabla estimado vs real, insight automático: "Te quedó $X menos de lo planeado. Fue principalmente en: [cat1] +$Y, [cat2] +$Z. El próximo mes podrías ajustar esas categorías." Calculado desde analisis_categorias (desviacion > 0, top 2).
 **Problema:** El resumen muestra estimado vs real pero solo con números. Si el real es mayor, el usuario ve el número en rojo pero no sabe en qué categoría se pasó ni en qué semana ocurrió.
 
 **Impacto:** Alta. Sin este insight, el cierre de mes no sirve para mejorar el mes siguiente.
@@ -962,4 +965,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-02 — Sesión Opus (extendida): +AA1, AA2, M1, AD1, Z2, M2. Total sesión: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-08 — Sesión Opus (extendida): +G2(verif), V2(verif+tooltip), P1, P2, P3, fix otros→otro; Q1 parcial. Acumulado: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2, G2, V2, P1, P2, P3 ✅; F3, F2, Q1 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
