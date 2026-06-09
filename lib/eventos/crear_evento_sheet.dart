@@ -101,7 +101,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       padding: EdgeInsets.fromLTRB(20, 16, 20, bottom + 24),
       child: Form(

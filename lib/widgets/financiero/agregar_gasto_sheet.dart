@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../services/registros_service.dart';
 import '../../services/gastos_variables_service.dart';
 import '../../services/api_client.dart';
+import '../../perfil_financiero_screen.dart';
 import 'mes_rango_selector.dart';
 import 'categoria_selector.dart';
 import 'split_section.dart';
@@ -95,6 +96,23 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
     if (mounted) setState(() => _loadingDefs = false);
   }
 
+  // O5 — etiqueta de recencia ("hoy", "ayer", "hace 3 días"…) del último uso.
+  String? _recencia(Map<String, dynamic> def) {
+    final raw = def['ultimo_fecha'] ?? def['ultimo_created'];
+    if (raw == null) return null;
+    final d = DateTime.tryParse(raw.toString());
+    if (d == null) return null;
+    final now = DateTime.now();
+    final dias = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(d.year, d.month, d.day)).inDays;
+    if (dias <= 0) return 'hoy';
+    if (dias == 1) return 'ayer';
+    if (dias < 7) return 'hace $dias días';
+    if (dias < 30) { final s = (dias / 7).floor(); return s <= 1 ? 'hace 1 sem' : 'hace $s sem'; }
+    final m = (dias / 30).floor();
+    return m <= 1 ? 'hace 1 mes' : 'hace $m meses';
+  }
+
   Map<String, dynamic>? _findCatInfo(String cat) {
     final list = widget.analisisCategorias;
     if (list == null) return null;
@@ -170,10 +188,11 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: _definiciones.map((def) {
+                  children: _definiciones.take(6).map((def) {
                     final sel = _defSeleccionada == def['id'];
                     final cat = def['categoria'] as String;
                     final ultimo = def['ultimo_monto'];
+                    final rec = _recencia(def);
                     return GestureDetector(
                       onTap: () => _seleccionarDefinicion(def),
                       child: Container(
@@ -195,7 +214,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                               )),
                           if (ultimo != null)
                             Text(
-                              '\$${double.tryParse(ultimo.toString())?.toStringAsFixed(2) ?? ultimo} · $cat',
+                              '\$${double.tryParse(ultimo.toString())?.toStringAsFixed(2) ?? ultimo} · ${rec ?? cat}',
                               style: TextStyle(
                                 color: sel ? AppTheme.primary.withValues(alpha: 0.7) : AppTheme.textMuted,
                                 fontSize: 10,
@@ -377,11 +396,19 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                     ),
                     const Expanded(
                       child: Text(
-                        'Agregar a mi presupuesto variable base',
+                        '¿Repites este gasto cada mes? Agrégalo a tu presupuesto',
                         style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                       ),
                     ),
                   ]),
+                  // O3 — explicar qué es "base" para que el usuario construya presupuesto
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12, right: 4, bottom: 2),
+                    child: Text(
+                      'Crea un tope mensual para este gasto. Te avisaremos si te pasas.',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.3),
+                    ),
+                  ),
                   if (_guardarComoBase) ...[
                     const SizedBox(height: 12),
                     const Text('Frecuencia',
@@ -484,11 +511,17 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         const SnackBar(content: Text('Escribe el nombre de la categoría personalizada')));
       return;
     }
+    // Capturar referencias que sobreviven al pop del sheet (T2/O3 muestran
+    // confirmación y navegan después de cerrar).
+    final messenger = ScaffoldMessenger.of(context);
+    final rootNav   = Navigator.of(context, rootNavigator: true);
+    final esNuevo   = _defSeleccionada == null; // nombre nuevo, no reuse de chip
     setState(() => _guardando = true);
     try {
       final categoriaFinal = (_categoria == 'otro' && _categoriaCustom != null)
           ? _categoriaCustom!
           : _categoria;
+      final guardadaBase = _guardarComoBase && _tipo != 'fijo';
       final creado = await RegistrosService.crear(
         uid: widget.firebaseUid, anio: widget.anio, mes: widget.mes,
         tipo: _tipo, categoria: categoriaFinal,
@@ -499,7 +532,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         definitionId: _defSeleccionada,
         pagado: _tipo == 'fijo' ? 1 : 0,
       );
-      if (_guardarComoBase && _tipo != 'fijo') {
+      if (guardadaBase) {
         await GastosVariablesService.crear(
           uid: widget.firebaseUid, nombre: _nombre.text.trim(),
           categoria: categoriaFinal,
@@ -525,12 +558,45 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         await _ofrecerAgregarPresupuesto(categoriaFinal, creado['id'] as int?);
       }
       if (mounted) Navigator.pop(context, true);
+      // T2 — confirmación + link al guardar como base.
+      if (guardadaBase) {
+        _toastBaseGuardada(messenger, rootNav, categoriaFinal);
+      } else if (_tipo == 'variable' && esNuevo && !_modoDetalle) {
+        // O3 — comunicar que la app aprende (definición auto-creada en backend).
+        messenger.showSnackBar(SnackBar(
+          content: const Text('Guardado ✓ · La próxima vez aparecerá en "gastos anteriores"'),
+          backgroundColor: AppTheme.surfaceAlt,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
           SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger));
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  // T2 — confirmar que el gasto se agregó al presupuesto base, con link directo
+  // a la pestaña Variables del perfil para verificarlo.
+  void _toastBaseGuardada(ScaffoldMessengerState messenger, NavigatorState rootNav, String categoria) {
+    final catLabel = categoria.isNotEmpty
+        ? '${categoria[0].toUpperCase()}${categoria.substring(1)}'
+        : categoria;
+    messenger.showSnackBar(SnackBar(
+      content: Text('Agregado a tu presupuesto base de $catLabel'),
+      backgroundColor: AppTheme.success,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 4),
+      action: SnackBarAction(
+        label: 'Ver presupuesto',
+        textColor: AppTheme.background,
+        onPressed: () => rootNav.push(MaterialPageRoute(
+          builder: (_) => PerfilFinancieroScreen(firebaseUid: widget.firebaseUid, initialTab: 2),
+        )),
+      ),
+    ));
   }
 
   Future<void> _ofrecerAgregarPresupuesto(String categoria, int? registroId) async {
@@ -594,7 +660,7 @@ class _CatBalanceHint extends StatelessWidget {
           Icon(Icons.info_outline, color: AppTheme.danger, size: 14),
           SizedBox(width: 8),
           Expanded(child: Text(
-            'Esta categoría no está en tu presupuesto',
+            'No está en tu presupuesto · lo registramos como gasto no planeado',
             style: TextStyle(color: AppTheme.danger, fontSize: 12),
           )),
         ]),

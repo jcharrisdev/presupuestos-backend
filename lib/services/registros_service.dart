@@ -26,6 +26,7 @@ class RegistrosService {
     String? notas,
     int? origenFijoId,
     int? origenVariableId,
+    int? origenDeudaId,
     int? definitionId,
     int pagado = 0,
   }) async {
@@ -43,6 +44,7 @@ class RegistrosService {
       if (notas != null) 'notas': notas,
       if (origenFijoId != null) 'origen_fijo_id': origenFijoId,
       if (origenVariableId != null) 'origen_variable_id': origenVariableId,
+      if (origenDeudaId != null) 'origen_deuda_id': origenDeudaId,
       if (definitionId != null) 'definition_id': definitionId,
     });
     if (res.statusCode != 201) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');

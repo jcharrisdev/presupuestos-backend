@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 40 ✅ implementadas · 6 ⚠️ parciales · 39 ❌ pendientes** (85 ítems)
+**Progreso: 44 ✅ implementadas · 6 ⚠️ parciales · 35 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (40)
-A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, P1, P2, P3, T1, U1, U2, U3, V1, V2, G2, W1, W2, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
+### ✅ Implementadas (44)
+A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
 
 ### ⚠️ Parciales (6) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -35,7 +35,6 @@ A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, P1, 
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
 - Patrimonio: **R1/R2** (conectar al presupuesto), **AC1/AC2** (editar pasivos, actualizar valor activos)
 - Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
-- Gastos/formulario: **O3** (contexto "guardar base"), **O4** (explicar no presupuestado), **O5** (recencia), **T2** (confirmar guardado base)
 - Otros: **A3** (promover análisis), **B2** (división dos días pago), **E1** (historial pagos fijo), **E3** (prominencia alertas), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
 
 **📦 Features grandes de la visión (aún no empezadas)**
@@ -525,7 +524,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### O3. El campo "Guardar como base" está oculto y no tiene contexto
+### ✅ O3. El campo "Guardar como base" está oculto y no tiene contexto
+**Estado:** IMPLEMENTADO — (1) El checkbox ahora pregunta "¿Repites este gasto cada mes? Agrégalo a tu presupuesto" + línea de contexto que explica qué es "base": "Crea un tope mensual para este gasto. Te avisaremos si te pasas." (2) El aprendizaje ya es automático: el backend (`POST /registros`) auto-crea un `expense_definition` para cada gasto variable/no presupuestado, así que reaparece en "gastos anteriores". Tras guardar un gasto variable nuevo en modo rápido, un toast lo comunica: "Guardado ✓ · La próxima vez aparecerá en gastos anteriores". (No se fuerza crear `gastos_variables_base` para categorías que ya tienen presupuesto, para evitar doble conteo del estimado.)
 **Problema:** El checkbox "Guardar como gasto variable base" aparece condicionalmente y no explica qué significa "base". El usuario que nunca lo activa no construye un presupuesto — solo registra gastos sueltos. La app nunca "aprende" sus hábitos.
 
 **Impacto:** Alta. Sin gastos base, no hay presupuesto real, solo un historial de gastos.
@@ -534,7 +534,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### O4. El tipo "No presupuestado" no tiene explicación ni consecuencia visible
+### ✅ O4. El tipo "No presupuestado" no tiene explicación ni consecuencia visible
+**Estado:** IMPLEMENTADO (verificado, cubierto por O1+T1) — En modo rápido el tipo ya NO es una decisión inicial del usuario: se auto-detecta (categoría sin presupuesto → `no_presupuestado`). El `_CatBalanceHint` ahora explica la consecuencia: "No está en tu presupuesto · lo registramos como gasto no planeado". Y al guardar, T1 ofrece agregarlo al presupuesto ("Gasto fuera de tu plan · ¿Agregar al presupuesto?"). El chip manual "No presupuestado" solo queda en modo detalle para usuarios avanzados.
 **Problema:** El usuario ve tres opciones de tipo: Fijo, Variable, No presupuestado. No hay tooltip, icono ni ejemplo. Muchos eligen "No presupuestado" para todo porque "suena a que ya lo gasté". Luego el gasto desaparece del radar del presupuesto.
 
 **Impacto:** Alta. Gastos no presupuestados no se cuentan contra el presupuesto de ninguna categoría.
@@ -543,7 +544,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### O5. Los gastos anteriores sugeridos no tienen indicador de recencia
+### ✅ O5. Los gastos anteriores sugeridos no tienen indicador de recencia
+**Estado:** IMPLEMENTADO — Backend `GET /user/expense-definitions` ahora devuelve `ultimo_fecha`/`ultimo_created` y ordena por más reciente (`ORDER BY rg.created_at IS NULL ASC, rg.created_at DESC, ed.nombre ASC` — nunca usados al final). El sheet muestra solo los 6 más recientes (`.take(6)`) y cada chip lleva etiqueta de recencia ("hoy", "ayer", "hace 3 días", "hace 2 sem", "hace 1 mes") en lugar de la categoría.
 **Problema:** La lista de gastos anteriores reutilizables carga todos los históricos del usuario. Un gasto de hace 8 meses aparece igual que uno de ayer. No hay orden por uso reciente ni indicador de cuándo fue la última vez.
 
 **Impacto:** Media.
@@ -651,7 +653,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ---
 
-### T2. Guardar un gasto como "variable base" no da confirmación ni enlace al resultado
+### ✅ T2. Guardar un gasto como "variable base" no da confirmación ni enlace al resultado
+**Estado:** IMPLEMENTADO — Al guardar un gasto con "agregar a presupuesto base", tras cerrar el sheet aparece un toast verde "Agregado a tu presupuesto base de [Categoría]" con acción "Ver presupuesto" que abre `PerfilFinancieroScreen` directo en la pestaña Variables (nuevo parámetro `initialTab`). El toast usa el `ScaffoldMessenger`/`Navigator` raíz capturados antes del pop, así sobrevive al cierre del sheet.
 **Problema:** Al activar "Guardar como gasto variable base" en el formulario y guardar, el usuario no ve ningún indicador de que el presupuesto base fue actualizado. No hay toast, no hay link al Tab Variables donde puede verificarlo.
 
 **Impacto:** Media. El usuario guarda el mismo gasto base múltiples veces por duda.
@@ -1007,4 +1010,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-08 — Sesión Opus (extendida): +G2(verif), V2(verif+tooltip), P1, P2, P3, N1, W2(verif), fix otros→otro; Q1 parcial. Acumulado: U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2, G2, V2, P1, P2, P3 ✅; F3, F2, Q1 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-08 — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

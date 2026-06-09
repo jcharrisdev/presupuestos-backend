@@ -10292,11 +10292,15 @@ app.get('/user/expense-definitions', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
+    // O5 — recencia: devolver fecha de último uso y ordenar por más reciente.
+    // Los que nunca se han registrado (created_at NULL) quedan al final.
     const [rows] = await db.execute(
       `SELECT ed.*,
               rg.monto      AS ultimo_monto,
               rg.anio       AS ultimo_anio,
-              rg.mes        AS ultimo_mes
+              rg.mes        AS ultimo_mes,
+              rg.fecha      AS ultimo_fecha,
+              rg.created_at AS ultimo_created
        FROM expense_definitions ed
        LEFT JOIN registros_gasto rg ON rg.definition_id = ed.id
          AND rg.created_at = (
@@ -10304,7 +10308,7 @@ app.get('/user/expense-definitions', async (req, res) => {
            WHERE r2.definition_id = ed.id AND r2.firebase_uid = ed.firebase_uid
          )
        WHERE ed.firebase_uid = ? AND ed.activo = 1
-       ORDER BY ed.nombre ASC`,
+       ORDER BY rg.created_at IS NULL ASC, rg.created_at DESC, ed.nombre ASC`,
       [firebase_uid]
     );
     res.json(rows);

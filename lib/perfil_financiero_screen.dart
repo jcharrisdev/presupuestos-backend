@@ -14,7 +14,9 @@ import 'invoice_scanner/invoice_scanner_screen.dart';
 /// Todo impacta en el "disponible real" que sirve de base para todos los módulos.
 class PerfilFinancieroScreen extends StatefulWidget {
   final String firebaseUid;
-  const PerfilFinancieroScreen({Key? key, required this.firebaseUid}) : super(key: key);
+  /// Pestaña inicial: 0 Ingresos · 1 Fijos · 2 Variables (base).
+  final int initialTab;
+  const PerfilFinancieroScreen({Key? key, required this.firebaseUid, this.initialTab = 0}) : super(key: key);
 
   @override
   State<PerfilFinancieroScreen> createState() => _PerfilFinancieroScreenState();
@@ -35,7 +37,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 3, vsync: this, initialIndex: widget.initialTab.clamp(0, 2));
     _cargar();
   }
 
