@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 44 ✅ implementadas · 6 ⚠️ parciales · 35 ❌ pendientes** (85 ítems)
+**Progreso: 48 ✅ implementadas · 6 ⚠️ parciales · 31 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (44)
-A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
+### ✅ Implementadas (48)
+A1, A2, A3, B3, C2, E2, E3, F1, H2, H3, H4, I1, I3, I4, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
 
 ### ⚠️ Parciales (6) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -21,7 +21,7 @@ A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, O3, 
 - **F3** — `Money.fmt` solo en números héroe; quedan ~250 `toStringAsFixed`
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
 
-### ❌ Pendientes (41) — agrupadas por prioridad
+### ❌ Pendientes (31) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
@@ -30,12 +30,11 @@ A1, A2, B3, C2, E2, F1, H2, H3, H4, I1, I3, I4, K2, L1, M1, M2, N1, O1, O2, O3, 
 **🟠 Media / valor de uso**
 - Deudas: **I2** (estrategias con números reales), **X3** (guía tasa interés)
 - Calendario: **J1** (tabs Lista/Flujo), **J2** (conectar con Quincenas), **J3** (vincular eventos)
-- Estado anual: **K1** (mes actual expandido), **K3** (tooltip vista quincenal)
 - Navegación: **D1** (modo diario), **D2** (shortcut categoría), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
 - Patrimonio: **R1/R2** (conectar al presupuesto), **AC1/AC2** (editar pasivos, actualizar valor activos)
 - Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
-- Otros: **A3** (promover análisis), **B2** (división dos días pago), **E1** (historial pagos fijo), **E3** (prominencia alertas), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
+- Otros: **B2** (división dos días pago), **E1** (historial pagos fijo), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -77,7 +76,8 @@ Después de este gasto: $430 → excede en $130 ⚠
 
 ---
 
-### A3. Tab Análisis con la información correcta está enterrado y nadie lo ve
+### ✅ A3. Tab Análisis con la información correcta está enterrado y nadie lo ve
+**Estado:** IMPLEMENTADO (verificado, cubierto por A1) — El Tab Gastos ya tiene la sección colapsable "SOBRES DEL MES" con barra semafórica presupuestado-vs-real por categoría (`_SobreRow`), promovida al tab más usado. El `_CategoriaCard` permanece en Tab Análisis para el detalle profundo + recomendaciones de aprendizaje. La info ya no está enterrada.
 **Problema:** El Tab Análisis en mes_detalle_screen SÍ tiene comparación presupuestado vs real por categoría (`_CategoriaCard`). Pero está al final del cuarto tab, visible solo si el usuario navega hasta allá y hace scroll. El 90% de usuarios nunca lo ve.
 
 **Impacto:** Media. La solución de A1 (poner sobres en Tab Gastos) resuelve esto en parte, pero también hay que promover la info del Tab Análisis al nivel del Tab Gastos o Dashboard.
@@ -218,7 +218,8 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ---
 
-### E3. Las alertas automáticas existen pero no tienen prominencia
+### ✅ E3. Las alertas automáticas existen pero no tienen prominencia
+**Estado:** IMPLEMENTADO (completa U2) — Además del badge rojo en la nav del mes (HomeShell + badges en `_MesCard` del Estado Anual, ya de U2), el Dashboard ahora muestra la **alerta más urgente (nivel danger) como card prominente arriba de todo**, con ícono, título, acción sugerida y tap al detalle del mes. Se deduplica de la sección "ALERTAS" inferior para no repetirla.
 **Problema:** El sistema genera `alertas_financieras` automáticamente, pero solo se ven en Tab Resumen con banners pequeños. No hay notificación ni indicador en el ícono de la pantalla de inicio.
 
 **Impacto:** Media.
@@ -408,7 +409,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ## CATEGORÍA K — ESTADO FINANCIERO ANUAL
 
-### K1. Los 12 meses están colapsados por defecto — el usuario no descubre el detalle
+### ✅ K1. Los 12 meses están colapsados por defecto — el usuario no descubre el detalle
+**Estado:** IMPLEMENTADO — El grid de 12 meses ahora arranca **expandido por defecto** (`_mesesExpanded = true`), con el mes actual ya resaltado (borde primary + tinte + badge "HOY"). Cada `_MesCard` lleva un chevron sutil que indica que abre el detalle, y el header del grid añade la pista "toca un mes para ver el detalle".
 **Problema:** La grilla de 12 meses en el estado financiero anual muestra un resumen comprimido. Para ver el desglose de un mes específico hay que hacer tap, pero muchos usuarios nunca lo hacen porque no parece tappable.
 
 **Impacto:** Media. El dato más útil (comparación mes a mes) queda oculto.
@@ -427,7 +429,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### K3. El toggle Vista Quincenal/Mensual no tiene onboarding contextual
+### ✅ K3. El toggle Vista Quincenal/Mensual no tiene onboarding contextual
+**Estado:** IMPLEMENTADO — El Estado Anual carga la `frecuencia_cobro` del usuario (GET /user/income). Si cobra quincenal y no tiene activada la Vista Quincenal, muestra un banner contextual sobre los chips de vista: "Cobras por quincena · Activa la Vista Quincenal para ver tus compromisos adaptados a tus dos cobros del mes" con botón "Activar Vista Quincenal" y una X para descartar (sesión). El banner desaparece al activar la vista.
 **Problema:** El toggle existe pero el usuario que cobra quincenal no sabe que debe activarlo para que la app se adapte a su ciclo de pago.
 
 **Impacto:** Alta para el perfil objetivo (cobran quincenal).
@@ -1010,4 +1013,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-08 — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-09 — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

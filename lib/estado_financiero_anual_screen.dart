@@ -33,7 +33,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   bool _loading = true;
   String? _error;
   bool _sinPerfil = false;
-  bool _mesesExpanded = false;
+  bool _mesesExpanded = true; // K1 — meses visibles por defecto (mes actual resaltado)
   int _alertasCount = 0;
   Map<int, Map<String, dynamic>> _alertasResumen = {};
   late String _vista; // 'mensual' | 'quincenal' | 'anual'
@@ -41,6 +41,8 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   Map<String, dynamic>? _comparativa;
   Map<String, dynamic>? _consejeroIA;
   bool _loadingIA = false;
+  String? _frecuenciaCobro;        // K3 — para sugerir Vista Quincenal
+  bool _hintQuincenalCerrado = false;
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -79,6 +81,14 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         final porMes = (resumen['por_mes'] as Map? ?? {})
             .map((k, v) => MapEntry(int.tryParse(k.toString()) ?? 0, Map<String, dynamic>.from(v as Map)));
         if (mounted) setState(() => _alertasResumen = porMes);
+      } catch (_) {}
+      // K3 — frecuencia de cobro para sugerir Vista Quincenal a quien cobra quincenal
+      try {
+        final r = await ApiClient.get('/user/income?firebase_uid=${widget.firebaseUid}');
+        if (r.statusCode == 200 && mounted) {
+          final inc = jsonDecode(r.body) as Map<String, dynamic>;
+          setState(() => _frecuenciaCobro = inc['frecuencia_cobro'] as String?);
+        }
       } catch (_) {}
       _cargarConsejero();
     } catch (e) {
@@ -222,6 +232,46 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           _buildConsejeroSkeleton(),
           const SizedBox(height: 16),
         ],
+        // K3 — sugerir Vista Quincenal a quien cobra quincenal y no la ha activado
+        if (_frecuenciaCobro == 'quincenal' && _vista != 'quincenal' && !_hintQuincenalCerrado) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.tips_and_updates_outlined, color: AppTheme.primary, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Cobras por quincena',
+                    style: TextStyle(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                const Text('Activa la Vista Quincenal para ver tus compromisos adaptados a tus dos cobros del mes.',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, height: 1.3)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => _cambiarVista('quincenal'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Activar Vista Quincenal',
+                        style: TextStyle(color: AppTheme.background, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ])),
+              GestureDetector(
+                onTap: () => setState(() => _hintQuincenalCerrado = true),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.close, color: AppTheme.textMuted, size: 16),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
         // Toggle de vista
         Row(children: [
           _VistaChip('Quincenal', 'quincenal', _vista, _cambiarVista),
@@ -268,8 +318,12 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         if (_mesesExpanded) ...[
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('MESES DEL AÑO',
-                style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+            child: Row(children: [
+              Expanded(child: Text('MESES DEL AÑO',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8))),
+              Text('toca un mes para ver el detalle',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, fontStyle: FontStyle.italic)),
+            ]),
           ),
           GridView.builder(
             shrinkWrap: true,
@@ -1028,6 +1082,13 @@ class _MesCard extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          // K1 — chevron sutil que indica que la tarjeta abre el detalle del mes
+          Positioned(
+            bottom: 2,
+            right: 4,
+            child: Icon(Icons.chevron_right,
+                size: 13, color: (esActual ? AppTheme.primary : AppTheme.textMuted).withValues(alpha: 0.6)),
           ),
           // Badge de alertas no leídas
           if (noLeidas > 0)

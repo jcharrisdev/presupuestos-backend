@@ -164,9 +164,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .where((c) => _d(c['presupuestado']) > 0 || _d(c['total_gastado']) > 0)
         .toList();
 
+    // E3 — alerta más urgente (nivel danger) para mostrarla arriba de todo
+    Map<String, dynamic>? alertaUrgente;
+    for (final a in _alertas) {
+      if ((a['nivel'] as String? ?? '') == 'danger') { alertaUrgente = a; break; }
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── E3 · ALERTA MÁS URGENTE (arriba de todo) ──────────────────────
+        if (alertaUrgente != null) ...[
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => MesDetalleScreen(
+                firebaseUid: widget.firebaseUid,
+                anio: _now.year, mes: _now.month, label: mesNombre,
+              ),
+            )).then((_) => _cargar()),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.danger.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.danger.withValues(alpha: 0.5)),
+              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 22),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(alertaUrgente['titulo'] as String? ?? 'Atención',
+                      style: const TextStyle(color: AppTheme.danger, fontSize: 14, fontWeight: FontWeight.w800)),
+                  if ((alertaUrgente['accion_sugerida'] as String? ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(alertaUrgente['accion_sugerida'] as String,
+                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+                  ],
+                ])),
+                const Icon(Icons.chevron_right, color: AppTheme.danger, size: 20),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         // ── CARD PRINCIPAL DEL MES ────────────────────────────────────────
         GestureDetector(
           onTap: () => Navigator.push(context, MaterialPageRoute(
@@ -378,12 +419,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
 
-        // ── ALERTAS ───────────────────────────────────────────────────────
-        if (_alertas.isNotEmpty) ...[
+        // ── ALERTAS (resto, sin repetir la urgente del tope) ──────────────
+        if (_alertas.where((a) => !identical(a, alertaUrgente)).isNotEmpty) ...[
           const SizedBox(height: 20),
           _SectionLabel('ALERTAS', Icons.notifications_active, AppTheme.warning),
           const SizedBox(height: 8),
-          ..._alertas.take(3).map((a) {
+          ..._alertas.where((a) => !identical(a, alertaUrgente)).take(3).map((a) {
             final nivel = a['nivel'] as String? ?? 'info';
             final color = nivel == 'danger' ? AppTheme.danger
                 : nivel == 'warning' ? AppTheme.warning : AppTheme.info;
