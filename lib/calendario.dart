@@ -399,6 +399,10 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
   Widget _vistaLista() {
     final eventos = _eventosFiltrados;
     return Column(children: [
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: _TabHint('Tus eventos por fecha: pagos y cobros programados.'),
+      ),
       // Filtros de estado: Todos / Pendientes / Pagados / Vencidos
       Container(
         color: AppTheme.surface,
@@ -525,6 +529,8 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const _TabHint('Cómo entra y sale el dinero cada día del mes.'),
+          const SizedBox(height: 12),
           Row(children: [
             _flujoChip('INGRESOS', ingresos, AppTheme.success),
             const SizedBox(width: 8),
@@ -619,6 +625,19 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
 ///
 /// Se usa tanto en la vista Calendario (panel inferior) como en la vista Lista.
 /// [showDate] controla si se muestra la fecha junto al estado (útil en la lista).
+// J1 — línea explicativa de qué muestra cada tab (Lista vs Flujo)
+class _TabHint extends StatelessWidget {
+  final String texto;
+  const _TabHint(this.texto);
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    const Icon(Icons.info_outline, color: AppTheme.textMuted, size: 13),
+    const SizedBox(width: 6),
+    Expanded(child: Text(texto,
+        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, fontStyle: FontStyle.italic))),
+  ]);
+}
+
 class _EventoCard extends StatelessWidget {
   final Map<String, dynamic> evento;
   final Color colorEvento;

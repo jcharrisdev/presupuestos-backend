@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 51 ✅ implementadas · 6 ⚠️ parciales · 28 ❌ pendientes** (85 ítems)
+**Progreso: 54 ✅ implementadas · 6 ⚠️ parciales · 25 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (51)
-A1, A2, A3, B3, C2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, X3, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AD1
+### ✅ Implementadas (54)
+A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AD1
 
 ### ⚠️ Parciales (6) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -21,19 +21,19 @@ A1, A2, A3, B3, C2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, K1, K2, K3, L1, M1, 
 - **F3** — `Money.fmt` solo en números héroe; quedan ~250 `toStringAsFixed`
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
 
-### ❌ Pendientes (28) — agrupadas por prioridad
+### ❌ Pendientes (25) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
 - **U6** — módulos aún como silos (Patrimonio, Ventas)
 
 **🟠 Media / valor de uso**
-- Calendario: **J1** (tabs Lista/Flujo), **J2** (conectar con Quincenas), **J3** (vincular eventos)
-- Navegación: **D1** (modo diario), **D2** (shortcut categoría), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
+- Calendario: **J2** (conectar con Quincenas), **J3** (vincular eventos a gastos fijos) — *requieren backend, sesión enfocada de calendario*
+- Navegación: **D1** (modo diario), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
 - Patrimonio: **R1/R2** (conectar al presupuesto), **AC2** (actualizar valor activos con el tiempo)
 - Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
-- Otros: **B2** (división dos días pago), **E1** (historial pagos fijo), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
+- Otros: **B2** (división dos días pago), **E1** (historial pagos fijo), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -170,7 +170,8 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ---
 
-### D2. Para ver cuánto gasté en una categoría, necesito 3–4 taps
+### ✅ D2. Para ver cuánto gasté en una categoría, necesito 3–4 taps
+**Estado:** IMPLEMENTADO — Cada sobre del Tab Gastos es ahora tappable (chevron indicador) y abre un sheet con el detalle: lista de registros de esa categoría en el mes (nombre, fecha, monto) + total y conteo. Usa los registros en memoria, sin navegar lejos ni llamada extra. (El long-press sigue editando el presupuesto base.)
 **Problema:** Ver el desglose de una categoría (ej: "¿cuánto gasté en comida esta semana?") requiere: Home → Mes → Tab Análisis → scroll hasta Comida. No hay shortcut.
 
 **Impacto:** Media.
@@ -380,7 +381,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ## CATEGORÍA J — CALENDARIO
 
-### J1. Las tabs "Lista" y "Flujo" del calendario no se distinguen claramente
+### ✅ J1. Las tabs "Lista" y "Flujo" del calendario no se distinguen claramente
+**Estado:** IMPLEMENTADO — Cada vista lleva una línea explicativa (`_TabHint`): Lista = "Tus eventos por fecha: pagos y cobros programados"; Flujo = "Cómo entra y sale el dinero cada día del mes".
 **Problema:** El calendario tiene tres tabs: Lista, Flujo, y la vista de calendario. No hay descripción de para qué sirve cada una. "Flujo" muestra un resumen financiero día a día pero el usuario lo confunde con "lo mismo que Lista pero diferente".
 
 **Impacto:** Media.
@@ -865,7 +867,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### Y2. El selector de categorías con scroll horizontal es difícil en pantallas pequeñas
+### ✅ Y2. El selector de categorías con scroll horizontal es difícil en pantallas pequeñas
+**Estado:** IMPLEMENTADO — `CategoriaSelector` pasó de `ListView` horizontal a un `Wrap` que muestra todas las categorías de golpe (se acomodan en filas). Las más usadas (alimentación, transporte, vivienda) ya van primero en la lista canónica. Cambio en el widget compartido → aplica en todas las pantallas que lo usan.
 **Problema:** 13 categorías en scroll horizontal significa que el usuario solo ve 4-5 a la vez y tiene que descubrir que puede hacer scroll. En pantallas pequeñas (<5") es especialmente difícil de usar.
 
 **Impacto:** Media. La categoría es un campo de uso frecuente.
@@ -1015,4 +1018,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-09 — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-09 — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

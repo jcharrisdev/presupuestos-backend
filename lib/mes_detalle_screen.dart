@@ -692,6 +692,72 @@ class _TabGastosState extends State<_TabGastos> {
     );
   }
 
+  // D2 — detalle de la categoría: lista de registros de ese mes (sin navegar lejos)
+  void _mostrarDetalleCategoria(
+      BuildContext context, String categoria, List<Map<String, dynamic>> registros) {
+    final delCat = registros.where((r) => r['categoria'] == categoria).toList()
+      ..sort((a, b) => (b['fecha']?.toString() ?? '').compareTo(a['fecha']?.toString() ?? ''));
+    final total = delCat.fold<double>(0, (s, r) => s + (_num(r['monto'])));
+    final catLabel = categoria.isNotEmpty
+        ? '${categoria[0].toUpperCase()}${categoria.substring(1)}'
+        : categoria;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6, minChildSize: 0.3, maxChildSize: 0.9, expand: false,
+        builder: (_, scrollCtrl) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(child: Text(catLabel,
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700))),
+              Text('${delCat.length} ${delCat.length == 1 ? 'gasto' : 'gastos'} · \$${total.toStringAsFixed(2)}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            ]),
+            const SizedBox(height: 12),
+            if (delCat.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('Sin gastos registrados en esta categoría este mes.',
+                    style: TextStyle(color: AppTheme.textSecondary))),
+              )
+            else
+              Expanded(child: ListView.separated(
+                controller: scrollCtrl,
+                itemCount: delCat.length,
+                separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
+                itemBuilder: (_, i) {
+                  final r = delCat[i];
+                  final fecha = (r['fecha']?.toString() ?? '');
+                  final fechaCorta = fecha.length >= 10 ? fecha.substring(0, 10) : fecha;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(children: [
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(r['nombre']?.toString() ?? '—',
+                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text(fechaCorta, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      ])),
+                      Text('\$${_num(r['monto']).toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+                    ]),
+                  );
+                },
+              )),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Future<void> _mostrarOpcionesVariable(BuildContext context, String categoria) async {
     // Cargar líneas de presupuesto variable para esta categoría
     List<Map<String, dynamic>> lineas = [];
@@ -879,6 +945,8 @@ class _TabGastosState extends State<_TabGastos> {
           if (_sobresExpandido)
             ...sobres.map((c) => _SobreRow(
               cat: c,
+              onTap: () => _mostrarDetalleCategoria(
+                  context, c['categoria'] as String, registros),
               onLongPress: () => _mostrarOpcionesVariable(
                   context, c['categoria'] as String),
             )),
@@ -1281,7 +1349,8 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
 class _SobreRow extends StatelessWidget {
   final Map<String, dynamic> cat;
   final VoidCallback? onLongPress;
-  const _SobreRow({required this.cat, this.onLongPress});
+  final VoidCallback? onTap; // D2 — abrir detalle de registros de la categoría
+  const _SobreRow({required this.cat, this.onLongPress, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1300,7 +1369,9 @@ class _SobreRow extends StatelessWidget {
             : AppTheme.success;
 
     return GestureDetector(
+      onTap: onTap,
       onLongPress: onLongPress,
+      behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1308,6 +1379,8 @@ class _SobreRow extends StatelessWidget {
             Expanded(child: Text(nombre,
                 style: const TextStyle(color: AppTheme.textSecondary,
                     fontSize: 12, fontWeight: FontWeight.w600))),
+            if (onTap != null)
+              const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 13),
             if (onLongPress != null)
               const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 11),
             const SizedBox(width: 4),

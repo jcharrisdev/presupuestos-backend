@@ -88,50 +88,53 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
       const Text('CATEGORÍA',
           style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
       const SizedBox(height: 8),
-      SizedBox(
-        height: 76,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          children: todas.map((c) {
-            final val = c['value'] as String;
-            final sel = _mostrarCustom ? val == 'otro' : widget.categoriaActual == val;
-            return GestureDetector(
-              onTap: () {
-                if (val == 'otro') {
-                  setState(() => _mostrarCustom = true);
-                  widget.onChanged('otro', null);
-                } else {
-                  setState(() => _mostrarCustom = false);
-                  widget.onChanged(val, null);
-                }
-              },
-              child: Container(
-                width: 72,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: sel ? widget.color.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: sel ? widget.color : AppTheme.border,
-                      width: sel ? 1.5 : 1),
-                ),
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(c['icon'] as IconData,
-                      color: sel ? widget.color : AppTheme.textMuted, size: 20),
-                  const SizedBox(height: 4),
-                  Text(c['label'] as String,
+      // Y2 — grid (Wrap) para ver todas las categorías de golpe, sin scroll horizontal
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: todas.map((c) {
+          final val = c['value'] as String;
+          final sel = _mostrarCustom ? val == 'otro' : widget.categoriaActual == val;
+          return GestureDetector(
+            onTap: () {
+              if (val == 'otro') {
+                setState(() => _mostrarCustom = true);
+                widget.onChanged('otro', null);
+              } else {
+                setState(() => _mostrarCustom = false);
+                widget.onChanged(val, null);
+              }
+            },
+            child: Container(
+              width: 72,
+              height: 64,
+              decoration: BoxDecoration(
+                color: sel ? widget.color.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: sel ? widget.color : AppTheme.border,
+                    width: sel ? 1.5 : 1),
+              ),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(c['icon'] as IconData,
+                    color: sel ? widget.color : AppTheme.textMuted, size: 20),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Text(c['label'] as String,
                       textAlign: TextAlign.center,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: sel ? widget.color : AppTheme.textMuted,
                         fontSize: 9,
                         fontWeight: sel ? FontWeight.w700 : FontWeight.normal,
                       )),
-                ]),
-              ),
-            );
-          }).toList(),
-        ),
+                ),
+              ]),
+            ),
+          );
+        }).toList(),
       ),
       // Campo de texto para categoría personalizada
       if (_mostrarCustom) ...[
