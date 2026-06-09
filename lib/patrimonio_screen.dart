@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'deudas/deudas_screen.dart';
 
 class PatrimonioScreen extends StatefulWidget {
   final String firebaseUid;
@@ -99,7 +100,12 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
                 if (pasivos.isEmpty)
                   _empty('Sin deudas activas. ¡Excelente!')
                 else
-                  ...pasivos.map((d) => _PasivoTile(deuda: d)),
+                  ...pasivos.map((d) => _PasivoTile(
+                        deuda: d,
+                        onVerDeuda: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => DeudasScreen(firebaseUid: widget.firebaseUid),
+                        )).then((_) => _cargar()),
+                      )),
                 const SizedBox(height: 80),
               ]),
             ),
@@ -215,28 +221,39 @@ class _ActivoTile extends StatelessWidget {
 
 class _PasivoTile extends StatelessWidget {
   final Map<String, dynamic> deuda;
-  const _PasivoTile({required this.deuda});
+  final VoidCallback? onVerDeuda; // AC1 — navegar a la deuda en Mis Deudas
+  const _PasivoTile({required this.deuda, this.onVerDeuda});
   @override
   Widget build(BuildContext context) {
     final saldo = double.tryParse((deuda['monto_pendiente'] ?? deuda['monto_total']).toString()) ?? 0;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
+    return GestureDetector(
+      onTap: onVerDeuda,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(children: [
+          const Icon(Icons.credit_card, color: AppTheme.danger, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(deuda['nombre'] as String? ?? '—', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            Text(deuda['tipo'] as String? ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            if (onVerDeuda != null) ...[
+              const SizedBox(height: 3),
+              Row(children: const [
+                Text('Ver deuda', style: TextStyle(color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                Icon(Icons.chevron_right, color: AppTheme.primary, size: 14),
+              ]),
+            ],
+          ])),
+          Text('\$${saldo.toStringAsFixed(2)}',
+              style: const TextStyle(color: AppTheme.danger, fontSize: 14, fontWeight: FontWeight.w700)),
+        ]),
       ),
-      child: Row(children: [
-        const Icon(Icons.credit_card, color: AppTheme.danger, size: 20),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(deuda['nombre'] as String? ?? '—', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-          Text(deuda['tipo'] as String? ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-        ])),
-        Text('\$${saldo.toStringAsFixed(2)}',
-            style: const TextStyle(color: AppTheme.danger, fontSize: 14, fontWeight: FontWeight.w700)),
-      ]),
     );
   }
 }

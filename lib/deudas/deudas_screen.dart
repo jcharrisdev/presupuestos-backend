@@ -558,6 +558,18 @@ class _TabEstrategias extends StatelessWidget {
     final estrategiasIguales = (av['meses_totales'] == sw['meses_totales']) &&
         (_d(av['total_intereses']) - _d(sw['total_intereses'])).abs() < 0.01;
 
+    // I2 — gancho motivacional de Snowball con números reales (orden de pago real)
+    final swOrden = (sw['orden'] as List?) ?? const [];
+    final mesesSaldado = swOrden
+        .map((d) => (d as Map)['mes_saldado'] as int?)
+        .where((m) => m != null && m > 0)
+        .cast<int>()
+        .toList()
+      ..sort();
+    final int? primeraSaldadaMes = mesesSaldado.isNotEmpty ? mesesSaldado.first : null;
+    final saldadasEn3m = mesesSaldado.where((m) => m <= 3).length;
+    final numDeudas = swOrden.length;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -663,6 +675,33 @@ class _TabEstrategias extends StatelessWidget {
                   'comparado con Snowball.',
                   style: const TextStyle(
                       color: AppTheme.success, fontSize: 12, height: 1.4),
+                ),
+              ),
+            ]),
+          ),
+        ],
+
+        // I2 — gancho motivacional de Snowball con números reales
+        if (numDeudas > 1 && primeraSaldadaMes != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.3)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.emoji_events_outlined, color: AppTheme.info, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  saldadasEn3m >= 2
+                      ? 'Con Snowball eliminas $saldadasEn3m deudas en los primeros 3 meses — '
+                        'ese impulso temprano ayuda a no rendirse.'
+                      : 'Con Snowball saldas tu primera deuda en el mes $primeraSaldadaMes — '
+                        'una victoria temprana que motiva a seguir.',
+                  style: const TextStyle(color: AppTheme.info, fontSize: 12, height: 1.4),
                 ),
               ),
             ]),

@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 48 ✅ implementadas · 6 ⚠️ parciales · 31 ❌ pendientes** (85 ítems)
+**Progreso: 51 ✅ implementadas · 6 ⚠️ parciales · 28 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (48)
-A1, A2, A3, B3, C2, E2, E3, F1, H2, H3, H4, I1, I3, I4, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AD1
+### ✅ Implementadas (51)
+A1, A2, A3, B3, C2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, X3, Y1, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AD1
 
 ### ⚠️ Parciales (6) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -21,18 +21,17 @@ A1, A2, A3, B3, C2, E2, E3, F1, H2, H3, H4, I1, I3, I4, K1, K2, K3, L1, M1, M2, 
 - **F3** — `Money.fmt` solo en números héroe; quedan ~250 `toStringAsFixed`
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
 
-### ❌ Pendientes (31) — agrupadas por prioridad
+### ❌ Pendientes (28) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
 - **U6** — módulos aún como silos (Patrimonio, Ventas)
 
 **🟠 Media / valor de uso**
-- Deudas: **I2** (estrategias con números reales), **X3** (guía tasa interés)
 - Calendario: **J1** (tabs Lista/Flujo), **J2** (conectar con Quincenas), **J3** (vincular eventos)
 - Navegación: **D1** (modo diario), **D2** (shortcut categoría), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
-- Patrimonio: **R1/R2** (conectar al presupuesto), **AC1/AC2** (editar pasivos, actualizar valor activos)
+- Patrimonio: **R1/R2** (conectar al presupuesto), **AC2** (actualizar valor activos con el tiempo)
 - Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
 - Otros: **B2** (división dos días pago), **E1** (historial pagos fijo), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split), **Y2** (grid categorías)
 
@@ -343,7 +342,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### I2. Las estrategias de deuda (Avalanche/Snowball) usan lenguaje técnico sin números concretos
+### ✅ I2. Las estrategias de deuda (Avalanche/Snowball) usan lenguaje técnico sin números concretos
+**Estado:** IMPLEMENTADO — El Tab Estrategias ya mostraba con datos reales: trayectoria actual (deuda total, mínimos, fecha fin, intereses) + comparativa lado a lado Avalanche/Snowball (meses, fecha fin, intereses) + ahorro Avalanche-vs-Snowball en $. Se completó con el gancho motivacional de Snowball usando el `orden` real de pago del backend (`mes_saldado` por deuda): "Con Snowball eliminas N deudas en los primeros 3 meses" o "saldas tu primera deuda en el mes X". Sin cambios de backend (el endpoint `/deudas/proyeccion` ya devolvía el orden).
 **Problema:** La pantalla de estrategias explica Avalanche y Snowball con texto genérico ("paga primero la de mayor tasa de interés"). No muestra cuánto dinero ahorra el usuario específicamente con sus deudas reales.
 
 **Impacto:** Media. El usuario no entiende por qué importa la estrategia.
@@ -843,7 +843,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### X3. La tasa de interés de deudas usa rangos genéricos sin guía de dónde encontrar el dato real
+### ✅ X3. La tasa de interés de deudas usa rangos genéricos sin guía de dónde encontrar el dato real
+**Estado:** IMPLEMENTADO — Junto al campo de tasa en `CrearDeudaSheet` (que ya tenía hint por tipo) se agregó un link "¿No sé mi tasa?" que abre un modal explicando dónde encontrar la TEA: estado de cuenta mensual, app/banca en línea, y el número detrás de la tarjeta. Incluye nota de que un estimado aproximado es mejor que ninguno y se puede corregir después.
 **Problema:** En el onboarding de deudas, los hints dicen "18–36% anual es típico". Pero para un usuario real que tiene una tarjeta de crédito BAC o Banistmo, el rango no ayuda a encontrar su tasa real.
 
 **Impacto:** Media. Una tasa incorrecta hace que las proyecciones de deudas sean inútiles.
@@ -978,7 +979,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ## CATEGORÍA AC — PATRIMONIO (mejoras funcionales)
 
-### AC1. Los pasivos del patrimonio son de solo lectura — no se pueden editar desde ahí
+### ✅ AC1. Los pasivos del patrimonio son de solo lectura — no se pueden editar desde ahí
+**Estado:** IMPLEMENTADO — Cada `_PasivoTile` en PatrimonioScreen ahora es tappable y muestra "Ver deuda →"; navega a `DeudasScreen` (fuente única para editar/gestionar deudas, coherente con N1) y recarga el patrimonio al volver.
 **Problema:** La sección "PASIVOS" de `PatrimonioScreen` muestra las deudas activas con `_PasivoTile` pero no tiene acciones (ni editar ni ir a deudas). El usuario ve su saldo de deuda pero no puede hacer nada al respecto sin salir de Patrimonio y navegar a DeudasScreen.
 
 **Impacto:** Baja/Media. Inconsistencia: activos tienen botón de edición, pasivos no.
@@ -1013,4 +1015,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-09 — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-09 — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

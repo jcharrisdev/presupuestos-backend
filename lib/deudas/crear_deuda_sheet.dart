@@ -156,6 +156,67 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
     }
   }
 
+  // X3 — modal que explica dónde encontrar la tasa real (TEA)
+  void _mostrarAyudaTasa() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          const Text('¿Dónde encuentro mi tasa?',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          const Text('Busca la "Tasa Efectiva Anual" (TEA). Suele estar en:',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
+          const SizedBox(height: 14),
+          _ayudaTasaItem(Icons.receipt_long_outlined, 'Tu estado de cuenta mensual',
+              'En tarjetas, aparece como "tasa de interés" o TEA, normalmente al final.'),
+          _ayudaTasaItem(Icons.phone_android, 'La app o banca en línea de tu banco',
+              'En el detalle del producto (tarjeta, préstamo) o en el contrato digital.'),
+          _ayudaTasaItem(Icons.credit_card, 'El número detrás de tu tarjeta',
+              'Llama y pregunta por tu "tasa efectiva anual". Es gratis.'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+            ),
+            child: const Text(
+              'Si no la encuentras ahora, usa un estimado del rango sugerido y corrígelo después. '
+              'Una tasa aproximada es mejor que ninguna.',
+              style: TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4)),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  Widget _ayudaTasaItem(IconData icon, String titulo, String detalle) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, color: AppTheme.primary, size: 20),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(titulo, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 2),
+        Text(detalle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+      ])),
+    ]),
+  );
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
@@ -331,6 +392,18 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                   Expanded(child: Text(_tasaHint(_tipo),
                       style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
                 ]),
+                const SizedBox(height: 6),
+                // X3 — guía de dónde encontrar la tasa real
+                GestureDetector(
+                  onTap: _mostrarAyudaTasa,
+                  child: Row(children: const [
+                    Icon(Icons.help_outline, color: AppTheme.primary, size: 14),
+                    SizedBox(width: 6),
+                    Text('¿No sé mi tasa?',
+                        style: TextStyle(color: AppTheme.primary, fontSize: 12,
+                            fontWeight: FontWeight.w600, decoration: TextDecoration.underline)),
+                  ]),
+                ),
               ]),
             ),
             const SizedBox(height: 12),
