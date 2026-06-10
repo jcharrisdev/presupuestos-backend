@@ -757,6 +757,16 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                 Text('Total \$${monto.toStringAsFixed(2)}',
                     style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
+              // Z3 — editar gasto (solo quien puede editar)
+              if (_puedeEditar)
+                GestureDetector(
+                  onTap: () => _showAgregarGasto(e),
+                  behavior: HitTestBehavior.opaque,
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 16),
+                  ),
+                ),
             ]),
           ),
 
@@ -1091,9 +1101,11 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
     );
   }
 
-  void _showAgregarGasto() {
-    final descCtrl = TextEditingController();
-    final montoCtrl = TextEditingController();
+  void _showAgregarGasto([Map<String, dynamic>? existing]) {
+    final editando = existing != null;
+    final descCtrl = TextEditingController(text: editando ? (existing['descripcion']?.toString() ?? '') : '');
+    final montoCtrl = TextEditingController(
+        text: editando ? (double.tryParse(existing['monto'].toString())?.toStringAsFixed(2) ?? '') : '');
     String pagadoPor = widget.firebaseUid;
     bool esPersonal = false;
     bool yaPagado = false;
@@ -1109,14 +1121,21 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         return Padding(
           padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Agregar gasto',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
+            Text(editando ? 'Editar gasto' : 'Agregar gasto',
+                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             _modalInput(descCtrl, 'Descripción'),
             const SizedBox(height: 10),
             _modalInput(montoCtrl, 'Monto', numeric: true),
             const SizedBox(height: 10),
-            if (!esPersonal) ...[
+            // Z3 — al editar solo cambian descripción y monto (el reparto se recalcula)
+            if (editando)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Text('Se actualiza la división entre miembros automáticamente.',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              ),
+            if (!editando && !esPersonal) ...[
               const Text('¿Quién lo pagará / ya pagó?', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 6),
               Container(
@@ -1140,7 +1159,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               const SizedBox(height: 10),
             ],
             // Toggle: ¿ya se pagó? — para tracking en tiempo real vs planificación
-            if (!esPersonal) ...[
+            if (!editando && !esPersonal) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -1171,33 +1190,35 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               ),
               const SizedBox(height: 10),
             ],
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Gasto personal (no se divide)',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              Switch(
-                value: esPersonal,
-                activeColor: AppTheme.primary,
-                onChanged: (v) => setM(() { esPersonal = v; if (v) yaPagado = false; }),
+            if (!editando) ...[
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Gasto personal (no se divide)',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                Switch(
+                  value: esPersonal,
+                  activeColor: AppTheme.primary,
+                  onChanged: (v) => setM(() { esPersonal = v; if (v) yaPagado = false; }),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () async {
+                  final p = await showDatePicker(
+                      context: ctx, initialDate: fecha, firstDate: DateTime(2020), lastDate: DateTime.now());
+                  if (p != null) setM(() => fecha = p);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                    const SizedBox(width: 8),
+                    Text(DateFormat('dd/MM/yyyy').format(fecha),
+                        style: const TextStyle(color: AppTheme.textPrimary)),
+                  ]),
+                ),
               ),
-            ]),
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () async {
-                final p = await showDatePicker(
-                    context: ctx, initialDate: fecha, firstDate: DateTime(2020), lastDate: DateTime.now());
-                if (p != null) setM(() => fecha = p);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
-                child: Row(children: [
-                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
-                  const SizedBox(width: 8),
-                  Text(DateFormat('dd/MM/yyyy').format(fecha),
-                      style: const TextStyle(color: AppTheme.textPrimary)),
-                ]),
-              ),
-            ),
+            ],
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -1215,22 +1236,30 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                         const SnackBar(content: Text('Completa todos los campos')));
                     return;
                   }
-                  final body = <String, dynamic>{
-                    'descripcion': desc,
-                    'monto': monto,
-                    'pagado_por': esPersonal ? widget.firebaseUid : pagadoPor,
-                    'es_personal': esPersonal,
-                    if (esPersonal) 'firebase_uid_personal': widget.firebaseUid,
-                    'fecha': DateFormat('yyyy-MM-dd').format(fecha),
-                    'firebase_uid': widget.firebaseUid,
-                    'ya_pagado': yaPagado,
-                  };
                   Navigator.pop(ctx);
-                  final ok = await SharedBudgetService.createExpense(widget.budgetId, body);
+                  bool ok;
+                  if (editando) {
+                    ok = await SharedBudgetService.updateExpense(existing['id'] as int, {
+                      'descripcion': desc,
+                      'monto': monto,
+                      'firebase_uid': widget.firebaseUid,
+                    });
+                  } else {
+                    ok = await SharedBudgetService.createExpense(widget.budgetId, {
+                      'descripcion': desc,
+                      'monto': monto,
+                      'pagado_por': esPersonal ? widget.firebaseUid : pagadoPor,
+                      'es_personal': esPersonal,
+                      if (esPersonal) 'firebase_uid_personal': widget.firebaseUid,
+                      'fecha': DateFormat('yyyy-MM-dd').format(fecha),
+                      'firebase_uid': widget.firebaseUid,
+                      'ya_pagado': yaPagado,
+                    });
+                  }
                   if (ok) _recargar();
                 },
-                child: const Text('Guardar gasto',
-                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: Text(editando ? 'Guardar cambios' : 'Guardar gasto',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ),
           ]),

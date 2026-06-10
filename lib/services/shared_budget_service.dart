@@ -79,6 +79,12 @@ class SharedBudgetService {
     return [];
   }
 
+  // Z3 — editar descripción/monto de un gasto compartido
+  static Future<bool> updateExpense(int expenseId, Map<String, dynamic> body) async {
+    final res = await ApiClient.patch('/shared-expenses/$expenseId', body);
+    return res.statusCode == 200;
+  }
+
   static Future<bool> deleteExpense(int expenseId, String uid) async {
     final res = await ApiClient.delete('/shared-expenses/$expenseId?firebase_uid=$uid');
     return res.statusCode == 200;
