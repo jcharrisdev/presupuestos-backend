@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/eventos_service.dart';
+import '../widgets/empty_state.dart';
 import 'crear_evento_sheet.dart';
 import 'evento_detalle_screen.dart';
 
@@ -96,17 +97,18 @@ class _EventosScreenState extends State<EventosScreen> {
 
   Widget _buildContent() {
     if (_eventos.isEmpty) {
-      return ListView(children: [
-        const SizedBox(height: 60),
-        const Center(child: Icon(Icons.celebration_outlined, color: AppTheme.textMuted, size: 56)),
-        const SizedBox(height: 16),
-        const Center(child: Text('Sin eventos presupuestados',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 15))),
-        const SizedBox(height: 8),
-        const Center(child: Text('Vacaciones, bodas, cumpleaños...\nToca + para crear uno.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.5))),
-      ]);
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 90, horizontal: 24),
+        children: [
+          EmptyState(
+            icon: Icons.celebration_outlined,
+            title: 'Sin eventos presupuestados',
+            subtitle: 'Vacaciones, bodas, cumpleaños...',
+            actionLabel: 'Crear evento',
+            onAction: _abrirCrear,
+          ),
+        ],
+      );
     }
 
     final total = _totalPresupuestado();

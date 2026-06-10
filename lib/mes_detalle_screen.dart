@@ -584,38 +584,164 @@ class _TabGastosState extends State<_TabGastos> {
     super.dispose();
   }
 
-  Future<void> _marcarFijo(Map<String, dynamic> g, bool pagado, int? registroId) async {
-    if (_operando) return;
-    setState(() => _operando = true);
-    try {
-      if (!pagado) {
-        final hoy = DateTime.now();
-        final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
-        await RegistrosService.crear(
-          uid: widget.uid,
-          anio: widget.anio,
-          mes: widget.mes,
-          tipo: 'fijo',
-          categoria: categoriaCanonicaCompromiso(g),
-          nombre: g['nombre'] as String? ?? '',
-          monto: _num(g['monto']),
-          fecha: fecha,
-          origenFijoId: g['id'] as int,
-          pagado: 1,
-        );
-      } else if (registroId != null) {
-        await RegistrosService.eliminar(widget.uid, registroId);
-      }
-      widget.onChanged();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _operando = false);
-    }
+  // B1 — mini-sheet de pago: permite pago completo o parcial (varias quincenas)
+  Future<void> _abrirPagoFijo(
+      Map<String, dynamic> g, List<Map<String, dynamic>> regs) async {
+    final planeado  = _num(g['monto']);
+    final pagadoSum = regs.fold<double>(0.0, (s, r) => s + _num(r['monto']));
+    final falta     = planeado - pagadoSum;
+    final sugerido  = falta > 0.01 ? falta : planeado;
+    final montoCtrl = TextEditingController(text: sugerido.toStringAsFixed(2));
+    DateTime fecha  = DateTime.now();
+    bool guardando  = false;
+
+    String fmtFecha(DateTime d) =>
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    String apiFecha(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetCtx) => StatefulBuilder(builder: (ctx, setS) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text('Pagar ${g['nombre']}',
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          // Resumen planeado / pagado / falta
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceAlt,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Expanded(child: _ResumenPago('Planeado', planeado, AppTheme.textSecondary)),
+              Expanded(child: _ResumenPago('Pagado', pagadoSum, AppTheme.success)),
+              Expanded(child: _ResumenPago('Falta', falta > 0 ? falta : 0, AppTheme.warning)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: montoCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
+              labelText: '¿Cuánto pagaste?',
+              prefixText: '\$ ',
+              suffixIcon: TextButton(
+                onPressed: () => setS(() =>
+                    montoCtrl.text = (falta > 0.01 ? falta : planeado).toStringAsFixed(2)),
+                child: const Text('Pagar todo', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Selector de fecha (default hoy)
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: ctx,
+                initialDate: fecha,
+                firstDate: DateTime(widget.anio - 1),
+                lastDate: DateTime(widget.anio + 1, 12, 31),
+              );
+              if (picked != null) setS(() => fecha = picked);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(children: [
+                const Icon(Icons.calendar_today, color: AppTheme.textMuted, size: 16),
+                const SizedBox(width: 10),
+                Text('Fecha: ${fmtFecha(fecha)}',
+                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                const Spacer(),
+                const Icon(Icons.edit, color: AppTheme.textMuted, size: 14),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: guardando ? null : () async {
+              final monto = double.tryParse(montoCtrl.text);
+              if (monto == null || monto <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Monto inválido')));
+                return;
+              }
+              setS(() => guardando = true);
+              try {
+                await RegistrosService.crear(
+                  uid: widget.uid,
+                  anio: widget.anio,
+                  mes: widget.mes,
+                  tipo: 'fijo',
+                  categoria: categoriaCanonicaCompromiso(g),
+                  nombre: g['nombre'] as String? ?? '',
+                  monto: monto,
+                  fecha: apiFecha(fecha),
+                  origenFijoId: g['id'] as int,
+                  pagado: 1,
+                );
+                if (!sheetCtx.mounted) return;
+                Navigator.pop(sheetCtx);
+                widget.onChanged();
+              } catch (e) {
+                setS(() => guardando = false);
+                if (!ctx.mounted) return;
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+              }
+            },
+            child: guardando
+                ? const SizedBox(height: 18, width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : const Text('Registrar pago'),
+          )),
+          // Pagos ya registrados (eliminar para corregir)
+          if (regs.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('Pagos registrados',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
+            const SizedBox(height: 6),
+            ...regs.map((r) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(children: [
+                const Icon(Icons.check_circle, color: AppTheme.success, size: 14),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  '${Money.fmt(_num(r['monto']))} · ${(r['fecha']?.toString() ?? '').split('T').first}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                )),
+                GestureDetector(
+                  onTap: () async {
+                    try {
+                      await RegistrosService.eliminar(widget.uid, (r['id'] as num).toInt());
+                      if (!sheetCtx.mounted) return;
+                      Navigator.pop(sheetCtx);
+                      widget.onChanged();
+                    } catch (_) {}
+                  },
+                  child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
+                ),
+              ]),
+            )),
+          ],
+        ]),
+      )),
+    );
   }
 
   double _num(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
@@ -901,6 +1027,7 @@ class _TabGastosState extends State<_TabGastos> {
             ...lineas.map((g) => _LineaVariableRow(
               g: g,
               uid: widget.uid,
+              disponibleActual: _num((widget.data['resumen'] as Map?)?['remanente_estimado']),
               onChanged: () {
                 Navigator.pop(context);
                 widget.onChanged();
@@ -953,17 +1080,14 @@ class _TabGastosState extends State<_TabGastos> {
     final gastosFijos = (compromisos['gastos_fijos'] as List? ?? []).cast<Map<String, dynamic>>();
     final deudas      = (compromisos['deudas'] as List? ?? []).cast<Map<String, dynamic>>();
 
-    // Mapa fijoId → registroId para saber qué registro borrar al desmarcar
-    final fijoARegistroId = <int, int>{};
-    final registradosIds  = <int>{};
+    // B1 — Mapa fijoId → lista de sus registros (soporta pagos parciales múltiples)
+    final fijoARegistros = <int, List<Map<String, dynamic>>>{};
     for (final r in registros) {
       final origenId = r['origen_fijo_id'];
       if (origenId != null) {
-        final fijoId  = (origenId as num?)?.toInt() ?? -1;
-        final regId   = (r['id'] as num?)?.toInt() ?? -1;
-        if (fijoId >= 0 && regId >= 0) {
-          registradosIds.add(fijoId);
-          fijoARegistroId[fijoId] = regId;
+        final fijoId = (origenId as num?)?.toInt() ?? -1;
+        if (fijoId >= 0) {
+          (fijoARegistros[fijoId] ??= []).add(r);
         }
       }
     }
@@ -1060,14 +1184,15 @@ class _TabGastosState extends State<_TabGastos> {
               '${gastosFijos.length + deudas.length} ítems planificados'),
           ...gastosFijos.map((g) {
             final fijoId = (g['id'] as num?)?.toInt() ?? -1;
-            final pagado = registradosIds.contains(fijoId);
+            final regs = fijoARegistros[fijoId] ?? const <Map<String, dynamic>>[];
+            final pagadoSum = regs.fold<double>(0.0, (s, r) => s + _num(r['monto']));
             return _PlanTile(
               nombre: g['nombre'] as String? ?? '',
               monto: _num(g['monto']),
               tipo: g['tipo'] as String? ?? 'otro',
-              pagado: pagado,
+              pagadoSum: pagadoSum,
               esPago: false,
-              onTap: (_operando || fijoId < 0) ? null : () => _marcarFijo(g, pagado, fijoARegistroId[fijoId]),
+              onTap: (_operando || fijoId < 0) ? null : () => _abrirPagoFijo(g, regs),
               onLongPress: fijoId < 0 ? null : () => _mostrarOpcionesFijo(context, g),
             );
           }),
@@ -1295,7 +1420,13 @@ class _LineaVariableRow extends StatefulWidget {
   final Map<String, dynamic> g;
   final String uid;
   final VoidCallback onChanged;
-  const _LineaVariableRow({required this.g, required this.uid, required this.onChanged});
+  final double disponibleActual; // D3 — para previsualizar el impacto
+  const _LineaVariableRow({
+    required this.g,
+    required this.uid,
+    required this.onChanged,
+    this.disponibleActual = 0,
+  });
   @override
   State<_LineaVariableRow> createState() => _LineaVariableRowState();
 }
@@ -1396,7 +1527,36 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
               labelText: 'Monto (\$)', prefixText: '\$ ', isDense: true,
               contentPadding: EdgeInsets.symmetric(vertical: 8),
             ),
+            onChanged: (_) => setState(() {}),
           ),
+          // D3 — preview del impacto en el disponible mensual
+          Builder(builder: (_) {
+            final original = double.tryParse(widget.g['monto_estimado'].toString()) ?? 0.0;
+            final nm = double.tryParse(_montoCtrl.text) ?? original;
+            if ((nm - original).abs() <= 0.001) return const SizedBox(height: 10);
+            final nuevoDisp = widget.disponibleActual + (original - nm);
+            final mejora = nuevoDisp >= widget.disponibleActual;
+            final color = nuevoDisp < 0 ? AppTheme.danger : mejora ? AppTheme.success : AppTheme.warning;
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                ),
+                child: Row(children: [
+                  Icon(mejora ? Icons.trending_up : Icons.trending_down, color: color, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(
+                    'Nuevo disponible: ${Money.fmt(nuevoDisp)} · antes ${Money.fmt(widget.disponibleActual)}',
+                    style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+                  )),
+                ]),
+              ),
+            );
+          }),
           const SizedBox(height: 10),
           Row(children: [
             Expanded(child: OutlinedButton(
@@ -1530,14 +1690,17 @@ class _PlanTile extends StatelessWidget {
   final String nombre;
   final double monto;
   final String tipo;
-  final bool pagado;
+  final bool pagado;          // usado por deudas (binario)
+  final double? pagadoSum;    // B1 — usado por fijos (soporta pago parcial)
   final bool esPago;
   final int? cuotasRestantes;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   const _PlanTile({
     required this.nombre, required this.monto, required this.tipo,
-    required this.pagado, required this.esPago,
+    required this.esPago,
+    this.pagado = false,
+    this.pagadoSum,
     this.cuotasRestantes,
     this.onTap,
     this.onLongPress,
@@ -1548,6 +1711,20 @@ class _PlanTile extends StatelessWidget {
     final color = tipo == 'deuda' ? AppTheme.danger
         : tipo == 'vivienda' ? AppTheme.colorFijo
         : AppTheme.colorFijo;
+
+    // Estado: completo / parcial / pendiente
+    final usaParcial = pagadoSum != null;
+    final completo = usaParcial ? (pagadoSum! >= monto - 0.01) : pagado;
+    final parcial  = usaParcial && pagadoSum! > 0.01 && pagadoSum! < monto - 0.01;
+    final falta    = monto - (pagadoSum ?? 0);
+
+    final borderColor = completo ? AppTheme.success.withValues(alpha: 0.3)
+        : parcial ? AppTheme.warning.withValues(alpha: 0.4)
+        : AppTheme.border;
+    final bgColor = completo ? AppTheme.success.withValues(alpha: 0.06)
+        : parcial ? AppTheme.warning.withValues(alpha: 0.05)
+        : AppTheme.surface;
+
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -1556,45 +1733,65 @@ class _PlanTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: pagado ? AppTheme.success.withOpacity(0.06) : AppTheme.surface,
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: pagado ? AppTheme.success.withOpacity(0.3) : AppTheme.border,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Row(children: [
         Icon(
-          pagado ? Icons.check_circle : (esPago ? Icons.credit_card_outlined : Icons.receipt_outlined),
-          color: pagado ? AppTheme.success : color,
+          completo ? Icons.check_circle
+              : parcial ? Icons.timelapse
+              : (esPago ? Icons.credit_card_outlined : Icons.receipt_outlined),
+          color: completo ? AppTheme.success : parcial ? AppTheme.warning : color,
           size: 18,
         ),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(nombre, style: TextStyle(
-            color: pagado ? AppTheme.textSecondary : AppTheme.textPrimary,
+            color: completo ? AppTheme.textSecondary : AppTheme.textPrimary,
             fontSize: 13, fontWeight: FontWeight.w600,
           )),
-          if (cuotasRestantes != null)
+          if (parcial)
+            Text('Pagado ${Money.fmt(pagadoSum!)} de ${Money.fmt(monto)} · falta ${Money.fmt(falta)}',
+                style: const TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w600))
+          else if (cuotasRestantes != null)
             Text('$cuotasRestantes cuotas restantes',
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('\$${monto.toStringAsFixed(2)}',
               style: TextStyle(
-                color: pagado ? AppTheme.textSecondary : color,
+                color: completo ? AppTheme.textSecondary : color,
                 fontWeight: FontWeight.w700, fontSize: 13,
               )),
-          if (pagado)
-            const Text('Registrado', style: TextStyle(color: AppTheme.success, fontSize: 9)),
-          if (!pagado && onTap != null)
-            const Text('Toca para pagar', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
-          if (!pagado && onTap == null)
+          if (completo)
+            const Text('Registrado', style: TextStyle(color: AppTheme.success, fontSize: 9))
+          else if (parcial)
+            const Text('Pago parcial', style: TextStyle(color: AppTheme.warning, fontSize: 9))
+          else if (onTap != null)
+            const Text('Toca para pagar', style: TextStyle(color: AppTheme.textMuted, fontSize: 9))
+          else
             const Text('Pendiente', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
         ]),
       ]),
     ),
     );
   }
+}
+
+// B1 — celda de resumen en el sheet de pago (Planeado / Pagado / Falta)
+class _ResumenPago extends StatelessWidget {
+  final String label;
+  final double valor;
+  final Color color;
+  const _ResumenPago(this.label, this.valor, this.color);
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+    const SizedBox(height: 3),
+    Text(Money.fmt(valor),
+        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+  ]);
 }
 
 class EditarGastoFijoSheet {

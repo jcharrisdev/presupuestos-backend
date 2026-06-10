@@ -179,6 +179,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if ((a['nivel'] as String? ?? '') == 'danger') { alertaUrgente = a; break; }
     }
 
+    // C1 — pagos de esta semana (próximos 7 días)
+    final hoyD = DateTime(_now.year, _now.month, _now.day);
+    final finSemana = hoyD.add(const Duration(days: 7));
+    double totalSemana = 0;
+    int countSemana = 0;
+    for (final p in _proximosPagos) {
+      final f = DateTime.tryParse((p as Map)['fecha_evento']?.toString() ?? '');
+      if (f != null && !f.isAfter(finSemana)) {
+        totalSemana += _d(p['monto_esperado']);
+        countSemana++;
+      }
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -455,7 +468,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // ── PRÓXIMOS PAGOS ────────────────────────────────────────────────
         if (_proximosPagos.isNotEmpty) ...[
           const SizedBox(height: 20),
-          _SectionLabel('PRÓXIMOS PAGOS', Icons.calendar_today, AppTheme.info),
+          Row(children: [
+            const _SectionLabel('PRÓXIMOS PAGOS', Icons.calendar_today, AppTheme.info),
+            const Spacer(),
+            // C1 — resumen de lo que cae en los próximos 7 días
+            if (countSemana > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('Esta semana · ${Money.fmt(totalSemana)}',
+                    style: const TextStyle(color: AppTheme.warning,
+                        fontSize: 10, fontWeight: FontWeight.w700)),
+              ),
+          ]),
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
@@ -469,6 +497,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final p = e.value as Map<String, dynamic>;
                 final fecha = (p['fecha_evento']?.toString() ?? '').substring(0, 10);
                 final monto = _d(p['monto_esperado']);
+                final f = DateTime.tryParse(p['fecha_evento']?.toString() ?? '');
+                final esSemana = f != null && !f.isAfter(finSemana);
                 return Column(children: [
                   if (i > 0) const Divider(color: AppTheme.border, height: 1),
                   ListTile(
@@ -477,17 +507,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     leading: Container(
                       width: 32, height: 32,
                       decoration: BoxDecoration(
-                          color: AppTheme.info.withValues(alpha: 0.1),
+                          color: (esSemana ? AppTheme.warning : AppTheme.info).withValues(alpha: 0.1),
                           shape: BoxShape.circle),
-                      child: const Icon(Icons.payment, color: AppTheme.info, size: 16),
+                      child: Icon(Icons.payment,
+                          color: esSemana ? AppTheme.warning : AppTheme.info, size: 16),
                     ),
-                    title: Text(p['titulo'] as String? ?? '',
-                        style: const TextStyle(color: AppTheme.textPrimary,
-                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    title: Row(children: [
+                      Flexible(child: Text(p['titulo'] as String? ?? '',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: AppTheme.textPrimary,
+                              fontSize: 13, fontWeight: FontWeight.w600))),
+                      if (esSemana) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppTheme.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text('Esta semana',
+                              style: TextStyle(color: AppTheme.warning,
+                                  fontSize: 9, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ]),
                     subtitle: Text(fecha,
                         style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                     trailing: Text('\$${monto.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.info,
+                        style: TextStyle(color: esSemana ? AppTheme.warning : AppTheme.info,
                             fontWeight: FontWeight.w700, fontSize: 13)),
                   ),
                 ]);

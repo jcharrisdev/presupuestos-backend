@@ -6,18 +6,14 @@
 
 ---
 
-## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
+## 📊 RESUMEN DE ESTADO — actualizado 2026-06-10
 
-**Progreso: 66 ✅ implementadas · 7 ⚠️ parciales · 12 ❌ pendientes** (85 ítems)
+**Progreso: 70 ✅ implementadas · 3 ⚠️ parciales · 12 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (66)
-A1, A2, A3, B2, B3, C2, D2, E1, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q2, R1, R2, T1, T2, U1, U2, U3, U4, V1, V2, G2, W1, W2, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
+### ✅ Implementadas (70)
+A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q2, R1, R2, T1, T2, U1, U2, U3, U4, V1, V2, G2, W1, W2, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
 
-### ⚠️ Parciales (7) — falta una pieza concreta
-- **B1** — toggle pagado existe; falta mini-sheet de pago parcial
-- **C1** — Dashboard mejorado; falta "próximos pagos de la semana"
-- **D3** — long-press editar fijo/variable existe; falta preview de impacto
-- **F2** — EmptyState aplicado solo en Tab Gastos; falta en otras pantallas
+### ⚠️ Parciales (3) — falta una pieza concreta
 - **F3** — `Money.fmt` solo en números héroe; quedan ~250 `toStringAsFixed`
 - **H1** — hint de modo express añadido; falta opción "Configuración rápida" upfront (toca flujo crítico onboarding)
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
@@ -87,8 +83,8 @@ Después de este gasto: $430 → excede en $130 ⚠
 
 ## CATEGORÍA B — QUINCENAS FUNCIONALES
 
-### ⚠️ B1. El toggle pagado/no pagado es binario — no soporta pagos parciales
-**Estado:** PARCIAL — El toggle existe en Tab Gastos (commit `988058f`): tap en gasto fijo crea/elimina `registros_gasto`. Pero sigue siendo binario (monto completo o nada). El mini-sheet para pagos parciales NO está implementado.
+### ✅ B1. El toggle pagado/no pagado es binario — no soporta pagos parciales
+**Estado:** IMPLEMENTADO — El tap en un compromiso fijo ya no crea un registro instantáneo: abre un mini-sheet (`_abrirPagoFijo`) con resumen Planeado/Pagado/Falta, campo "¿Cuánto pagaste?" (default = lo que falta, botón "Pagar todo"), selector de fecha (default hoy) y lista de pagos ya registrados con opción de eliminar. Soporta varios pagos parciales (ej. Q1 + Q2). El `_PlanTile` ahora muestra tres estados: completo (✓ verde), parcial (ⓘ ámbar con "Pagado $X de $Y · falta $Z") o pendiente. Solo aplica a gastos fijos; las deudas siguen con su AbonoDeudaSheet (evita duplicar, ver G1). El Tab Quincenas (B3) sigue con toggle binario.
 
 **Problema:** Un gasto fijo de $200/mes aparece como una línea con toggle. El usuario puede marcarlo como "pagado" (crea un registro de $200) o no. No puede decir "pagué $100 esta quincena, falta $100". No hay concepto de pago parcial.
 
@@ -124,8 +120,8 @@ Esto permite pagar en partes. El indicador del gasto muestra "Pagado $100 de $20
 
 ## CATEGORÍA C — DASHBOARD Y PRIMERA PANTALLA
 
-### ⚠️ C1. El Dashboard no responde "¿por qué no me alcanza?"
-**Estado:** PARCIAL — Paquetes 3 y 6 (commits `3f8973a`, `fc812fc`): se agregaron banner de compromisos pendientes, sobres del mes (horizontal scroll con barra semafórica por categoría), y tarjeta de gastos hormiga. Faltan: próximos pagos de la semana y disponible quincenal.
+### ✅ C1. El Dashboard no responde "¿por qué no me alcanza?"
+**Estado:** IMPLEMENTADO — Paquetes 3, 6 y Lote 9. Ya tenía: banner de compromisos pendientes, sobres del mes (scroll horizontal con barra semafórica), gastos hormiga y disponible quincenal (`_QuincenalCard`, C2). Lote 9 añade el resto de C1: la sección PRÓXIMOS PAGOS ahora resalta **los de la semana** (próximos 7 días) — chip "Esta semana · B/. X" en el header y, por ítem, badge "Esta semana" + color ámbar cuando cae dentro de 7 días.
 
 **Problema:** La pantalla de Dashboard muestra: ingreso estimado, total gastado, remanente, y una barra de progreso global. No dice DÓNDE se está yendo el dinero ni qué categorías están en riesgo.
 
@@ -181,8 +177,8 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ---
 
-### ⚠️ D3. Editar un gasto fijo del perfil y editar un registro son dos flujos completamente separados con UX diferente
-**Estado:** PARCIAL — Paquetes 2 y 5 (commits `91be835`, `7d56121`): long-press en Tab Gastos permite editar/eliminar gastos fijos (`user_gastos_fijos`) y presupuesto variable base (`gastos_variables_base`) directamente sin ir al Perfil. Falta: preview de impacto en disponible antes de guardar.
+### ✅ D3. Editar un gasto fijo del perfil y editar un registro son dos flujos completamente separados con UX diferente
+**Estado:** IMPLEMENTADO — Paquetes 2 y 5 (commits `91be835`, `7d56121`) dieron edición directa de fijos y presupuesto variable base desde el Tab Gastos sin ir al Perfil. Lote 9 cierra D3: al editar una línea de presupuesto variable base (`_LineaVariableRow`), mientras se escribe el nuevo monto se muestra el mismo preview de impacto que N2 para fijos: "Nuevo disponible: $X · antes $Y" con color/ícono de tendencia (rojo si queda negativo). El disponible se pasa desde `remanente_estimado` del mes.
 
 **Problema:** Si el usuario quiere cambiar el monto de su presupuesto de gasolina, va a Perfil Financiero. Si quiere editar un registro real, va al Tab Gastos. Son pantallas distintas con formularios distintos. No hay conexión visible entre "lo que planeé" y "lo que pagué".
 
@@ -246,8 +242,8 @@ Todo lo demás va al Tab Análisis donde tiene sentido.
 
 ---
 
-### ⚠️ F2. Los estados vacíos no guían al usuario
-**Estado:** PARCIAL — Tab Gastos ahora usa el widget reutilizable EmptyState (ícono + título + subtítulo + botón "Registrar primer gasto" que abre el sheet). El widget EmptyState ya existe en lib/widgets/empty_state.dart para replicar en otras pantallas con estados vacíos pendientes.
+### ✅ F2. Los estados vacíos no guían al usuario
+**Estado:** IMPLEMENTADO — El widget reutilizable `EmptyState` (ícono + título + subtítulo + botón de acción) cubre ahora las pantallas principales con estado vacío: Tab Gastos ("Registrar primer gasto"), Eventos ("Crear evento"), Deudas ("Registrar deuda") y Gustitos (ya tenía su propio CTA). Cada uno abre directo el sheet de creación. Pantallas secundarias adoptarán el widget compartido a medida que se toquen.
 **Problema:** Si el usuario no tiene registros, gastos fijos, o datos, muchas pantallas simplemente muestran vacío o un spinner infinito. No hay instrucciones de "qué hacer ahora".
 
 **Impacto:** Media para usuarios nuevos.
@@ -1031,4 +1027,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-10 — Lote 8: +Z3 (editar gasto compartido: lápiz + modal en modo edición; PATCH ya existía). Antes — Lote 7: +B2 (quincena respeta dia_pago/dia_pago_2 con badge ½ mes; no afecta el disponible), U4 (subtítulos de rol Dashboard=hoy / Estado=plan). Diferidos: S1 (ledger ingresos), X1/U7 (transversales), U5/Z3, J2/J3, W5. Antes — Lote 6: +X2 (validación de email en split), E1 (historial de pagos por gasto fijo — endpoint + grid 12 meses), L2 (presupuesto de gustitos — columna user_settings + barra de progreso). Diferidos: B2 (cálculo quincenal sensible), S1 (Ventas), X1/U7 (transversales/arquitectura). Antes — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-10 — Lote 9 (cerrar parciales de UI, todo frontend): +B1 (mini-sheet de pago parcial para fijos: ¿cuánto pagaste? + fecha + pagos múltiples; tile con estado completo/parcial/pendiente), +C1 (Dashboard resalta pagos de la semana / próximos 7 días con badge "Esta semana"), +D3 (preview de impacto al editar presupuesto variable base, patrón N2), +F2 (EmptyState con acción en Eventos y Deudas, además de Gastos/Gustitos). Diferidos: F3 (migración Money.fmt), H1/Q1 (tocan onboarding/ingreso crítico), G1/U6 y features grandes. Antes — Lote 8: +Z3 (editar gasto compartido: lápiz + modal en modo edición; PATCH ya existía). Antes — Lote 7: +B2 (quincena respeta dia_pago/dia_pago_2 con badge ½ mes; no afecta el disponible), U4 (subtítulos de rol Dashboard=hoy / Estado=plan). Diferidos: S1 (ledger ingresos), X1/U7 (transversales), U5/Z3, J2/J3, W5. Antes — Lote 6: +X2 (validación de email en split), E1 (historial de pagos por gasto fijo — endpoint + grid 12 meses), L2 (presupuesto de gustitos — columna user_settings + barra de progreso). Diferidos: B2 (cálculo quincenal sensible), S1 (Ventas), X1/U7 (transversales/arquitectura). Antes — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

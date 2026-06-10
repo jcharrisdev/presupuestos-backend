@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/deudas_service.dart';
 import '../widgets/ayuda_sheet.dart';
+import '../widgets/empty_state.dart';
 import 'crear_deuda_sheet.dart';
 import 'abono_deuda_sheet.dart';
 import 'historial_abonos_sheet.dart';
@@ -255,6 +256,16 @@ class _DeudasScreenState extends State<DeudasScreen>
                     _plan = null;
                   });
                 }),
+            onCrear: () => CrearDeudaSheet.show(context,
+                firebaseUid: widget.firebaseUid,
+                onCreada: () {
+                  _cargar();
+                  setState(() {
+                    _proyeccion = null;
+                    _simulador = null;
+                    _plan = null;
+                  });
+                }),
           ),
           _TabEstrategias(
             proyeccion: _proyeccion,
@@ -301,6 +312,7 @@ class _TabSituacion extends StatelessWidget {
   final Future<void> Function(int, String) onArchivar;
   final void Function(Map<String, dynamic>) onAbono;
   final void Function(Map<String, dynamic>) onEditar;
+  final VoidCallback onCrear;
 
   const _TabSituacion({
     required this.deudas,
@@ -312,6 +324,7 @@ class _TabSituacion extends StatelessWidget {
     required this.onArchivar,
     required this.onAbono,
     required this.onEditar,
+    required this.onCrear,
   });
 
   double _d(dynamic v) {
@@ -326,21 +339,18 @@ class _TabSituacion extends StatelessWidget {
       return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
     }
     if (deudas.isEmpty) {
-      return ListView(children: [
-        const SizedBox(height: 80),
-        Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.credit_card_off_outlined,
-                size: 56, color: AppTheme.textMuted.withOpacity(0.4)),
-            const SizedBox(height: 16),
-            const Text('Sin deudas registradas',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 16)),
-            const SizedBox(height: 8),
-            const Text('Toca el botón + para registrar una deuda',
-                style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-          ]),
-        ),
-      ]);
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 90, horizontal: 24),
+        children: [
+          EmptyState(
+            icon: Icons.credit_card_off_outlined,
+            title: 'Sin deudas registradas',
+            subtitle: 'Lleva el control de tarjetas, préstamos y letras.',
+            actionLabel: 'Registrar deuda',
+            onAction: onCrear,
+          ),
+        ],
+      );
     }
     return RefreshIndicator(
       color: AppTheme.primary,
