@@ -631,6 +631,16 @@ class _TabGastosState extends State<_TabGastos> {
               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 8),
           ListTile(
+            leading: const Icon(Icons.history, color: AppTheme.info),
+            title: const Text('Ver historial de pagos', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: const Text('Qué meses lo has pagado este año',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            onTap: () {
+              Navigator.pop(context);
+              _mostrarHistorialFijo(context, g['id'] as int);
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
             title: const Text('Editar gasto fijo', style: TextStyle(color: AppTheme.textPrimary)),
             subtitle: const Text('Cambia nombre o monto para todos los meses',
@@ -758,6 +768,96 @@ class _TabGastosState extends State<_TabGastos> {
       ),
     );
   }
+
+  // E1 — historial de pagos del gasto fijo (qué meses se pagó este año)
+  void _mostrarHistorialFijo(BuildContext context, int fijoId) {
+    const labels = ['', 'Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: FutureBuilder(
+          future: ApiClient.get(
+              '/user/gastos-fijos/$fijoId/historial?firebase_uid=${widget.uid}&anio=${widget.anio}'),
+          builder: (ctx, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const SizedBox(height: 180,
+                  child: Center(child: CircularProgressIndicator(color: AppTheme.primary)));
+            }
+            if (!snap.hasData || snap.data!.statusCode != 200) {
+              return const SizedBox(height: 120,
+                  child: Center(child: Text('No se pudo cargar el historial',
+                      style: TextStyle(color: AppTheme.textSecondary))));
+            }
+            final data = jsonDecode(snap.data!.body) as Map<String, dynamic>;
+            final meses = (data['meses'] as List).cast<Map<String, dynamic>>();
+            final presup = (double.tryParse(data['presupuestado'].toString()) ?? 0);
+            final promedio = (double.tryParse(data['promedio_pagado'].toString()) ?? 0);
+            final mesesPagados = (data['meses_pagados'] as int? ?? 0);
+            return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 14),
+              Text(data['nombre']?.toString() ?? 'Gasto fijo',
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text('Presupuestado: ${Money.fmt(presup)}/mes · ${widget.anio}',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              const SizedBox(height: 16),
+              // Grid de 12 meses
+              Wrap(spacing: 8, runSpacing: 8, children: meses.map((m) {
+                final mes = m['mes'] as int;
+                final pagado = m['pagado'] as bool? ?? false;
+                final futuro = m['futuro'] as bool? ?? false;
+                final color = pagado ? AppTheme.success : futuro ? AppTheme.textMuted : AppTheme.danger;
+                return Container(
+                  width: 64, height: 48,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: futuro ? 0.05 : 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: color.withValues(alpha: futuro ? 0.2 : 0.4)),
+                  ),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Text(labels[mes], style: TextStyle(
+                        color: futuro ? AppTheme.textMuted : color, fontSize: 11, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Icon(pagado ? Icons.check_circle : futuro ? Icons.remove : Icons.cancel,
+                        color: color, size: 13),
+                  ]),
+                );
+              }).toList()),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: _HistKpi('Pagado este año', '$mesesPagados ${mesesPagados == 1 ? 'mes' : 'meses'}', AppTheme.success)),
+                Expanded(child: _HistKpi('Promedio pagado', Money.fmt(promedio), AppTheme.textPrimary)),
+              ]),
+              if (promedio > 0 && presup > 0 && (promedio - presup).abs() > 0.5) ...[
+                const SizedBox(height: 10),
+                Text(
+                  promedio > presup
+                      ? 'Pagas en promedio ${Money.fmt(promedio - presup)} más que lo presupuestado.'
+                      : 'Pagas en promedio ${Money.fmt(presup - promedio)} menos que lo presupuestado.',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3),
+                ),
+              ],
+            ]);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _HistKpi(String label, String value, Color color) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w800)),
+      Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+    ],
+  );
 
   Future<void> _mostrarOpcionesVariable(BuildContext context, String categoria) async {
     // Cargar líneas de presupuesto variable para esta categoría

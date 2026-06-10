@@ -86,6 +86,15 @@ class SplitSectionState extends State<SplitSection> {
     return (100 - usado).clamp(0, 100);
   }
 
+  // X2 — validación de formato de email
+  static final _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  bool _emailValido(String e) => _emailRe.hasMatch(e.trim());
+
+  /// True si hay algún correo escrito con formato inválido (para que el caller
+  /// pueda bloquear el envío si quiere).
+  bool get hayEmailInvalido =>
+      participantes.any((p) => p.email.text.trim().isNotEmpty && !_emailValido(p.email.text));
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -201,18 +210,20 @@ class SplitSectionState extends State<SplitSection> {
                       labelText: 'Correo',
                       hintText: 'correo@ejemplo.com',
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      suffixIcon: tipo == TipoDivision.partesIguales && _total > 0 && p.email.text.isNotEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Center(
-                                widthFactor: 1,
-                                child: Text(
-                                  '\$${(_total / _n).toStringAsFixed(2)}',
-                                  style: const TextStyle(color: AppTheme.success, fontSize: 11, fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                            )
-                          : null,
+                      // X2 — ícono de validez del email en tiempo real
+                      errorText: (p.email.text.trim().isNotEmpty && !_emailValido(p.email.text))
+                          ? 'Correo inválido' : null,
+                      errorStyle: const TextStyle(fontSize: 10),
+                      helperText: tipo == TipoDivision.partesIguales && _total > 0 && p.email.text.trim().isNotEmpty
+                          ? '\$${(_total / _n).toStringAsFixed(2)} por persona' : null,
+                      helperStyle: const TextStyle(color: AppTheme.success, fontSize: 10),
+                      suffixIcon: p.email.text.trim().isEmpty
+                          ? null
+                          : Icon(
+                              _emailValido(p.email.text) ? Icons.check_circle : Icons.error_outline,
+                              color: _emailValido(p.email.text) ? AppTheme.success : AppTheme.warning,
+                              size: 18,
+                            ),
                     ),
                   ),
                 ),

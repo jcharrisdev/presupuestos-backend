@@ -713,6 +713,8 @@ pool.getConnection(async (err, conn) => {
       updated_at        TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`);
     await db.execute(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS periodo_preferido ENUM('mensual','quincenal') DEFAULT 'mensual'`).catch(()=>{});
+    // L2 — presupuesto mensual de gustitos (0 = sin límite)
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS presupuesto_gustitos DECIMAL(10,2) DEFAULT 0`).catch(()=>{});
     console.log('✅ Migración user_settings OK');
   } catch (e) {
     if (!e.message.includes('already exists')) {
@@ -1267,6 +1269,49 @@ app.get('/user/gastos-fijos', async (req, res) => {
     );
     const total = rows.filter(r => r.activo).reduce((s, r) => s + Number(r.monto_mensual), 0);
     res.json({ gastos: rows, total_mensual: parseFloat(total.toFixed(2)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// E1 — GET /user/gastos-fijos/:id/historial?firebase_uid=&anio=
+// Historial de pagos del compromiso por mes (verde=pagado / gris=no) + promedio.
+app.get('/user/gastos-fijos/:id/historial', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, anio } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const year = parseInt(anio) || new Date().getFullYear();
+  try {
+    const [[fijo]] = await db.execute(
+      `SELECT id, descripcion, monto_mensual FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`,
+      [id, firebase_uid]
+    );
+    if (!fijo) return res.status(404).json({ error: 'Gasto fijo no encontrado' });
+    const [regs] = await db.execute(
+      `SELECT mes, SUM(monto) AS pagado
+       FROM registros_gasto
+       WHERE firebase_uid = ? AND origen_fijo_id = ? AND anio = ?
+       GROUP BY mes`,
+      [firebase_uid, id, year]
+    );
+    const porMes = {};
+    for (const r of regs) porMes[Number(r.mes)] = Number(r.pagado);
+    const now = new Date();
+    const meses = [];
+    let totalPagado = 0, mesesPagados = 0;
+    for (let m = 1; m <= 12; m++) {
+      const pagado = porMes[m] != null;
+      const monto  = porMes[m] || 0;
+      const futuro = year > now.getFullYear() || (year === now.getFullYear() && m > now.getMonth() + 1);
+      if (pagado) { totalPagado += monto; mesesPagados++; }
+      meses.push({ mes: m, pagado, monto: parseFloat(monto.toFixed(2)), futuro });
+    }
+    res.json({
+      nombre: fijo.descripcion,
+      presupuestado: parseFloat(Number(fijo.monto_mensual).toFixed(2)),
+      anio: year,
+      meses_pagados: mesesPagados,
+      promedio_pagado: mesesPagados ? parseFloat((totalPagado / mesesPagados).toFixed(2)) : 0,
+      meses,
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6437,11 +6482,12 @@ app.get('/user/settings', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[row]] = await db.execute(
-      `SELECT modo_negocio, periodo_preferido FROM user_settings WHERE firebase_uid = ?`, [firebase_uid]
+      `SELECT modo_negocio, periodo_preferido, presupuesto_gustitos FROM user_settings WHERE firebase_uid = ?`, [firebase_uid]
     );
     res.json({
-      modo_negocio:      row ? Number(row.modo_negocio) : 0,
-      periodo_preferido: row?.periodo_preferido || 'mensual',
+      modo_negocio:         row ? Number(row.modo_negocio) : 0,
+      periodo_preferido:    row?.periodo_preferido || 'mensual',
+      presupuesto_gustitos: row ? Number(row.presupuesto_gustitos) : 0,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -6450,7 +6496,7 @@ app.get('/user/settings', async (req, res) => {
 
 // PATCH /user/settings — actualizar configuración del usuario
 app.patch('/user/settings', async (req, res) => {
-  const { firebase_uid, modo_negocio, periodo_preferido } = req.body;
+  const { firebase_uid, modo_negocio, periodo_preferido, presupuesto_gustitos } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     // Asegura que existe el registro
@@ -6462,6 +6508,9 @@ app.patch('/user/settings', async (req, res) => {
     if (periodo_preferido)
       await db.execute(`UPDATE user_settings SET periodo_preferido=? WHERE firebase_uid=?`,
         [periodo_preferido, firebase_uid]);
+    if (presupuesto_gustitos !== undefined)
+      await db.execute(`UPDATE user_settings SET presupuesto_gustitos=? WHERE firebase_uid=?`,
+        [parseFloat(Number(presupuesto_gustitos).toFixed(2)) || 0, firebase_uid]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

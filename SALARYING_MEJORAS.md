@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 60 ✅ implementadas · 7 ⚠️ parciales · 18 ❌ pendientes** (85 ítems)
+**Progreso: 63 ✅ implementadas · 7 ⚠️ parciales · 15 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (60)
-A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q2, R1, R2, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, W4, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
+### ✅ Implementadas (63)
+A1, A2, A3, B3, C2, D2, E1, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q2, R1, R2, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, W4, X2, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
 
 ### ⚠️ Parciales (7) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -22,7 +22,7 @@ A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, 
 - **H1** — hint de modo express añadido; falta opción "Configuración rápida" upfront (toca flujo crítico onboarding)
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
 
-### ❌ Pendientes (18) — agrupadas por prioridad
+### ❌ Pendientes (15) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
@@ -33,7 +33,7 @@ A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, 
 - Navegación: **D1** (modo diario), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
 - Onboarding: **W3** (B/. — va con F3), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
-- Otros (sesión backend enfocada): **B2** (división dos días pago — toca cálculo quincenal), **E1** (historial pagos fijo), **L2** (límite gustitos), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split)
+- Otros: **B2** (división dos días pago — `/user/quincena` hoy divide todo /2; falta respetar dia_pago/dia_pago_2 — toca cálculo quincenal sensible), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos — transversal)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -193,7 +193,8 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ## CATEGORÍA E — INFORMACIÓN FALTANTE O INCOMPLETA
 
-### E1. No hay historial de pagos por gasto fijo
+### ✅ E1. No hay historial de pagos por gasto fijo
+**Estado:** IMPLEMENTADO — Nuevo endpoint `GET /user/gastos-fijos/:id/historial` (registros con `origen_fijo_id` agrupados por mes). En el menú de opciones del fijo (long-press en Tab Gastos) se añadió "Ver historial de pagos" → sheet con grid de 12 meses (verde=pagado ✓, rojo=no pagado, gris=futuro), meses pagados, promedio pagado y comparación vs presupuestado.
 **Problema:** El usuario paga su renta cada mes. No hay ninguna pantalla que muestre "Renta: pagado en enero, febrero, marzo... fallido en abril". No puede ver el historial de un compromiso específico a lo largo del tiempo.
 
 **Impacto:** Media.
@@ -449,7 +450,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### L2. No hay límite de gustitos ni aviso de exceso
+### ✅ L2. No hay límite de gustitos ni aviso de exceso
+**Estado:** IMPLEMENTADO — Nueva columna `presupuesto_gustitos` en `user_settings` (migración idempotente) + GET/PATCH `/user/settings` extendidos. En la pantalla de Gustitos, el header muestra "B/. X de B/. Y" con barra de progreso semafórica y mensaje ("Te quedan… / Te pasaste…"). Botón para definir/editar el presupuesto mensual (0 = sin límite).
 **Problema:** El usuario puede registrar 20 gustitos en el mes sin ningún aviso. No hay presupuesto de gustitos ni alerta de "ya llevas $150 en compras por gusto este mes".
 
 **Impacto:** Media.
@@ -842,7 +844,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### X2. Los correos en el split de gastos no se validan antes de enviar
+### ✅ X2. Los correos en el split de gastos no se validan antes de enviar
+**Estado:** IMPLEMENTADO — `SplitSection` valida el formato de email en tiempo real: ícono check verde / warning ámbar en el campo + `errorText` "Correo inválido". Expone `hayEmailInvalido`; el sheet de gasto bloquea el envío con snackbar si algún correo tiene formato inválido.
 **Problema:** El campo de correo en `SplitSection` acepta cualquier texto sin verificar que tenga formato de email. El backend puede rechazarlo, pero el error no llega al usuario de forma clara.
 
 **Impacto:** Baja/Media.
@@ -1025,4 +1028,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-09 — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-10 — Lote 6: +X2 (validación de email en split), E1 (historial de pagos por gasto fijo — endpoint + grid 12 meses), L2 (presupuesto de gustitos — columna user_settings + barra de progreso). Diferidos: B2 (cálculo quincenal sensible), S1 (Ventas), X1/U7 (transversales/arquitectura). Antes — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

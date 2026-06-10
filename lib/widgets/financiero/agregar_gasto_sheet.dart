@@ -511,6 +511,13 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         const SnackBar(content: Text('Escribe el nombre de la categoría personalizada')));
       return;
     }
+    // X2 — no enviar split si algún correo tiene formato inválido
+    final splitCheck = _splitKey.currentState;
+    if (splitCheck != null && splitCheck.activo && splitCheck.hayEmailInvalido) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Revisa los correos del split: hay uno con formato inválido')));
+      return;
+    }
     // Capturar referencias que sobreviven al pop del sheet (T2/O3 muestran
     // confirmación y navegan después de cerrar).
     final messenger = ScaffoldMessenger.of(context);
