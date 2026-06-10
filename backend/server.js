@@ -10646,6 +10646,35 @@ app.post('/registros', async (req, res) => {
 
     const esHormiga = (tipo === 'no_presupuestado' && Number(monto) <= 25) ? 1 : 0;
 
+    // G1 — dedupe de pagos de deuda: una deuda tiene UN solo registro por mes.
+    // Evita el duplicado cuando el usuario marca la deuda como pagada en Tab Gastos
+    // Y además registra un abono desde la pantalla de Deudas (ambos escriben un
+    // registros_gasto con origen_deuda_id). Si ya hay uno este mes, se actualiza
+    // en lugar de insertar otro. NO aplica a origen_fijo_id (los fijos permiten
+    // varios pagos parciales por B1). El saldo de la deuda lo lleva /deudas/:id/abono.
+    if (origen_deuda_id) {
+      const [[dupDeuda]] = await db.execute(
+        `SELECT id FROM registros_gasto
+           WHERE firebase_uid = ? AND anio = ? AND mes = ? AND origen_deuda_id = ?
+           LIMIT 1`,
+        [firebase_uid, anio, mes, origen_deuda_id]
+      );
+      if (dupDeuda) {
+        await db.execute(
+          `UPDATE registros_gasto
+             SET nombre = ?, monto = ?, fecha = ?, pagado = ?, categoria = ?
+           WHERE id = ?`,
+          [nombre, monto, fecha, pagado ? 1 : 0, categoria, dupDeuda.id]
+        );
+        await _actualizarTotalesMes(mesRow.id, firebase_uid);
+        const [[merged]] = await db.execute(`SELECT * FROM registros_gasto WHERE id = ?`, [dupDeuda.id]);
+        res.status(201).json(merged);
+        _logInfo('/registros', `Pago de deuda actualizado sin duplicar: "${nombre}" $${Number(monto).toFixed(2)} en ${anio}/${mes}`, firebase_uid);
+        _generarAlertasMes(firebase_uid, Number(anio), Number(mes)).catch(() => {});
+        return;
+      }
+    }
+
     const [r] = await db.execute(
       `INSERT INTO registros_gasto
          (firebase_uid, mes_id, anio, mes, tipo, categoria, subcategoria_id,
