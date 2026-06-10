@@ -8,20 +8,21 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 54 ✅ implementadas · 6 ⚠️ parciales · 25 ❌ pendientes** (85 ítems)
+**Progreso: 58 ✅ implementadas · 7 ⚠️ parciales · 20 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (54)
-A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AD1
+### ✅ Implementadas (58)
+A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, R1, R2, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, W4, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
 
-### ⚠️ Parciales (6) — falta una pieza concreta
+### ⚠️ Parciales (7) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
 - **C1** — Dashboard mejorado; falta "próximos pagos de la semana"
 - **D3** — long-press editar fijo/variable existe; falta preview de impacto
 - **F2** — EmptyState aplicado solo en Tab Gastos; falta en otras pantallas
 - **F3** — `Money.fmt` solo en números héroe; quedan ~250 `toStringAsFixed`
+- **H1** — hint de modo express añadido; falta opción "Configuración rápida" upfront (toca flujo crítico onboarding)
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
 
-### ❌ Pendientes (25) — agrupadas por prioridad
+### ❌ Pendientes (20) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
@@ -31,8 +32,7 @@ A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, 
 - Calendario: **J2** (conectar con Quincenas), **J3** (vincular eventos a gastos fijos) — *requieren backend, sesión enfocada de calendario*
 - Navegación: **D1** (modo diario), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
-- Patrimonio: **R1/R2** (conectar al presupuesto), **AC2** (actualizar valor activos con el tiempo)
-- Onboarding: **H1** (modo express), **Q2** (deducciones con fecha), **W3** (B/.), **W4** (compartido), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
+- Onboarding: **Q2** (deducciones con fecha), **W3** (B/. — va con F3), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
 - Otros: **B2** (división dos días pago), **E1** (historial pagos fijo), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split)
 
 **📦 Features grandes de la visión (aún no empezadas)**
@@ -288,7 +288,8 @@ Todo lo demás va al Tab Análisis donde tiene sentido.
 
 ## CATEGORÍA H — ONBOARDING Y PRIMERA EXPERIENCIA
 
-### H1. Onboarding no tiene modo express para usuarios simples
+### ⚠️ H1. Onboarding no tiene modo express para usuarios simples
+**Estado:** PARCIAL — En el paso de gastos se añadió un hint que comunica el camino express: "Con tu ingreso y gastos fijos ya tienes lo básico. Lo siguiente (deudas y presupuesto variable) es opcional: puedes saltarlo y completarlo después." Los pasos deudas/variables ya tenían botón "Saltar por ahora". FALTA: una opción explícita upfront tipo "Configuración rápida (5 min)" que reordene/colapse el PageView — diferido por riesgo (toca el flujo crítico de onboarding).
 **Problema:** El flujo de 5 pasos obliga a todos los usuarios a pasar por deudas, metas, y variables base, aunque muchos solo tengan un ingreso y gastos básicos. Para alguien que cobra $800 quincenal y paga renta + comida, el proceso se siente excesivo.
 
 **Impacto:** Alta. El usuario abandona antes de llegar al estado financiero.
@@ -617,7 +618,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ## CATEGORÍA R — PATRIMONIO
 
-### R1. El módulo de Patrimonio está desconectado del presupuesto
+### ✅ R1. El módulo de Patrimonio está desconectado del presupuesto
+**Estado:** IMPLEMENTADO — Nota contextual bajo el card de patrimonio neto: "Tu patrimonio es lo que tienes acumulado. Tu presupuesto mensual controla lo que entra y sale cada mes. Son dos vistas del mismo dinero." Diferencia stock vs flujo.
 **Problema:** El patrimonio neto no tiene relación visible con el disponible mensual. Un usuario puede tener patrimonio positivo y disponible negativo sin que la app explique la diferencia entre tener dinero (patrimonio/stock) y flujo de dinero (presupuesto/flujo).
 
 **Impacto:** Media. Genera confusión conceptual.
@@ -626,7 +628,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ---
 
-### R2. Agregar un activo no explica para qué sirve registrarlo
+### ✅ R2. Agregar un activo no explica para qué sirve registrarlo
+**Estado:** IMPLEMENTADO — Bajo el título del formulario de activo: "Registrar tus activos te ayuda a ver tu salud financiera completa. No afecta tu presupuesto mensual."
 **Problema:** El formulario de "nuevo activo" pide nombre, valor y tipo. El usuario no sabe si esto afecta su presupuesto, sus impuestos, o si es solo informativo. Sin contexto, el módulo queda sin uso.
 
 **Impacto:** Media.
@@ -807,7 +810,8 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### W4. La pregunta sobre gastos compartidos en el onboarding rompe el flujo
+### ✅ W4. La pregunta sobre gastos compartidos en el onboarding rompe el flujo
+**Estado:** IMPLEMENTADO — Mensaje cambiado a "Registra tu parte personal aquí (celular, seguro, tu mitad de la renta, etc.). Después, en el menú, puedes coordinar los gastos compartidos…" — no interrumpe el flujo ni refiere a un menú que el usuario aún no conoce.
 **Problema:** En el paso 2, si el usuario indica que sus gastos son compartidos, la app le dice "Usa Presupuesto Compartido en el menú principal" — pero el usuario está en el onboarding y no conoce el menú. El flujo queda interrumpido sin instrucción de qué hacer.
 
 **Impacto:** Media.
@@ -992,7 +996,8 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-### AC2. Los activos no tienen mecanismo para actualizar su valor con el tiempo
+### ✅ AC2. Los activos no tienen mecanismo para actualizar su valor con el tiempo
+**Estado:** IMPLEMENTADO — `_ActivoTile` calcula los meses desde `updated_at` (la columna ya existía con ON UPDATE CURRENT_TIMESTAMP). Si tiene ≥6 meses, muestra borde amarillo + "Valor de hace N meses · ¿Actualizar?" tappable que abre el formulario de edición. Sin cambios de backend.
 **Problema:** El usuario registra su carro con valor $12,000. Un año después sigue en $12,000 aunque valga $9,000. No hay recordatorio ni forma fácil de actualizar el valor de los activos. El patrimonio neto queda sobrevaluado indefinidamente.
 
 **Impacto:** Media.
@@ -1018,4 +1023,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-09 — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-09 — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

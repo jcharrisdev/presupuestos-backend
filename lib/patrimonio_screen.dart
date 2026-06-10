@@ -81,6 +81,24 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
                     ]),
                   ]),
                 ),
+                const SizedBox(height: 12),
+                // R1 — diferenciar patrimonio (stock) de presupuesto (flujo)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.info.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                    Icon(Icons.lightbulb_outline, color: AppTheme.info, size: 16),
+                    SizedBox(width: 10),
+                    Expanded(child: Text(
+                      'Tu patrimonio es lo que tienes acumulado. Tu presupuesto mensual controla lo que entra y sale cada mes. Son dos vistas del mismo dinero.',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.35),
+                    )),
+                  ]),
+                ),
                 const SizedBox(height: 20),
 
                 // Activos
@@ -184,17 +202,29 @@ class _ActivoTile extends StatelessWidget {
     'otro': Icons.category_outlined,
   };
 
+  // AC2 — meses desde la última actualización del valor
+  int? _mesesDesdeActualizacion() {
+    final raw = activo['updated_at'] ?? activo['created_at'];
+    if (raw == null) return null;
+    final d = DateTime.tryParse(raw.toString());
+    if (d == null) return null;
+    final now = DateTime.now();
+    return (now.difference(d).inDays / 30).floor();
+  }
+
   @override
   Widget build(BuildContext context) {
     final valor = double.tryParse(activo['valor'].toString()) ?? 0;
     final icon  = _tipoIcon[activo['tipo'] as String? ?? 'otro'] ?? Icons.category_outlined;
+    final meses = _mesesDesdeActualizacion();
+    final desactualizado = meses != null && meses >= 6;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: desactualizado ? AppTheme.warning.withValues(alpha: 0.5) : AppTheme.border),
       ),
       child: Row(children: [
         Icon(icon, color: AppTheme.success, size: 20),
@@ -202,6 +232,19 @@ class _ActivoTile extends StatelessWidget {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(activo['nombre'] as String, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
           Text(activo['tipo'] as String? ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          if (desactualizado)
+            GestureDetector(
+              onTap: onEdit,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Row(children: [
+                  const Icon(Icons.update, color: AppTheme.warning, size: 12),
+                  const SizedBox(width: 4),
+                  Text('Valor de hace $meses meses · ¿Actualizar?',
+                      style: const TextStyle(color: AppTheme.warning, fontSize: 11, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
         ])),
         Text('\$${valor.toStringAsFixed(2)}',
             style: const TextStyle(color: AppTheme.success, fontSize: 14, fontWeight: FontWeight.w700)),
@@ -325,6 +368,12 @@ class _ActivoFormState extends State<_ActivoForm> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.existing != null ? 'Editar activo' : 'Nuevo activo',
               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          // R2 — explicar para qué sirve registrar un activo
+          const Text(
+            'Registrar tus activos te ayuda a ver tu salud financiera completa. No afecta tu presupuesto mensual.',
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.35),
+          ),
           const SizedBox(height: 16),
           TextField(controller: _nombreCtrl,
               style: const TextStyle(color: AppTheme.textPrimary),

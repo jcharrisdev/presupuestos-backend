@@ -861,9 +861,9 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
               Icon(Icons.info_outline, color: AppTheme.info, size: 16),
               SizedBox(width: 8),
               Expanded(child: Text(
-                'Para gastos compartidos usa "Presupuesto Compartido" en el menú principal. '
-                'Ahí defines quién paga qué y la app calcula el balance automáticamente.\n'
-                'Si igual tienes gastos personales fijos (celular, seguro, etc.) agrégalos aquí.',
+                'Registra tu parte personal aquí (celular, seguro, tu mitad de la renta, etc.). '
+                'Después, en el menú, puedes coordinar los gastos compartidos: defines quién paga '
+                'qué y la app calcula el balance automáticamente.',
                 style: TextStyle(color: AppTheme.info, fontSize: 12, height: 1.4),
               )),
             ]),
@@ -988,6 +988,17 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
             label: widget.gastosFijos.isEmpty ? 'Saltar por ahora' : 'Continuar',
             onPressed: widget.onContinuar,
           ),
+        // H1 — comunicar que lo que sigue es opcional (configuración rápida)
+        const SizedBox(height: 10),
+        Row(children: const [
+          Icon(Icons.bolt_outlined, color: AppTheme.textMuted, size: 14),
+          SizedBox(width: 6),
+          Expanded(child: Text(
+            'Con tu ingreso y gastos fijos ya tienes lo básico. Lo siguiente (deudas y '
+            'presupuesto variable) es opcional: puedes saltarlo y completarlo después desde tu perfil.',
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.35),
+          )),
+        ]),
       ]),
     );
   }
