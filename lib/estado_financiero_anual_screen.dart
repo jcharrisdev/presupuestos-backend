@@ -138,7 +138,16 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: Text('Estado Financiero $_anio'),
+        // U4 — rol del Estado Financiero: el PLAN (proyección y comparación anual)
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Estado Financiero $_anio'),
+            const Text('Tu plan: proyección del año y comparación mes a mes',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.normal)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline, size: 20),

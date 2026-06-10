@@ -9498,6 +9498,7 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     const totalGasto = totalFijos + totalVar + totalNoPres;
     const [compFijos] = await db.execute(
       `SELECT ugf.id, ugf.descripcion AS nombre, ugf.monto_mensual AS monto, ugf.categoria,
+              ugf.dia_pago, ugf.dia_pago_2,
               rg.id AS registro_id
        FROM user_gastos_fijos ugf
        LEFT JOIN registros_gasto rg
@@ -9520,8 +9521,21 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
          ON rg.origen_deuda_id = d.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
        WHERE d.firebase_uid = ? AND d.activa = 1`,
       [firebase_uid, anio, mes, firebase_uid]);
+    // B2 — monto del fijo en esta quincena según sus días de pago:
+    //   dos días de pago (uno por quincena) → mitad en cada una
+    //   un solo día conocido → completo en su quincena, no aparece en la otra
+    //   sin día definido → fallback 50/50 (no sabemos cuándo)
+    const _montoFijoQuincena = (montoMensual, diaPago, diaPago2) => {
+      const m = Number(montoMensual);
+      if (diaPago != null && diaPago2 != null) return m / 2;
+      if (diaPago != null) return (Number(diaPago) <= 15) === esQ1 ? m : 0;
+      return m / 2;
+    };
     const todosCompromisos = [
-      ...compFijos.map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'fijo', categoria: c.categoria || 'otros', registro_id: c.registro_id || null })),
+      ...compFijos
+        .map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat(_montoFijoQuincena(c.monto, c.dia_pago, c.dia_pago_2).toFixed(2)), tipo: 'fijo', categoria: c.categoria || 'otros', registro_id: c.registro_id || null, medio: (c.dia_pago != null && c.dia_pago_2 != null) }))
+        // Un fijo de un solo día no pertenece a la otra quincena: no lo mostramos ahí.
+        .filter(c => c.monto > 0),
       ...compVariables.map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'variable', categoria: c.categoria || 'otros', registro_id: c.registro_id || null })),
       ...compDeudas.map(d => ({ id: d.id, nombre: d.nombre, monto: parseFloat((Number(d.monto) / 2).toFixed(2)), tipo: 'deuda', categoria: 'deudas', registro_id: d.registro_id || null })),
     ];

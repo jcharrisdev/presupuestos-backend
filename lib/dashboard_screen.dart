@@ -90,7 +90,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        // U4 — rol del Dashboard: el AHORA (hoy, esta quincena, alertas)
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Dashboard'),
+            Text('Tu hoy: estado actual y esta quincena',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.normal)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, size: 20),

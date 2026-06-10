@@ -2562,6 +2562,11 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                     fontSize: 13,
                     decoration: pagado ? TextDecoration.lineThrough : null,
                   )),
+              // B2 — aclarar que es media cuota cuando el fijo se paga 2 veces al mes
+              subtitle: c['medio'] == true
+                  ? const Text('½ de tu cuota · pagas 2 veces al mes',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 10))
+                  : null,
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text('\$${_d(c['monto']).toStringAsFixed(2)}',
                     style: TextStyle(
