@@ -37,6 +37,33 @@ class SharedBudgetService {
     return res.statusCode == 201;
   }
 
+  // Z4 — generar un código de invitación abierto para compartir (anfitrión)
+  static Future<String?> generateInviteCode(
+    int budgetId,
+    String uid, {
+    String rolInvitado = 'participante',
+  }) async {
+    final res = await ApiClient.post('/shared-budgets/$budgetId/invite-code', {
+      'firebase_uid': uid,
+      'rol_invitado': rolInvitado,
+    });
+    if (res.statusCode == 201) return json.decode(res.body)['code'] as String?;
+    return null;
+  }
+
+  // Z4 — unirse a un presupuesto con un código (invitado). Devuelve (ok, mensaje).
+  static Future<(bool, String)> joinByCode(String code, String uid) async {
+    final body = <String, dynamic>{'firebase_uid': uid};
+    final nombre = AuthService.currentUser?.displayName;
+    if (nombre != null && nombre.isNotEmpty) body['display_name'] = nombre;
+    final res = await ApiClient.post(
+        '/shared-budget-invitations/code/${code.trim()}/join', body);
+    if (res.statusCode == 200) return (true, 'Te uniste al presupuesto');
+    String msg = 'No se pudo unir';
+    try { msg = json.decode(res.body)['error'] as String? ?? msg; } catch (_) {}
+    return (false, msg);
+  }
+
   static Future<List<dynamic>> getInvitations(String uid) async {
     final res = await ApiClient.get('/shared-budget-invitations?firebase_uid=$uid');
     if (res.statusCode == 200) return json.decode(res.body) as List;

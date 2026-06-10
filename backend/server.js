@@ -5202,6 +5202,133 @@ app.post('/shared-budget-invitations/:token/reject', async (req, res) => {
   }
 });
 
+// Z4 — POST /shared-budgets/:id/invite-code
+// Genera (o reutiliza) un código de invitación abierto que el creador/admin puede
+// compartir por WhatsApp/SMS. Cualquiera con el código puede unirse sin que el
+// anfitrión conozca su email exacto. Invitación "abierta": email_invitado = '__open__'
+// (nunca coincide con un firebase_uid real, así el accept por email la ignora).
+app.post('/shared-budgets/:id/invite-code', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid, rol_invitado = 'participante' } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const rolesValidos = ['admin', 'participante', 'lectura'];
+  if (!rolesValidos.includes(rol_invitado)) return res.status(400).json({ error: 'rol_invitado inválido' });
+  try {
+    const [[myMember]] = await db.execute(
+      `SELECT rol FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!myMember || !['creador', 'admin'].includes(myMember.rol)) {
+      return res.status(403).json({ error: 'Solo el creador o un admin puede invitar' });
+    }
+    if (myMember.rol === 'admin' && rol_invitado === 'admin') {
+      return res.status(403).json({ error: 'Solo el creador puede asignar rol admin' });
+    }
+    // Reutilizar un código abierto vigente con el mismo rol (evita acumular códigos)
+    const [[existing]] = await db.execute(
+      `SELECT token FROM shared_budget_invitations
+        WHERE shared_budget_id = ? AND email_invitado = '__open__' AND rol_invitado = ?
+          AND estado = 'pending' AND expires_at > NOW()
+        ORDER BY created_at DESC LIMIT 1`,
+      [id, rol_invitado]
+    );
+    let code;
+    if (existing) {
+      code = existing.token;
+    } else {
+      const gen = () => require('crypto').randomBytes(4).toString('hex').toUpperCase(); // 8 chars
+      code = gen();
+      for (let i = 0; i < 5; i++) {
+        const [[clash]] = await db.execute(`SELECT id FROM shared_budget_invitations WHERE token = ?`, [code]);
+        if (!clash) break;
+        code = gen();
+      }
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      await db.execute(
+        `INSERT INTO shared_budget_invitations (shared_budget_id, email_invitado, token, expires_at, rol_invitado)
+         VALUES (?, '__open__', ?, ?, ?)`,
+        [id, code, expiresAt, rol_invitado]
+      );
+    }
+    res.status(201).json({ code, rol_invitado });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Z4 — POST /shared-budget-invitations/code/:code/join
+// Une al usuario actual a un presupuesto usando un código abierto. Aditivo: no
+// toca el accept por email. Reutilizable hasta que expire (varias personas pueden
+// unirse con el mismo código). Guarda contra unirse dos veces.
+app.post('/shared-budget-invitations/code/:code/join', async (req, res) => {
+  const { code } = req.params;
+  const { firebase_uid, ingreso_declarado, display_name } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  const conn = await db.getConnection();
+  await conn.beginTransaction();
+  try {
+    const [[inv]] = await conn.execute(
+      `SELECT * FROM shared_budget_invitations
+        WHERE token = ? AND email_invitado = '__open__' AND estado = 'pending' AND expires_at > NOW()`,
+      [code]
+    );
+    if (!inv) { await conn.rollback(); conn.release(); return res.status(404).json({ error: 'Código no válido o expirado' }); }
+    const [[yaMiembro]] = await conn.execute(
+      `SELECT 1 AS x FROM shared_budget_members WHERE shared_budget_id = ? AND firebase_uid = ?`,
+      [inv.shared_budget_id, firebase_uid]
+    );
+    if (yaMiembro) { await conn.rollback(); conn.release(); return res.status(409).json({ error: 'Ya eres miembro de este presupuesto' }); }
+
+    const [[budget]] = await conn.execute(`SELECT regla_reparto FROM shared_budgets WHERE id = ?`, [inv.shared_budget_id]);
+    const rolNuevo = inv.rol_invitado || 'participante';
+    const contribucionNuevo = budget.regla_reparto === 'pool_contribucion' ? (ingreso_declarado || null) : null;
+    await conn.execute(
+      `INSERT IGNORE INTO shared_budget_members (shared_budget_id, firebase_uid, display_name, rol, porcentaje, ingreso_declarado, contribucion_mensual)
+       VALUES (?, ?, ?, ?, 0, ?, ?)`,
+      [inv.shared_budget_id, firebase_uid, display_name || null, rolNuevo, ingreso_declarado || null, contribucionNuevo]
+    );
+    await conn.execute(`UPDATE shared_budgets SET estado = 'active' WHERE id = ?`, [inv.shared_budget_id]);
+
+    // Recalcular splits de los gastos pendientes con el nuevo miembro (igual que en accept)
+    try {
+      const [allMembers] = await conn.execute(
+        `SELECT firebase_uid, porcentaje, ingreso_declarado FROM shared_budget_members WHERE shared_budget_id = ?`,
+        [inv.shared_budget_id]
+      );
+      const [gastosPendientes] = await conn.execute(
+        `SELECT DISTINCT se.id, se.monto, se.regla_override
+         FROM shared_expenses se
+         WHERE se.shared_budget_id = ? AND se.es_personal = 0
+           AND NOT EXISTS (SELECT 1 FROM shared_expense_splits s2 WHERE s2.expense_id = se.id AND s2.pagado = 1)`,
+        [inv.shared_budget_id]
+      );
+      for (const gasto of gastosPendientes) {
+        const reglaGasto = gasto.regla_override || budget.regla_reparto;
+        const nuevosSplits = calcularSplits(parseFloat(gasto.monto), reglaGasto, allMembers);
+        await conn.execute(`DELETE FROM shared_expense_splits WHERE expense_id = ?`, [gasto.id]);
+        for (const sp of nuevosSplits) {
+          await conn.execute(
+            `INSERT INTO shared_expense_splits (expense_id, firebase_uid, monto_responsabilidad) VALUES (?, ?, ?)`,
+            [gasto.id, sp.firebase_uid, sp.monto_responsabilidad]
+          );
+        }
+      }
+    } catch (_) { /* fire-and-forget */ }
+
+    await conn.execute(
+      `INSERT INTO shared_budget_activity_logs (shared_budget_id, actor_uid, accion, detalle)
+       VALUES (?, ?, 'unirse_por_codigo', NULL)`,
+      [inv.shared_budget_id, firebase_uid]
+    );
+    await conn.commit();
+    conn.release();
+    res.json({ message: 'Te uniste al presupuesto', shared_budget_id: inv.shared_budget_id });
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /shared-budgets/:id/members/:uid — Editar porcentaje/contribución de un miembro (admin o creador)
 app.patch('/shared-budgets/:id/members/:uid', async (req, res) => {
   const { id, uid } = req.params;

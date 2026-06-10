@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'services/shared_budget_service.dart';
 import 'theme/app_theme.dart';
@@ -1050,11 +1051,96 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                   },
                 ),
               ),
+              // ── Z4 · O comparte un código de invitación ──────────────
+              const SizedBox(height: 18),
+              const Divider(color: AppTheme.border, height: 1),
+              const SizedBox(height: 14),
+              const Text('O comparte un código',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              const Text('Cualquiera con el código se une con el rol elegido arriba. Útil si la persona aún no usa Salarying.',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.3)),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.link, size: 18, color: AppTheme.primary),
+                  label: const Text('Generar código',
+                      style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () async {
+                    final code = await SharedBudgetService.generateInviteCode(
+                        widget.budgetId, widget.firebaseUid, rolInvitado: rolNuevoInvitado);
+                    if (!ctx.mounted) return;
+                    if (code == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('No se pudo generar el código'),
+                          backgroundColor: AppTheme.danger));
+                      return;
+                    }
+                    Navigator.pop(ctx);
+                    if (mounted) _mostrarCodigoDialog(code);
+                  },
+                ),
+              ),
             ]),
           ),
         );
       }),
     ).whenComplete(() => emailCtrl.dispose());
+  }
+
+  // Z4 — muestra el código generado con opción de copiar
+  void _mostrarCodigoDialog(String code) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Código de invitación',
+            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Compártelo por WhatsApp o SMS. Quien lo reciba entra desde Compartido → "Unirme con código".',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4)),
+            ),
+            child: Text(code, textAlign: TextAlign.center,
+                style: const TextStyle(color: AppTheme.primary, fontSize: 24,
+                    fontWeight: FontWeight.bold, letterSpacing: 4)),
+          ),
+          const SizedBox(height: 6),
+          const Text('Válido por 30 días', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar', style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.copy, size: 16, color: Colors.black),
+            label: const Text('Copiar', style: TextStyle(color: Colors.black)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: code));
+              Navigator.pop(context);
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Código copiado')));
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   void _showEliminarDialog() {

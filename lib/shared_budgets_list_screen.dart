@@ -86,6 +86,72 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
     }
   }
 
+  // Z4 — unirse a un presupuesto con un código compartido
+  void _unirmeConCodigoDialog() {
+    final codeCtrl = TextEditingController();
+    bool uniendo = false;
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Unirme con código',
+            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Pega el código que te compartieron para unirte al presupuesto.',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: codeCtrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18,
+                letterSpacing: 3, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              hintText: 'CÓDIGO',
+              hintStyle: const TextStyle(color: AppTheme.textMuted, letterSpacing: 2),
+              filled: true,
+              fillColor: AppTheme.surfaceAlt,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: uniendo ? null : () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+            onPressed: uniendo ? null : () async {
+              final code = codeCtrl.text.trim();
+              if (code.isEmpty) return;
+              setD(() => uniendo = true);
+              final (ok, msg) = await SharedBudgetService.joinByCode(code, widget.firebaseUid);
+              if (!ctx.mounted) return;
+              if (ok) {
+                Navigator.pop(ctx);
+                _cargar(silencioso: true);
+                _checkInvitations();
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(msg), backgroundColor: AppTheme.success));
+              } else {
+                setD(() => uniendo = false);
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(msg), backgroundColor: AppTheme.danger));
+              }
+            },
+            child: uniendo
+                ? const SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : const Text('Unirme', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      )),
+    ).whenComplete(() => codeCtrl.dispose());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -95,6 +161,11 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
         title: const Text('Compartido', style: TextStyle(color: AppTheme.textPrimary)),
         iconTheme: const IconThemeData(color: AppTheme.textPrimary),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.vpn_key_outlined, color: AppTheme.textPrimary),
+            tooltip: 'Unirme con código',
+            onPressed: _unirmeConCodigoDialog,
+          ),
           Stack(
             children: [
               IconButton(
