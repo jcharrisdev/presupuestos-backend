@@ -8,10 +8,10 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-08
 
-**Progreso: 58 ✅ implementadas · 7 ⚠️ parciales · 20 ❌ pendientes** (85 ítems)
+**Progreso: 60 ✅ implementadas · 7 ⚠️ parciales · 18 ❌ pendientes** (85 ítems)
 
-### ✅ Implementadas (58)
-A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, M1, M2, N1, O1, O2, O3, O4, O5, P1, P2, P3, R1, R2, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, W4, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
+### ✅ Implementadas (60)
+A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q2, R1, R2, T1, T2, U1, U2, U3, V1, V2, G2, W1, W2, W4, X3, Y1, Y2, Z1, Z2, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1
 
 ### ⚠️ Parciales (7) — falta una pieza concreta
 - **B1** — toggle pagado existe; falta mini-sheet de pago parcial
@@ -22,7 +22,7 @@ A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, 
 - **H1** — hint de modo express añadido; falta opción "Configuración rápida" upfront (toca flujo crítico onboarding)
 - **Q1** — "¿Cuánto recibes?" + pista quincenal hechos; falta conversión ×2 (ingresar por quincena) — toca ingreso base crítico
 
-### ❌ Pendientes (20) — agrupadas por prioridad
+### ❌ Pendientes (18) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **G1** — abono deuda + marcar pagado puede duplicar registro *(requiere aprobación)*
@@ -32,8 +32,8 @@ A1, A2, A3, B3, C2, D2, E2, E3, F1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, 
 - Calendario: **J2** (conectar con Quincenas), **J3** (vincular eventos a gastos fijos) — *requieren backend, sesión enfocada de calendario*
 - Navegación: **D1** (modo diario), **U4** (Dashboard vs Estado), **U5** (checklist setup), **U7** (flicker refresco/Provider)
 - Compartido: **Z3** (editar gasto), **Z4** (link de invitación)
-- Onboarding: **Q2** (deducciones con fecha), **W3** (B/. — va con F3), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
-- Otros: **B2** (división dos días pago), **E1** (historial pagos fijo), **L2** (límite gustitos), **N2** (preview impacto gasto fijo), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split)
+- Onboarding: **W3** (B/. — va con F3), **W5** (tutorial guiado), **Q1** (conversión ×2 por quincena — requiere reordenar onboarding)
+- Otros (sesión backend enfocada): **B2** (división dos días pago — toca cálculo quincenal), **E1** (historial pagos fijo), **L2** (límite gustitos), **S1** (ingreso puntual en Ventas), **X1** (errores backend silenciosos), **X2** (validar email split)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -495,7 +495,8 @@ Así el flujo feliz (gasto personal) es inmediato.
 
 ---
 
-### N2. El perfil no muestra el impacto de cambiar un gasto fijo
+### ✅ N2. El perfil no muestra el impacto de cambiar un gasto fijo
+**Estado:** IMPLEMENTADO — `EditarGastoFijoSheet` recibe el disponible mensual estimado y, mientras el usuario escribe el nuevo monto, muestra en vivo "Nuevo disponible mensual: $X · antes $Y" con color e ícono de tendencia (rojo si queda negativo). Usa `Money.fmt`.
 **Problema:** El usuario edita su gasto fijo "Renta" de $500 a $600. No hay feedback de "esto cambia tu disponible mensual de $350 a $250". El cambio se guarda silenciosamente y el usuario no conecta la edición con su situación financiera.
 
 **Impacto:** Media.
@@ -607,7 +608,8 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ---
 
-### Q2. La calculadora de deducciones panameñas usa porcentajes hardcodeados sin fecha
+### ✅ Q2. La calculadora de deducciones panameñas usa porcentajes hardcodeados sin fecha
+**Estado:** IMPLEMENTADO — Junto al toggle CSS+Educativo (11%) se muestra la vigencia: "Tasas estimadas 2025 · Verifica con tu empleador" + el camino manual correcto: apagar el toggle e ingresar arriba el neto exacto que le llega a la mano (cuando CSS está apagado, neto = monto ingresado). Trazado el flujo: no se añadió campo huérfano (en salario el neto deriva del campo de arriba, no de un netoCtrl separado). El desglose de deducciones individuales editables queda para cuando se toque el motor de ingreso (junto a Q1).
 **Problema:** El switch "Calcular deducciones (Panamá)" aplica porcentajes fijos que pueden estar desactualizados. No hay fecha de vigencia visible ni advertencia de que son estimados.
 
 **Impacto:** Media. Usuario confía en un cálculo potencialmente incorrecto.
@@ -1023,4 +1025,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-*Última actualización: 2026-06-09 — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-09 — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

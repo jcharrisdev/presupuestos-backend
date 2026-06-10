@@ -643,6 +643,7 @@ class _TabGastosState extends State<_TabGastos> {
                 nombre: g['nombre'] as String,
                 monto: _num(g['monto']),
                 firebaseUid: widget.uid,
+                disponibleActual: _num((widget.data['resumen'] as Map?)?['remanente_estimado']),
                 onGuardado: widget.onChanged,
               );
             },
@@ -1504,6 +1505,7 @@ class EditarGastoFijoSheet {
     required double monto,
     required String firebaseUid,
     required VoidCallback onGuardado,
+    double disponibleActual = 0, // N2 — para previsualizar el impacto
   }) {
     final nombreCtrl = TextEditingController(text: nombre);
     final montoCtrl  = TextEditingController(text: monto.toStringAsFixed(2));
@@ -1539,7 +1541,36 @@ class EditarGastoFijoSheet {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Monto mensual (\$)', prefixText: '\$ '),
+            onChanged: (_) => setS(() {}),
           ),
+          // N2 — preview del impacto en el disponible mensual
+          Builder(builder: (_) {
+            final nm = double.tryParse(montoCtrl.text) ?? monto;
+            final nuevoDisp = disponibleActual + (monto - nm);
+            final cambio = (nm - monto).abs() > 0.001;
+            if (!cambio) return const SizedBox(height: 16);
+            final mejora = nuevoDisp >= disponibleActual;
+            final color = nuevoDisp < 0 ? AppTheme.danger : mejora ? AppTheme.success : AppTheme.warning;
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                ),
+                child: Row(children: [
+                  Icon(mejora ? Icons.trending_up : Icons.trending_down, color: color, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'Nuevo disponible mensual: ${Money.fmt(nuevoDisp)}  ·  antes ${Money.fmt(disponibleActual)}',
+                    style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+                  )),
+                ]),
+              ),
+            );
+          }),
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: guardando ? null : () async {

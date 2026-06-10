@@ -469,6 +469,12 @@ class _Paso1IncomeState extends State<_Paso1Income> {
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                 const Text('Descuentos de nómina obligatorios en Panamá',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                // Q2 — fecha de vigencia + camino manual
+                const SizedBox(height: 4),
+                Text(widget.aplicarCss
+                        ? 'Tasas estimadas 2025 · Verifica con tu empleador. ¿Conoces tu neto exacto? Apaga esto e ingresa arriba el monto que te llega a la mano.'
+                        : 'Estás ingresando tu neto exacto: escribe arriba el monto que te llega a la mano (sin descuentos automáticos).',
+                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, fontStyle: FontStyle.italic, height: 1.3)),
               ])),
               Switch(
                 value: widget.aplicarCss,
