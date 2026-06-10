@@ -43,6 +43,8 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   bool _loadingIA = false;
   String? _frecuenciaCobro;        // K3 — para sugerir Vista Quincenal
   bool _hintQuincenalCerrado = false;
+  bool? _tieneRegistrosMes;        // U5 — ¿ya registró su primer gasto del mes?
+  bool _checklistCerrado = false;  // U5 — checklist de setup descartado (sesión)
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -89,6 +91,13 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           final inc = jsonDecode(r.body) as Map<String, dynamic>;
           setState(() => _frecuenciaCobro = inc['frecuencia_cobro'] as String?);
         }
+      } catch (_) {}
+      // U5 — ¿ya registró su primer gasto del mes actual? (para el checklist de setup)
+      try {
+        final mesActual = DateTime.now().month;
+        final mesData = await EstadoAnualService.getMes(widget.firebaseUid, _anio, mesActual);
+        final regs = (mesData['registros'] as List? ?? []);
+        if (mounted) setState(() => _tieneRegistrosMes = regs.isNotEmpty);
       } catch (_) {}
       _cargarConsejero();
     } catch (e) {
@@ -224,6 +233,67 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     if (v != 'anual') widget.onPeriodoChanged?.call(v);
   }
 
+  // U5 — checklist de primeros pasos: guía al usuario nuevo a registrar su
+  // primer gasto. Perfil y estado ya están hechos (si llegamos aquí), así que
+  // se muestran ✓; el paso pendiente es registrar el primer gasto del mes.
+  // Se descarta con la X (sesión) y desaparece solo al registrar un gasto.
+  Widget _buildSetupChecklist() {
+    final mesActual = DateTime.now().month;
+    Widget paso(IconData icon, String texto, bool hecho, {VoidCallback? onTap}) => InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(children: [
+          Icon(hecho ? Icons.check_circle : icon,
+              color: hecho ? AppTheme.success : AppTheme.primary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(texto,
+              style: TextStyle(
+                color: hecho ? AppTheme.textMuted : AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: hecho ? FontWeight.normal : FontWeight.w600,
+                decoration: hecho ? TextDecoration.lineThrough : null,
+              ))),
+          if (!hecho && onTap != null)
+            const Icon(Icons.chevron_right, color: AppTheme.primary, size: 18),
+        ]),
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.rocket_launch_outlined, color: AppTheme.primary, size: 18),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('Primeros pasos · 2 de 3 listos',
+              style: TextStyle(color: AppTheme.primary, fontSize: 13, fontWeight: FontWeight.w800))),
+          GestureDetector(
+            onTap: () => setState(() => _checklistCerrado = true),
+            child: const Icon(Icons.close, color: AppTheme.textMuted, size: 18),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        paso(Icons.account_circle_outlined, 'Crea tu perfil financiero', true),
+        paso(Icons.bar_chart_rounded, 'Genera tu estado financiero', true),
+        paso(Icons.add_circle_outline, 'Registra tu primer gasto del mes', false,
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => MesDetalleScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _anio, mes: mesActual, label: _mesesLabel[mesActual],
+            ),
+          )).then((_) => _cargar()),
+        ),
+      ]),
+    );
+  }
+
   Widget _buildBody() {
     final ea = _data!['estado_anual'] as Map<String, dynamic>;
     final meses = (_data!['meses'] as List).cast<Map<String, dynamic>>();
@@ -231,6 +301,11 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── U5 · CHECKLIST DE PRIMEROS PASOS ──────────────────────────────
+        if (!_checklistCerrado && _tieneRegistrosMes == false) ...[
+          _buildSetupChecklist(),
+          const SizedBox(height: 16),
+        ],
         // ── Sección Consejero ─────────────────────────────────────────────
         if (_consejero != null && !(_consejero!['sin_perfil'] as bool? ?? false)) ...[
           _buildScoreCard(_consejero!),

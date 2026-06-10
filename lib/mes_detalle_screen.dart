@@ -149,7 +149,13 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: AppTheme.danger)))
+              ? EmptyState(
+                  icon: Icons.cloud_off,
+                  title: 'No pudimos cargar este mes',
+                  subtitle: 'Revisa tu conexión o genera tu estado financiero primero.',
+                  actionLabel: 'Reintentar',
+                  onAction: _cargar,
+                )
               : RefreshIndicator(
                   onRefresh: _cargar,
                   child: TabBarView(
