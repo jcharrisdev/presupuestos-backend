@@ -13,11 +13,11 @@ class VentasLandingScreen extends StatelessWidget {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text(
+        title: Text(
           'Módulo de Ventas',
           style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
         ),
-        content: const Text(
+        content: Text(
           'Este módulo agrupa dos divisiones comerciales independientes:\n\n'
           '1. Venta de productos — gestiona tu catálogo, producción y cobros a clientes por productos.\n\n'
           '2. Ofrecimiento de servicios — crea trabajos o proyectos, registra clientes, asigna colaboradores, '
@@ -51,7 +51,7 @@ class VentasLandingScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '¿Con qué deseas trabajar hoy?',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
@@ -60,7 +60,7 @@ class VentasLandingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Selecciona una de las dos divisiones comerciales.',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
               ),
@@ -141,7 +141,7 @@ class _DivisionCard extends StatelessWidget {
                   children: [
                     Text(
                       titulo,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -150,7 +150,7 @@ class _DivisionCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitulo,
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
                     ),
                   ],
                 ),

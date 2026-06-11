@@ -258,13 +258,13 @@ class _PasoView extends StatelessWidget {
 
         // Título
         Text(paso.titulo,
-            style: const TextStyle(
+            style: TextStyle(
                 color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800, height: 1.2)),
         const SizedBox(height: 12),
 
         // Descripción
         Text(paso.desc,
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.6)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.6)),
 
         // Puntos
         if (paso.puntos.isNotEmpty) ...[
@@ -279,7 +279,7 @@ class _PasoView extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(child: Text(p,
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5))),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5))),
             ]),
           )),
         ],

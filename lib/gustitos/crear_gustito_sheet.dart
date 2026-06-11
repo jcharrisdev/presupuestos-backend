@@ -59,7 +59,7 @@ class CrearGustitoSheet {
                     child: const Icon(Icons.bolt, color: AppTheme.primary, size: 20),
                   ),
                   const SizedBox(width: 12),
-                  const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('Nuevo Gustito',
                         style: TextStyle(
                             color: AppTheme.textPrimary,
@@ -75,7 +75,7 @@ class CrearGustitoSheet {
                 // Nombre
                 TextField(
                   controller: nameCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: const InputDecoration(hintText: '¿Qué compraste?'),
                 ),
                 const SizedBox(height: 12),
@@ -85,7 +85,7 @@ class CrearGustitoSheet {
                   controller: montoCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration:
                       const InputDecoration(prefixText: 'B/. ', hintText: '0.00'),
                 ),
@@ -94,14 +94,14 @@ class CrearGustitoSheet {
                 // Comercio (opcional)
                 TextField(
                   controller: merchantCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: const InputDecoration(
                       hintText: 'Comercio o lugar (opcional)'),
                 ),
                 const SizedBox(height: 20),
 
                 // Fecha
-                const Text('¿Cuándo?',
+                Text('¿Cuándo?',
                     style: TextStyle(
                         color: AppTheme.textSecondary, fontSize: 12)),
                 const SizedBox(height: 8),
@@ -115,7 +115,7 @@ class CrearGustitoSheet {
                       lastDate: DateTime.now(),
                       builder: (ctx, child) => Theme(
                         data: Theme.of(ctx).copyWith(
-                          colorScheme: const ColorScheme.dark(
+                          colorScheme: ColorScheme.dark(
                               primary: AppTheme.primary,
                               surface: AppTheme.surfaceAlt),
                         ),
@@ -133,12 +133,12 @@ class CrearGustitoSheet {
                       border: Border.all(color: AppTheme.border),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.calendar_today_outlined,
+                      Icon(Icons.calendar_today_outlined,
                           color: AppTheme.textSecondary, size: 16),
                       const SizedBox(width: 10),
                       Text(
                         '${spentAt.year}-${spentAt.month.toString().padLeft(2, "0")}-${spentAt.day.toString().padLeft(2, "0")}',
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: AppTheme.textPrimary),
                       ),
                     ]),
                   ),
@@ -147,7 +147,7 @@ class CrearGustitoSheet {
                 const SizedBox(height: 20),
 
                 // Categoría
-                const Text('Categoría',
+                Text('Categoría',
                     style: TextStyle(
                         color: AppTheme.textSecondary, fontSize: 12)),
                 const SizedBox(height: 8),
@@ -162,7 +162,7 @@ class CrearGustitoSheet {
                 const SizedBox(height: 20),
 
                 // Emoción
-                const Text('¿Cómo te sentiste? (opcional)',
+                Text('¿Cómo te sentiste? (opcional)',
                     style: TextStyle(
                         color: AppTheme.textSecondary, fontSize: 12)),
                 const SizedBox(height: 8),

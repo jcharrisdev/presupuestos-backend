@@ -31,9 +31,9 @@ class _RegistroPagoClienteScreenState extends State<RegistroPagoClienteScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Registrar pago del cliente',
+        title: Text('Registrar pago del cliente',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text(
+        content: Text(
           'Registra un pago recibido del cliente:\n\n'
           '• Anticipo — pago inicial antes de iniciar el trabajo.\n'
           '• Pago parcial — abono durante el desarrollo del trabajo.\n'
@@ -91,7 +91,7 @@ class _RegistroPagoClienteScreenState extends State<RegistroPagoClienteScreen> {
               DropdownButtonFormField<String>(
                 value: _tipo,
                 dropdownColor: AppTheme.surface,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                 decoration: _deco(''),
                 items: const [
                   DropdownMenuItem(value: 'anticipo', child: Text('Anticipo')),
@@ -105,7 +105,7 @@ class _RegistroPagoClienteScreenState extends State<RegistroPagoClienteScreen> {
               TextFormField(
                 controller: _montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                 decoration: _deco('Ej. 1500.00'),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Campo requerido';
@@ -117,7 +117,7 @@ class _RegistroPagoClienteScreenState extends State<RegistroPagoClienteScreen> {
               _label('Nota (opcional)'),
               TextFormField(
                 controller: _notaCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                 decoration: _deco('Ej. Anticipo vía transferencia'),
                 maxLines: 2,
               ),
@@ -141,12 +141,12 @@ class _RegistroPagoClienteScreenState extends State<RegistroPagoClienteScreen> {
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+        child: Text(text, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
       );
 
   InputDecoration _deco(String hint) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
         filled: true,
         fillColor: AppTheme.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

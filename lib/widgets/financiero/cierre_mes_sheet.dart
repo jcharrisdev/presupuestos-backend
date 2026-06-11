@@ -78,7 +78,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -99,19 +99,19 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                 const Icon(Icons.insights_outlined, color: AppTheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text('Cómo te fue en ${widget.labelMes}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 // Indicador de paso
                 if (_paso < 3)
                   Text('${_paso + 1}/3',
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               ],
             ),
           ),
           const SizedBox(height: 4),
           // Línea separadora
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           // Contenido por paso
           Flexible(
             child: SingleChildScrollView(
@@ -176,16 +176,16 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Remanente estimado',
+                  Text('Remanente estimado',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                   Text('${Money.fmt(remEst)}',
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text('Remanente real',
+                  Text('Remanente real',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                   Text('${Money.fmt(remReal)}',
                       style: TextStyle(
@@ -242,7 +242,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
           ]),
           const SizedBox(height: 4),
           Text('Fue principalmente en: $top. El próximo mes podrías ajustar esas categorías.',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
         ]),
       ),
     ];
@@ -256,7 +256,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
       children: [
         _seccion('Gastos por confirmar (${_pendientes.length})'),
         const SizedBox(height: 4),
-        const Text('¿Ya pagaste estos? Confírmalos para que tu resumen sea exacto. Los que no, déjalos así.',
+        Text('¿Ya pagaste estos? Confírmalos para que tu resumen sea exacto. Los que no, déjalos así.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 12),
         if (_pendientes.isEmpty)
@@ -297,14 +297,14 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(r['nombre']?.toString() ?? '',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                 Text(tipo,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
               ],
             ),
           ),
           Text('${Money.fmt(_d(r['monto']))}',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
           GestureDetector(
             onTap: () => _marcarPagado(r),
@@ -332,7 +332,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
       children: [
         _seccion('Alertas del mes (${widget.alertas.length})'),
         const SizedBox(height: 4),
-        const Text('Revisa estas situaciones antes de cerrar el mes.',
+        Text('Revisa estas situaciones antes de cerrar el mes.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 12),
         if (widget.alertas.isEmpty)
@@ -364,7 +364,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(a['mensaje']?.toString() ?? '',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 12)),
           ),
         ],
       ),
@@ -431,7 +431,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
           width: double.infinity,
           child: TextButton(
             onPressed: _cerrando ? null : () => Navigator.pop(context, false),
-            child: const Text('Cancelar',
+            child: Text('Cancelar',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
           ),
         ),
@@ -443,7 +443,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
 
   Widget _seccion(String texto) => Text(
     texto,
-    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+    style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
   );
 
   Widget _botonSiguiente({required String label, required VoidCallback onTap}) => SizedBox(
@@ -491,7 +491,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
-              children: const [
+              children: [
                 Expanded(child: Text('', style: TextStyle(fontSize: 11))),
                 SizedBox(width: 80,
                     child: Text('Estimado', textAlign: TextAlign.right,
@@ -502,7 +502,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
               ],
             ),
           ),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           ...filas.map((f) {
             final est    = f['est'] as double;
             final real   = f['real'] as double;
@@ -524,13 +524,13 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                     children: [
                       Expanded(
                         child: Text(f['label'] as String,
-                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12)),
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 12)),
                       ),
                       SizedBox(
                         width: 80,
                         child: Text(est > 0 ? '${Money.fmt(est)}' : '—',
                             textAlign: TextAlign.right,
-                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                       ),
                       SizedBox(
                         width: 80,
@@ -542,7 +542,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                     ],
                   ),
                 ),
-                const Divider(color: AppTheme.border, height: 1),
+                Divider(color: AppTheme.border, height: 1),
               ],
             );
           }),

@@ -121,10 +121,10 @@ class _DeudasScreenState extends State<DeudasScreen>
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Archivar deuda',
+        title: Text('Archivar deuda',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
         content: Text('¿Marcar "$nombre" como saldada/archivada?',
-            style: const TextStyle(color: AppTheme.textSecondary)),
+            style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -376,7 +376,7 @@ class _TabSituacion extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Deuda total pendiente',
+                  Text('Deuda total pendiente',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   const SizedBox(height: 4),
                   Text('${Money.fmt(totalPendiente)}',
@@ -388,7 +388,7 @@ class _TabSituacion extends StatelessWidget {
               ),
               if (totalPagoMinimo > 0)
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  const Text('Pago mínimo mensual',
+                  Text('Pago mínimo mensual',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   Text('${Money.fmt(totalPagoMinimo)}',
@@ -421,7 +421,7 @@ class _TabSituacion extends StatelessWidget {
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  const Text('Progreso total de tus deudas',
+                  Text('Progreso total de tus deudas',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   Text('${(pct * 100).toStringAsFixed(0)}% pagado',
                       style: const TextStyle(color: AppTheme.success,
@@ -438,7 +438,7 @@ class _TabSituacion extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Text('Original: ${Money.fmt(orig)}',
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                   Text('Pagado: ${Money.fmt(pagado)}',
                       style: const TextStyle(color: AppTheme.success, fontSize: 11)),
                   Text('Falta: ${Money.fmt(totalPendiente)}',
@@ -547,7 +547,7 @@ class _TabEstrategias extends StatelessWidget {
     if (proyeccion == null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Toca para cargar el análisis',
+          Text('Toca para cargar el análisis',
               style: TextStyle(color: AppTheme.textSecondary)),
           const SizedBox(height: 12),
           ElevatedButton(onPressed: onLoad, child: const Text('Cargar')),
@@ -555,7 +555,7 @@ class _TabEstrategias extends StatelessWidget {
       );
     }
     if (proyeccion!['sin_deudas'] == true) {
-      return const Center(
+      return Center(
         child: Text('No tienes deudas activas para analizar',
             style: TextStyle(color: AppTheme.textSecondary)),
       );
@@ -720,7 +720,7 @@ class _TabEstrategias extends StatelessWidget {
         ],
 
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Snowball da más motivación al saldar deudas pequeñas rápido. '
           'Avalanche es matemáticamente más eficiente.',
           style: TextStyle(
@@ -774,7 +774,7 @@ class _EstrategiaCard extends StatelessWidget {
                       fontSize: 14))),
         ]),
         Text(subtitulo,
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         if (recomendado)
           Container(
             margin: const EdgeInsets.only(top: 4),
@@ -789,7 +789,7 @@ class _EstrategiaCard extends StatelessWidget {
                     fontSize: 9,
                     fontWeight: FontWeight.w600)),
           ),
-        const Divider(color: AppTheme.border, height: 16),
+        Divider(color: AppTheme.border, height: 16),
         _MiniRow('Terminas en', fechaFin),
         _MiniRow('Meses', '$meses'),
         _MiniRow('Intereses', '${Money.fmt(intereses)}'),
@@ -801,9 +801,9 @@ class _EstrategiaCard extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 4),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(l,
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
           Text(v,
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 11,
                   fontWeight: FontWeight.w600)),
@@ -875,7 +875,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
           ),
           child: Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Abono extra mensual',
+              Text('Abono extra mensual',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               Text('${Money.fmt0(_local)}/mes',
                   style: const TextStyle(
@@ -900,9 +900,9 @@ class _TabSimuladorState extends State<_TabSimulador> {
               },
             ),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('B/. 0',
+              Text('B/. 0',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-              const Text('B/. 500',
+              Text('B/. 500',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
           ]),
@@ -936,12 +936,12 @@ class _TabSimuladorState extends State<_TabSimulador> {
         if (widget.loading)
           const Center(child: CircularProgressIndicator(color: AppTheme.primary))
         else if (sim == null)
-          const Center(
+          Center(
             child: Text('Ajusta el slider para ver el resultado',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
           )
         else if (sim['sin_deudas'] == true)
-          const Center(
+          Center(
               child: Text('No tienes deudas activas',
                   style: TextStyle(color: AppTheme.textSecondary)))
         else ...[
@@ -964,7 +964,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
                   const SizedBox(width: 8),
                   Expanded(child: Text(
                     '${Money.fmt0(_local)}/mes extra → "${deudaObjetivo['nombre']}"',
-                    style: const TextStyle(color: AppTheme.textPrimary,
+                    style: TextStyle(color: AppTheme.textPrimary,
                         fontSize: 14, fontWeight: FontWeight.w700),
                   )),
                 ]),
@@ -973,7 +973,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
                   _estrategiaLocal == 'avalanche'
                       ? 'Estrategia Avalanche: se ataca primero la deuda con mayor tasa de interés'
                       : 'Estrategia Snowball: se ataca primero la deuda con menor saldo',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
                 ),
               ]),
             ),
@@ -1021,7 +1021,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
                 Expanded(
                   child: Text(
                     'El extra se aplica a: ${deudaObjetivo['nombre']}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.w600),
@@ -1064,10 +1064,10 @@ class _ComparativaFechas extends StatelessWidget {
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Sin abono extra',
+          Text('Sin abono extra',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           Text(fechaSin,
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600)),
@@ -1149,7 +1149,7 @@ class _ResultCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppTheme.textMuted, fontSize: 11)),
         ]),
       );
@@ -1182,7 +1182,7 @@ class _TabPlan extends StatelessWidget {
     if (plan == null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Genera tu plan de ataque',
+          Text('Genera tu plan de ataque',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
           const SizedBox(height: 12),
           ElevatedButton.icon(
@@ -1226,7 +1226,7 @@ class _TabPlan extends StatelessWidget {
           ),
           child: Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Fecha de libertad financiera',
+              Text('Fecha de libertad financiera',
                   style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
               Text(fechaLibertad,
@@ -1237,18 +1237,18 @@ class _TabPlan extends StatelessWidget {
             ]),
             const SizedBox(height: 6),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Meses restantes',
+              Text('Meses restantes',
                   style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
               Text('$meses meses',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w600)),
             ]),
             const SizedBox(height: 6),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Total en intereses',
+              Text('Total en intereses',
                   style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
               Text('${Money.fmt(totalIntereses)}',
@@ -1259,7 +1259,7 @@ class _TabPlan extends StatelessWidget {
             ]),
             const SizedBox(height: 6),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Estrategia',
+              Text('Estrategia',
                   style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
               Text(
@@ -1349,7 +1349,7 @@ class _TabPlan extends StatelessWidget {
                     ]),
                     const SizedBox(height: 4),
                     Text(paso['recomendacion'] as String? ?? '',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppTheme.textMuted,
                             fontSize: 11,
                             height: 1.4)),
@@ -1430,11 +1430,11 @@ class _ProximaAccion extends StatelessWidget {
             'No adquieras deuda nueva mientras esto esté pendiente'),
         if (pagoMin > 0) ...[
           const SizedBox(height: 8),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 8),
           Text(
             'Cada \$1 extra que pagues a "$nombre" reduce drásticamente los intereses totales.',
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.4),
           ),
         ],
       ]),
@@ -1447,7 +1447,7 @@ class _ProximaAccion extends StatelessWidget {
       Icon(icon, color: color, size: 14),
       const SizedBox(width: 8),
       Expanded(child: Text(texto,
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12, height: 1.4))),
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 12, height: 1.4))),
     ],
   );
 }
@@ -1459,7 +1459,7 @@ class _SeccionHeader extends StatelessWidget {
   const _SeccionHeader(this.text);
   @override
   Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
+      style: TextStyle(
           color: AppTheme.textMuted,
           fontSize: 11,
           fontWeight: FontWeight.w700,
@@ -1477,7 +1477,7 @@ class _InfoRow extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
               Text(value,
                   style: TextStyle(
@@ -1601,10 +1601,10 @@ class _DeudaTile extends StatelessWidget {
           const SizedBox(height: 4),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('Pendiente: ${Money.fmt(montoPendiente)}',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             if (pagoMinimo > 0)
               Text('Cuota: ${Money.fmt(pagoMinimo)}/mes',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
             if (fechaPago != null)
               Text('Pago: $fechaPago',
                   style: const TextStyle(color: AppTheme.info, fontSize: 10)),
@@ -1723,7 +1723,7 @@ class _TipoChip extends StatelessWidget {
         border: Border.all(color: AppTheme.border),
       ),
       child: Text(labels[tipo] ?? tipo,
-          style: const TextStyle(
+          style: TextStyle(
               color: AppTheme.textMuted,
               fontSize: 10,
               fontWeight: FontWeight.w500)),

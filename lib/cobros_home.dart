@@ -120,13 +120,13 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
-          const Text('Nuevo presupuesto de producción',
+          Text('Nuevo presupuesto de producción',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
-          TextField(controller: nombreCtrl, style: const TextStyle(color: AppTheme.textPrimary),
+          TextField(controller: nombreCtrl, style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(hintText: 'Ej: Producción mayo - Cheesecakes')),
           const SizedBox(height: 12),
-          TextField(controller: descCtrl, style: const TextStyle(color: AppTheme.textPrimary),
+          TextField(controller: descCtrl, style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(hintText: 'Descripción (opcional)'), maxLines: 2),
           const SizedBox(height: 24),
           SizedBox(width: double.infinity, child: ElevatedButton(
@@ -171,7 +171,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
               children: [
             _handle(),
-            const Text('Nueva venta',
+            Text('Nueva venta',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 17,
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
@@ -179,7 +179,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
             // ── Nombre ──────────────────────────────────────────────────────
             TextField(
               controller: nombreCtrl, autofocus: true,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Nombre de la venta',
                 hintText: 'Ej: Venta mayo semana 1',
@@ -188,19 +188,19 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
             const SizedBox(height: 20),
 
             // ── Presupuesto de producción ───────────────────────────────────
-            const Text('Presupuesto de producción (opcional)',
+            Text('Presupuesto de producción (opcional)',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 12,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            const Text('El sistema calculará la inversión desde los insumos registrados.',
+            Text('El sistema calculará la inversión desde los insumos registrados.',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 8),
             DropdownButtonFormField<int>(
               value: prodId,
               dropdownColor: AppTheme.surfaceAlt,
-              hint: const Text('Sin presupuesto de insumos',
+              hint: Text('Sin presupuesto de insumos',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
               decoration: InputDecoration(
                 filled: true,
                 fillColor: AppTheme.surfaceAlt,
@@ -208,13 +208,13 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppTheme.border)),
+                    borderSide: BorderSide(color: AppTheme.border)),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppTheme.border)),
+                    borderSide: BorderSide(color: AppTheme.border)),
               ),
               items: [
-                const DropdownMenuItem<int>(
+                DropdownMenuItem<int>(
                     value: null,
                     child: Text('Sin presupuesto',
                         style: TextStyle(color: AppTheme.textMuted))),
@@ -230,7 +230,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                     child: Text(
                       '${p['nombre']} · ${Money.fmt(costo)}',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppTheme.textPrimary,
+                      style: TextStyle(color: AppTheme.textPrimary,
                           fontSize: 13),
                     ),
                   );
@@ -241,11 +241,11 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
             const SizedBox(height: 20),
 
             // ── Inversión manual ────────────────────────────────────────────
-            const Text('Inversión manual (opcional)',
+            Text('Inversión manual (opcional)',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 12,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            const Text(
+            Text(
                 'Si ingresas un monto aquí, tiene prioridad sobre el presupuesto.',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 8),
@@ -253,7 +253,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
               controller: inversionCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 18),
@@ -321,9 +321,9 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Módulo de Cobros',
+                title: Text('Módulo de Cobros',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Gestiona tu negocio en tres pasos:\n\n'
                   'Pestaña Productos:\n'
                   '  Define tu catálogo: productos y variantes con precio. '
@@ -393,10 +393,10 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
           child: const Icon(Icons.storefront_outlined, color: AppTheme.primary, size: 36),
         ),
         const SizedBox(height: 20),
-        const Text('Catálogo de Productos',
+        Text('Catálogo de Productos',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(horizontal: 40),
           child: Text(
             'Define productos y variantes con precio para usar en los pedidos de tus clientes.',
@@ -486,7 +486,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
       color: AppTheme.background,
       child: Column(children: [
         if (_refreshingVentas)
-          const LinearProgressIndicator(minHeight: 2, color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt),
+          LinearProgressIndicator(minHeight: 2, color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt),
         Expanded(child: RefreshIndicator(
         color: AppTheme.primary, backgroundColor: AppTheme.surface,
         onRefresh: () => _cargarVentas(silencioso: true),
@@ -528,7 +528,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                       child: const Icon(Icons.receipt_long_outlined, color: AppTheme.primary, size: 18)),
                     const SizedBox(width: 12),
                     Expanded(child: Text(nombre,
-                        style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15))),
+                        style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15))),
                     if (pendientes > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -540,14 +540,14 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                   const SizedBox(height: 12),
                   Row(children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Cobrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      Text('Cobrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                       Text('${Money.fmt(cobrado)}',
                           style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.w800, fontSize: 16)),
                     ])),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      const Text('Total esperado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                      Text('Total esperado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                       Text('${Money.fmt(esperado)}',
-                          style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 14)),
+                          style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 14)),
                     ])),
                   ]),
                   if (esperado > 0.0) ...[
@@ -580,14 +580,14 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
             child: Icon(icon, color: color, size: 20)),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+          Text(title, style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
           if (subtitle.isNotEmpty)
-            Text(subtitle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            Text(subtitle, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                 maxLines: 1, overflow: TextOverflow.ellipsis),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(trailing, style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
-          Text(trailingLabel, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+          Text(trailingLabel, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ]),
       ]),
     );
@@ -598,9 +598,9 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
     mainAxisAlignment: MainAxisAlignment.center, children: [
     Icon(icon, size: 56, color: AppTheme.textMuted.withOpacity(0.35)),
     const SizedBox(height: 16),
-    Text(t, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
+    Text(t, style: TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
     const SizedBox(height: 6),
-    Text(s, style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+    Text(s, style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
   ]));
 
   /// Handle decorativo del bottom sheet (barra gris centrada en la parte superior).

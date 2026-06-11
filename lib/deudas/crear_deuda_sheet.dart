@@ -170,10 +170,10 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
           Center(child: Container(width: 36, height: 4,
               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
-          const Text('¿Dónde encuentro mi tasa?',
+          Text('¿Dónde encuentro mi tasa?',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('Busca la "Tasa Efectiva Anual" (TEA). Suele estar en:',
+          Text('Busca la "Tasa Efectiva Anual" (TEA). Suele estar en:',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
           const SizedBox(height: 14),
           _ayudaTasaItem(Icons.receipt_long_outlined, 'Tu estado de cuenta mensual',
@@ -211,9 +211,9 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
       Icon(icon, color: AppTheme.primary, size: 20),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(titulo, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(titulo, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
-        Text(detalle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+        Text(detalle, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
       ])),
     ]),
   );
@@ -239,7 +239,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             const SizedBox(height: 16),
             Text(
               _modoEdicion ? 'Editar deuda' : 'Nueva deuda',
-              style: const TextStyle(color: AppTheme.textPrimary,
+              style: TextStyle(color: AppTheme.textPrimary,
                   fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 20),
@@ -247,14 +247,14 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             // ── Nombre ──────────────────────────────────────────────────────
             TextField(
               controller: _nombreCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                   labelText: 'Nombre (ej: Tarjeta Visa, Préstamo banco)'),
             ),
             const SizedBox(height: 16),
 
             // ── Tipo ────────────────────────────────────────────────────────
-            const Text('TIPO DE DEUDA',
+            Text('TIPO DE DEUDA',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
             const SizedBox(height: 8),
             Wrap(
@@ -297,7 +297,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                     activeColor: AppTheme.primary,
                   ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('Compra a plazo / cuotas fijas',
                           style: TextStyle(color: AppTheme.textPrimary, fontSize: 13,
@@ -314,7 +314,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                       child: TextField(
                         controller: _cuotaFijaCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: AppTheme.textPrimary),
                         decoration: const InputDecoration(
                             labelText: 'Cuota mensual fija (\$)', prefixText: 'B/. '),
                       ),
@@ -325,7 +325,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                         controller: _numCuotasCtrl,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: AppTheme.textPrimary),
                         decoration: const InputDecoration(
                             labelText: 'Número de cuotas'),
                       ),
@@ -334,7 +334,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                   const SizedBox(height: 10),
                   TextField(
                     controller: _acreedorCtrl,
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: AppTheme.textPrimary),
                     decoration: const InputDecoration(
                         labelText: 'Nombre del acreedor (opcional)',
                         hintText: 'Banco, tienda, persona…'),
@@ -348,7 +348,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             TextField(
               controller: _totalCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                   prefixText: 'B/. ', labelText: 'Monto total original'),
             ),
@@ -357,7 +357,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
               controller: _pendienteCtrl,
               onChanged: (_) => setState(() {}),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                   prefixText: 'B/. ', labelText: 'Saldo pendiente actual'),
             ),
@@ -372,13 +372,13 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('TASA DE INTERÉS',
+                Text('TASA DE INTERÉS',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _tasaCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     suffixText: '% anual',
@@ -388,10 +388,10 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                 ),
                 const SizedBox(height: 8),
                 Row(children: [
-                  const Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 13),
+                  Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 13),
                   const SizedBox(width: 6),
                   Expanded(child: Text(_tasaHint(_tipo),
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11))),
                 ]),
                 const SizedBox(height: 6),
                 // X3 — guía de dónde encontrar la tasa real
@@ -417,7 +417,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                     controller: _plazoCtrl,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: AppTheme.textPrimary),
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       suffixText: 'meses',
@@ -431,7 +431,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                   child: TextField(
                     controller: _pagoMinCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: AppTheme.textPrimary),
                     decoration: InputDecoration(
                       prefixText: 'B/. ',
                       labelText: 'Pago mínimo',
@@ -455,7 +455,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                     const Icon(Icons.calculate_outlined, color: AppTheme.primary, size: 16),
                     const SizedBox(width: 8),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Cuota calculada (PMT)',
+                      Text('Cuota calculada (PMT)',
                           style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                       Text('\$ ${_cuotaCalculada.toStringAsFixed(2)}',
                           style: const TextStyle(color: AppTheme.primary,
@@ -463,7 +463,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                     ])),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                       Text('Total: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0)).toStringAsFixed(2)}',
-                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                       Text('Intereses: \$ ${(_cuotaCalculada * (int.tryParse(_plazoCtrl.text) ?? 0) - (double.tryParse(_pendienteCtrl.text.replaceAll(',', '')) ?? 0)).toStringAsFixed(2)}',
                           style: const TextStyle(color: AppTheme.warning, fontSize: 10)),
                     ]),
@@ -482,10 +482,10 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('DÍAS DE PAGO',
+                Text('DÍAS DE PAGO',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
                 const SizedBox(height: 4),
-                const Text('Si pagas por quincena, ingresa ambos días.',
+                Text('Si pagas por quincena, ingresa ambos días.',
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -515,7 +515,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                       style: const TextStyle(color: AppTheme.primary, fontSize: 11,
                           fontWeight: FontWeight.w600))
                 else
-                  const Text('Sin día de pago configurado',
+                  Text('Sin día de pago configurado',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
             ),
@@ -530,14 +530,14 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('DESDE CUÁNDO AFECTA TU PRESUPUESTO',
+                Text('DESDE CUÁNDO AFECTA TU PRESUPUESTO',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
                   value: _mesInicioPago,
                   decoration: const InputDecoration(labelText: 'Mes de inicio'),
                   dropdownColor: AppTheme.surfaceAlt,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                   items: List.generate(12, (i) => DropdownMenuItem(
                     value: i + 1,
                     child: Text(_meses[i]),
@@ -547,7 +547,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                 const SizedBox(height: 4),
                 Text(
                   'Esta deuda aparecerá en tu estado financiero desde ${_meses[_mesInicioPago - 1]}.',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                 ),
               ]),
             ),
@@ -557,7 +557,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
             TextField(
               controller: _notasCtrl,
               maxLines: 2,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                   labelText: 'Notas (opcional)',
                   hintText: 'Ej: tasa especial hasta dic 2025, negociar refinanciamiento…'),
@@ -575,7 +575,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                   border: Border.all(color: AppTheme.border),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.calendar_today_outlined,
+                  Icon(Icons.calendar_today_outlined,
                       color: AppTheme.textSecondary, size: 16),
                   const SizedBox(width: 10),
                   Text(
@@ -599,7 +599,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
               child: ElevatedButton(
                 onPressed: _guardando ? null : _guardar,
                 child: _guardando
-                    ? const SizedBox(height: 18, width: 18,
+                    ? SizedBox(height: 18, width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2,
                             color: AppTheme.background))
                     : Text(_modoEdicion ? 'Guardar cambios' : 'Guardar deuda'),
@@ -619,7 +619,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
                 primary: AppTheme.primary, surface: AppTheme.surfaceAlt)),
         child: child!,
       ),
@@ -738,10 +738,10 @@ class _DiaPagoSelector extends StatelessWidget {
       value: value,
       decoration: InputDecoration(labelText: label),
       dropdownColor: AppTheme.surfaceAlt,
-      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-      hint: const Text('—', style: TextStyle(color: AppTheme.textMuted)),
+      style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+      hint: Text('—', style: TextStyle(color: AppTheme.textMuted)),
       items: [
-        const DropdownMenuItem<int>(value: null, child: Text('—',
+        DropdownMenuItem<int>(value: null, child: Text('—',
             style: TextStyle(color: AppTheme.textMuted))),
         ...List.generate(
           maxDay - minDay + 1,

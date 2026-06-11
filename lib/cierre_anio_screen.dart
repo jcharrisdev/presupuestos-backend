@@ -48,17 +48,17 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Confirmar cierre anual',
+        title: Text('Confirmar cierre anual',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
         content: Text(
           '¿Cerrar el año ${widget.anio} y generar el resumen histórico?\n\n'
           'Los datos quedan preservados. Esta acción puede repetirse si necesitas actualizar.',
-          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -93,8 +93,8 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
         title: Text('Cierre ${widget.anio}',
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
-        iconTheme: const IconThemeData(color: AppTheme.textSecondary),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+        iconTheme: IconThemeData(color: AppTheme.textSecondary),
         elevation: 0,
       ),
       body: _cargando
@@ -171,9 +171,9 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
               runSpacing: 8,
               children: mantener.map((rec) => Chip(
                 label: Text(rec['categoria'] as String? ?? '',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                 backgroundColor: AppTheme.surfaceAlt,
-                side: const BorderSide(color: AppTheme.border),
+                side: BorderSide(color: AppTheme.border),
                 padding: EdgeInsets.zero,
               )).toList(),
             ),
@@ -197,7 +197,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
                   Expanded(
                     child: Text(
                       (r['mensaje'] ?? r['resumen'] ?? '') as String,
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                     ),
                   ),
                 ],
@@ -208,7 +208,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
 
           // Botón de cierre
           if (!_cerrado) ...[
-            const Divider(color: AppTheme.border),
+            Divider(color: AppTheme.border),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -228,7 +228,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Se guarda un snapshot del año. Puedes volver a ejecutarlo para actualizar.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
@@ -240,7 +240,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
                 onPressed: () => Navigator.pop(context, true),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.textPrimary,
-                  side: const BorderSide(color: AppTheme.border),
+                  side: BorderSide(color: AppTheme.border),
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -272,7 +272,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
               Text('Año ${widget.anio} cerrado',
                   style: const TextStyle(
                       color: AppTheme.success, fontSize: 15, fontWeight: FontWeight.bold)),
-              const Text('Snapshot guardado en el historial.',
+              Text('Snapshot guardado en el historial.',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             ],
           ),
@@ -297,10 +297,10 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Análisis del año ${widget.anio}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
               Text('$total categorías analizadas · $ajustes con ajuste sugerido',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             ],
           ),
         ),
@@ -328,7 +328,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
           _filaStat('Gastos fijos', fijos, AppTheme.colorFijo),
           _filaStat('Gastos variables', vars, AppTheme.warning),
           _filaStat('No presupuestados', noPres, AppTheme.danger),
-          const Divider(color: AppTheme.border, height: 16),
+          Divider(color: AppTheme.border, height: 16),
           _filaStat('Remanente real', rem, rem >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
         ],
       ),
@@ -375,7 +375,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(rec['categoria'] as String? ?? '',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
               ),
             ],
@@ -410,5 +410,5 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
   );
 
   Widget _seccion(String t) => Text(t,
-      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8));
+      style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8));
 }

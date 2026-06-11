@@ -79,9 +79,9 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Progreso de ahorros',
+                title: Text('Progreso de ahorros',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Muestra el avance de todas tus metas de ahorro activas.\n\n'
                   '• La barra verde indica cuánto llevas ahorrado vs la meta total.\n'
                   '• "En progreso" → menos del 75% completado.\n'
@@ -127,9 +127,9 @@ class _ProgresoAhorroScreenState extends State<ProgresoAhorroScreen> {
   Widget _empty() => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
     Icon(Icons.savings_outlined, size: 64, color: AppTheme.textMuted.withOpacity(0.4)),
     const SizedBox(height: 16),
-    const Text('Sin metas de ahorro', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
+    Text('Sin metas de ahorro', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
     const SizedBox(height: 6),
-    const Text('Crea tu primera meta en la pantalla anterior', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+    Text('Crea tu primera meta en la pantalla anterior', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
   ]));
 }
 
@@ -164,18 +164,18 @@ class _AhorroCardState extends State<_AhorroCard> {
               Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16, left: 130),
                 decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2))),
               Text('Aportaciones — ${widget.ahorro['nombre']}',
-                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
+                style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
               const SizedBox(height: 16),
               TextField(
                 controller: montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(labelText: 'Monto', prefixText: 'B/. '),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: notaCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(labelText: 'Nota (opcional)', hintText: 'ej: bono de trabajo'),
               ),
               const SizedBox(height: 12),
@@ -191,9 +191,9 @@ class _AhorroCardState extends State<_AhorroCard> {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6), border: Border.all(color: AppTheme.border)),
                   child: Row(children: [
-                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                    Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
                     const SizedBox(width: 8),
-                    Text(DateFormat('dd/MM/yyyy').format(fecha), style: const TextStyle(color: AppTheme.textPrimary)),
+                    Text(DateFormat('dd/MM/yyyy').format(fecha), style: TextStyle(color: AppTheme.textPrimary)),
                   ]),
                 ),
               ),
@@ -228,7 +228,7 @@ class _AhorroCardState extends State<_AhorroCard> {
                   final lista = (body['aportaciones'] as List? ?? []).cast<Map<String, dynamic>>();
                   if (lista.isEmpty) return const SizedBox.shrink();
                   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Historial', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+                    Text('Historial', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
                     const SizedBox(height: 8),
                     ...lista.map((a) => Container(
                       margin: const EdgeInsets.only(bottom: 6),
@@ -236,8 +236,8 @@ class _AhorroCardState extends State<_AhorroCard> {
                       decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(6)),
                       child: Row(children: [
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(a['fecha']?.toString().substring(0,10) ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-                          if (a['nota'] != null) Text(a['nota'].toString(), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                          Text(a['fecha']?.toString().substring(0,10) ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                          if (a['nota'] != null) Text(a['nota'].toString(), style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                         ])),
                         Text('${Money.fmt(double.tryParse(a['monto'].toString()) ?? 0)}',
                           style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w700)),
@@ -247,7 +247,7 @@ class _AhorroCardState extends State<_AhorroCard> {
                             await ApiClient.delete('/aportaciones/${a['id']}?firebase_uid=${widget.firebaseUid}');
                             if (ctx.mounted) { Navigator.pop(ctx); widget.onAportado(); }
                           },
-                          child: const Icon(Icons.close, size: 16, color: AppTheme.textMuted),
+                          child: Icon(Icons.close, size: 16, color: AppTheme.textMuted),
                         ),
                       ]),
                     )),
@@ -296,7 +296,7 @@ class _AhorroCardState extends State<_AhorroCard> {
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.ahorro['nombre'], style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+            Text(widget.ahorro['nombre'], style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 2),
             // Badge de estado con color dinámico
             Container(
@@ -314,7 +314,7 @@ class _AhorroCardState extends State<_AhorroCard> {
             onPressed: _modalAportaciones,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 18),
+            icon: Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 18),
             onPressed: widget.onDelete,
           ),
         ]),
@@ -324,16 +324,16 @@ class _AhorroCardState extends State<_AhorroCard> {
         // ── MONTOS ──────────────────────────────────────────────────────
         Row(children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Ahorrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            Text('Ahorrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 2),
             Text('${Money.fmt(totalReal)}',
                 style: const TextStyle(color: AppTheme.colorAhorro, fontSize: 18, fontWeight: FontWeight.w800)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            const Text('Meta', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            Text('Meta', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 2),
             Text('${Money.fmt(meta)}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 18, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 18, fontWeight: FontWeight.w700)),
             if (aportado > 0) Text('+ ${Money.fmt(aportado)} manual',
                 style: const TextStyle(color: AppTheme.colorAhorro, fontSize: 10)),
           ]),
@@ -353,11 +353,11 @@ class _AhorroCardState extends State<_AhorroCard> {
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('${(pct * 100).toStringAsFixed(1)}% completado',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           // Mostrar "Faltan $X" solo si queda algo por ahorrar
           if (restante > 0)
             Text('Faltan ${Money.fmt(restante)}',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         ]),
       ]),
     );

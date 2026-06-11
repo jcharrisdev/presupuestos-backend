@@ -154,7 +154,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Estado Financiero $_anio'),
-            const Text('Tu plan: proyección del año y comparación mes a mes',
+            Text('Tu plan: proyección del año y comparación mes a mes',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.normal)),
           ],
         ),
@@ -194,10 +194,10 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.person_outline, color: AppTheme.primary, size: 64),
         const SizedBox(height: 16),
-        const Text('Configura tu perfil primero',
+        Text('Configura tu perfil primero',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Para generar tu estado financiero anual necesitas registrar tu ingreso y tus gastos fijos.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
@@ -219,10 +219,10 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     child: Padding(
       padding: const EdgeInsets.all(24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.cloud_off, color: AppTheme.textMuted, size: 48),
+        Icon(Icons.cloud_off, color: AppTheme.textMuted, size: 48),
         const SizedBox(height: 12),
         Text(_error!, textAlign: TextAlign.center,
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         const SizedBox(height: 16),
         ElevatedButton(onPressed: _cargar, child: const Text('Reintentar')),
       ]),
@@ -277,7 +277,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
               style: TextStyle(color: AppTheme.primary, fontSize: 13, fontWeight: FontWeight.w800))),
           GestureDetector(
             onTap: () => setState(() => _checklistCerrado = true),
-            child: const Icon(Icons.close, color: AppTheme.textMuted, size: 18),
+            child: Icon(Icons.close, color: AppTheme.textMuted, size: 18),
           ),
         ]),
         const SizedBox(height: 4),
@@ -333,7 +333,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
                 const Text('Cobras por quincena',
                     style: TextStyle(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                const Text('Activa la Vista Quincenal para ver tus compromisos adaptados a tus dos cobros del mes.',
+                Text('Activa la Vista Quincenal para ver tus compromisos adaptados a tus dos cobros del mes.',
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, height: 1.3)),
                 const SizedBox(height: 8),
                 GestureDetector(
@@ -341,14 +341,14 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Activar Vista Quincenal',
+                    child: Text('Activar Vista Quincenal',
                         style: TextStyle(color: AppTheme.background, fontSize: 11, fontWeight: FontWeight.w700)),
                   ),
                 ),
               ])),
               GestureDetector(
                 onTap: () => setState(() => _hintQuincenalCerrado = true),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.only(left: 4),
                   child: Icon(Icons.close, color: AppTheme.textMuted, size: 16),
                 ),
@@ -401,7 +401,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           ),
         const SizedBox(height: 8),
         if (_mesesExpanded) ...[
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Row(children: [
               Expanded(child: Text('MESES DEL AÑO',
@@ -441,7 +441,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           _TocaMeses(onTap: () => setState(() => _mesesExpanded = true)),
 
         const SizedBox(height: 24),
-        const Divider(color: AppTheme.border),
+        Divider(color: AppTheme.border),
         const SizedBox(height: 12),
         // Botón Eventos
         OutlinedButton.icon(
@@ -467,7 +467,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           label: Text('Cerrar año $_anio / Proyección ${_anio + 1}'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppTheme.textSecondary,
-            side: const BorderSide(color: AppTheme.border),
+            side: BorderSide(color: AppTheme.border),
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -556,12 +556,12 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              const Text('Salud financiera: ', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Text('Salud financiera: ', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
             ]),
             const SizedBox(height: 4),
             Text('Fijos+deudas: ${m['pct_fijos']}%  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
             Text('Te sobran ${Money.fmt(num.tryParse(m['remanente'].toString()))}/mes  ·  ${Money.fmt(num.tryParse(m['remanente_quincenal'].toString()))}/quincena',
                 style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
           ])),
@@ -569,9 +569,9 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         // ── Desglose del score: explica de dónde sale el número ──────────
         if (bd != null) ...[
           const SizedBox(height: 12),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 10),
-          const Text('CÓMO SE CALCULA (máx 25 c/u)',
+          Text('CÓMO SE CALCULA (máx 25 c/u)',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 9, letterSpacing: 0.6)),
           const SizedBox(height: 8),
           Row(children: [
@@ -590,7 +590,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     return Expanded(child: Padding(
       padding: const EdgeInsets.only(right: 6),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+        Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
         const SizedBox(height: 3),
         ClipRRect(
           borderRadius: BorderRadius.circular(2),
@@ -625,13 +625,13 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('TU ACCIÓN PRIORITARIA · $mesLabel'.toUpperCase(),
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
           const SizedBox(height: 2),
           Text(ef['titulo'] as String,
               style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(ef['texto'] as String,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
         ])),
       ]),
     );
@@ -640,7 +640,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   Widget _buildInsights(Map<String, dynamic> c) {
     final items = (c['insights'] as List).cast<Map<String, dynamic>>();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Padding(
+      Padding(
         padding: EdgeInsets.only(bottom: 10),
         child: Text('ANÁLISIS', style: TextStyle(
             color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
@@ -662,10 +662,10 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(insight['titulo'] as String,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
               Text(insight['texto'] as String,
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
             ])),
           ]),
         );
@@ -694,7 +694,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         child: const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 14),
       ),
       const SizedBox(width: 12),
-      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Análisis IA', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
         SizedBox(height: 4),
         Text('Generando análisis personalizado…', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
@@ -723,10 +723,10 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           border: Border.all(color: AppTheme.border),
         ),
         child: Row(children: [
-          const Icon(Icons.auto_awesome, color: AppTheme.textMuted, size: 16),
+          Icon(Icons.auto_awesome, color: AppTheme.textMuted, size: 16),
           const SizedBox(width: 10),
           Expanded(child: Text(msg,
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12))),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12))),
         ]),
       );
     }
@@ -767,17 +767,17 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         ]),
         const SizedBox(height: 4),
         Text('Análisis personalizado para $mesLabel · $tokensUsados tokens',
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         const SizedBox(height: 12),
-        const Divider(color: AppTheme.border, height: 1),
+        Divider(color: AppTheme.border, height: 1),
         const SizedBox(height: 12),
-        Text(analisis, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.6)),
+        Text(analisis, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.6)),
         const SizedBox(height: 10),
         // Footer que confirma origen
         Row(children: [
           const Icon(Icons.verified, color: AppTheme.primary, size: 12),
           const SizedBox(width: 4),
-          const Text('Generado por Claude AI · Anthropic',
+          Text('Generado por Claude AI · Anthropic',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ]),
       ]),
@@ -806,11 +806,11 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         border: Border.all(color: AppTheme.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('TENDENCIA DEL AÑO', style: TextStyle(
+        Text('TENDENCIA DEL AÑO', style: TextStyle(
             color: AppTheme.textMuted, fontSize: 11,
             letterSpacing: 0.8, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
-        const Text('Te sobró por mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        Text('Te sobró por mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 14),
         SizedBox(
           height: 80,
@@ -839,7 +839,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
                       ),
                       const SizedBox(height: 4),
                       Text(labels[i],
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: AppTheme.textMuted, fontSize: 8),
                           overflow: TextOverflow.visible,
                           textAlign: TextAlign.center),
@@ -875,7 +875,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         border: Border.all(color: AppTheme.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('VS MES ANTERIOR', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
+        Text('VS MES ANTERIOR', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
         const SizedBox(height: 12),
         Row(children: [
           Expanded(child: _CompCol(label: anterior['label'] as String, remanente: remAnt, active: false)),
@@ -904,7 +904,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           ]),
         ),
         if (esEst)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 6),
             child: Text('* Basado en planificación — registra gastos para ver el real.',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
@@ -1028,9 +1028,9 @@ class _CardAnual extends StatelessWidget {
             const Icon(Icons.bar_chart_rounded, color: AppTheme.primary, size: 20),
             const SizedBox(width: 8),
             Text('Estado Financiero $anio',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
             const Spacer(),
-            const Icon(Icons.expand_more, color: AppTheme.textMuted, size: 20),
+            Icon(Icons.expand_more, color: AppTheme.textMuted, size: 20),
           ]),
           const SizedBox(height: 20),
           Row(children: [
@@ -1043,7 +1043,7 @@ class _CardAnual extends StatelessWidget {
           _Fila('Gastos fijos', fijosEst, tieneReal ? fijosReal : null, AppTheme.danger),
           _Fila('Gastos variables', varEst, tieneReal ? varReal : null, AppTheme.warning),
           if (tieneReal) _Fila('No presupuestados', 0, noPres, AppTheme.danger),
-          const Divider(color: AppTheme.border, height: 24),
+          Divider(color: AppTheme.border, height: 24),
           _Fila('Remanente', remEst, tieneReal ? remReal : null,
               remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
         ]),
@@ -1155,15 +1155,15 @@ class _MesCard extends StatelessWidget {
                           fontWeight: FontWeight.w600))
                 else if (remEst != null)
                   Text('${Money.fmt0(remEst)}',
-                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))
+                      style: TextStyle(fontSize: 11, color: AppTheme.textMuted))
                 else
-                  const Text('—', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                  Text('—', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                 if (esActual)
                   Container(
                     margin: const EdgeInsets.only(top: 4),
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(3)),
-                    child: const Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
+                    child: Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
                   ),
               ],
             ),
@@ -1267,7 +1267,7 @@ class _CompCol extends StatelessWidget {
       const SizedBox(height: 4),
       Text('${Money.fmt(remanente)}',
           style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800)),
-      Text('te sobró', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+      Text('te sobró', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
     ]);
   }
 }

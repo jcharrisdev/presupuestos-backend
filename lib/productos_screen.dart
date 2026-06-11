@@ -93,17 +93,17 @@ class _ProductosScreenState extends State<ProductosScreen> {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
-          const Text('Nuevo producto', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          Text('Nuevo producto', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
           TextField(
             controller: nombreCtrl, autofocus: true,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(hintText: 'Nombre del producto (ej: Cheesecake)'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: descCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(hintText: 'Descripción (opcional)'),
             maxLines: 2,
           ),
@@ -151,21 +151,21 @@ class _ProductosScreenState extends State<ProductosScreen> {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
-          const Text('Nueva variante', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          Text('Nueva variante', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('Ej: sabor "Fresa", tamaño "Pequeño"',
+          Text('Ej: sabor "Fresa", tamaño "Pequeño"',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 16),
           Row(children: [
             Expanded(child: TextField(
               controller: nombreCtrl, autofocus: true,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre / Sabor'),
             )),
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: tamanoCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Tamaño (opcional)',
                 hintText: 'Pequeño, Grande…',
@@ -177,7 +177,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
             Expanded(child: TextField(
               controller: precioCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(
                 labelText: 'Precio de venta',
                 prefixText: 'B/. ',
@@ -187,7 +187,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: unidadCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Unidad'),
             )),
           ]),
@@ -230,18 +230,18 @@ class _ProductosScreenState extends State<ProductosScreen> {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
-          const Text('Editar variante', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          Text('Editar variante', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
           Row(children: [
             Expanded(child: TextField(
               controller: nombreCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre / Sabor'),
             )),
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: tamanoCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Tamaño (opcional)',
                 hintText: 'Pequeño, Grande…',
@@ -252,7 +252,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
           TextField(
             controller: precioCtrl, autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
             decoration: const InputDecoration(
               labelText: 'Precio de venta',
               prefixText: 'B/. ',
@@ -303,9 +303,9 @@ class _ProductosScreenState extends State<ProductosScreen> {
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Catálogo de productos',
+                title: Text('Catálogo de productos',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Define aquí lo que vendes.\n\n'
                   '• Producto → lo que vendes (ej: Cheesecake).\n'
                   '• Variante → versión con precio propio (ej: Fresa regular \$3.75).\n'
@@ -409,7 +409,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
           Text('Historial de precios — $nombre',
-            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
           const SizedBox(height: 4),
           Text('Precio actual: ${Money.fmt(precioActual)}',
             style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 16)),
@@ -421,7 +421,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
               final body = json.decode(snap.data!.body) as Map<String, dynamic>;
               final historial = (body['historial'] as List? ?? []).cast<Map<String, dynamic>>();
               if (historial.isEmpty) {
-                return const Padding(
+                return Padding(
                   padding: EdgeInsets.all(16),
                   child: Center(child: Text('Sin cambios de precio registrados', style: TextStyle(color: AppTheme.textSecondary))),
                 );
@@ -431,7 +431,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: historial.length,
-                  separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
+                  separatorBuilder: (_, __) => Divider(color: AppTheme.border, height: 1),
                   itemBuilder: (_, i) {
                     final h = historial[i];
                     final antes = double.tryParse(h['precio_anterior'].toString()) ?? 0;
@@ -444,10 +444,10 @@ class _ProductosScreenState extends State<ProductosScreen> {
                       child: Row(children: [
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(fecha.length >= 16 ? fecha.substring(0, 16) : fecha,
-                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                           const SizedBox(height: 3),
                           Text('${Money.fmt(antes)} → ${Money.fmt(nuevo)}',
-                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                         ])),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -476,9 +476,9 @@ class _ProductosScreenState extends State<ProductosScreen> {
   Widget _empty() => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
     Icon(Icons.storefront_outlined, size: 64, color: AppTheme.textMuted.withOpacity(0.4)),
     const SizedBox(height: 16),
-    const Text('Sin productos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
+    Text('Sin productos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
     const SizedBox(height: 6),
-    const Text('Toca "Producto" para agregar uno al catálogo', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+    Text('Toca "Producto" para agregar uno al catálogo', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
   ]));
 
   Widget _handle() => Center(child: Container(
@@ -530,10 +530,10 @@ class _ProductoCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(producto['nombre']?.toString() ?? '', style: const TextStyle(
+                Text(producto['nombre']?.toString() ?? '', style: TextStyle(
                   color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
                 if ((producto['descripcion']?.toString() ?? '').isNotEmpty)
-                  Text(producto['descripcion'].toString(), style: const TextStyle(
+                  Text(producto['descripcion'].toString(), style: TextStyle(
                     color: AppTheme.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
               ])),
               // Badge de variantes activas
@@ -561,14 +561,14 @@ class _ProductoCard extends StatelessWidget {
 
         // ── VARIANTES (expandido) ─────────────────────────────────────────────
         if (expandido) ...[
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           if (variantes.isEmpty)
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(children: [
-                const Icon(Icons.info_outline, color: AppTheme.textMuted, size: 14),
+                Icon(Icons.info_outline, color: AppTheme.textMuted, size: 14),
                 const SizedBox(width: 8),
-                const Text('Sin variantes. Agrega la primera.',
+                Text('Sin variantes. Agrega la primera.',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                 const Spacer(),
                 TextButton.icon(
@@ -606,7 +606,7 @@ class _ProductoCard extends StatelessWidget {
                           if ((v['tamano']?.toString() ?? '').isNotEmpty) v['tamano'].toString(),
                           v['unidad']?.toString() ?? 'unidad',
                         ].join(' · '),
-                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                       ),
                     ])),
                     Text('${Money.fmt(precio)}', style: const TextStyle(
@@ -630,7 +630,7 @@ class _ProductoCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     GestureDetector(
                       onTap: () => onVerHistorialPrecios(v),
-                      child: const Icon(Icons.history, color: AppTheme.textMuted, size: 16),
+                      child: Icon(Icons.history, color: AppTheme.textMuted, size: 16),
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(

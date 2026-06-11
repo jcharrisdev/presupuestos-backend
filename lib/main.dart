@@ -8,6 +8,7 @@ import 'home_shell.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/cache_service.dart';
+import 'services/theme_pref.dart';
 
 // RouteObserver global: permite que VentaDetalle detecte cuando vuelve al foco
 // (didPopNext) y recargue datos — fix Bug 1 (cobrado desde calendario no actualizaba).
@@ -17,6 +18,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await initializeDateFormatting('es', null);
+  ThemePref.load(); // aplica el tema guardado (claro/oscuro) antes de pintar
   await CacheService.init();
   await NotificationService.init();
   await NotificationService.requestPermission();
@@ -34,12 +36,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Salarying',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.theme,
-      navigatorObservers: [routeObserver],
-      home: const _AuthGate(),
+    // Reconstruye MaterialApp (y todo el árbol) cuando cambia el tema.
+    return ValueListenableBuilder<bool>(
+      valueListenable: AppTheme.modeNotifier,
+      builder: (_, __, ___) => MaterialApp(
+        title: 'Salarying',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.theme,
+        navigatorObservers: [routeObserver],
+        home: const _AuthGate(),
+      ),
     );
   }
 }
@@ -49,13 +55,21 @@ class MyApp extends StatelessWidget {
 /// - Muestra un splash mientras resuelve el silent sign-in.
 /// - Si hay sesión → va directo a [HomeShell] (evita el login manual).
 /// - Si no → muestra [LoginScreen].
-class _AuthGate extends StatelessWidget {
+class _AuthGate extends StatefulWidget {
   const _AuthGate();
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  // Cacheado: así un rebuild por cambio de tema NO re-dispara el silent sign-in
+  // (evita el splash y preserva la navegación al cambiar claro/oscuro).
+  late final Future<GoogleSignInAccount?> _future = AuthService.silentSignIn();
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<GoogleSignInAccount?>(
-      future: AuthService.silentSignIn(),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const _SplashScreen();
@@ -93,7 +107,7 @@ class _SplashScreen extends StatelessWidget {
                 color: AppTheme.primary,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.account_balance_wallet, color: AppTheme.background, size: 38),
+              child: Icon(Icons.account_balance_wallet, color: AppTheme.background, size: 38),
             ),
             const SizedBox(height: 28),
             const SizedBox(

@@ -100,7 +100,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -123,12 +123,12 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
 
               // Título
               Text(_esEdicion ? 'Editar evento' : 'Nuevo evento',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
               const SizedBox(height: 20),
 
               // Selector de emoji
-              const Text('Ícono', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              Text('Ícono', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -155,7 +155,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
               // Nombre
               TextFormField(
                 controller: _nombreCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: _dec('Nombre del evento', hint: 'Ej: Vacaciones, Boda de Ana...'),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
               ),
@@ -164,7 +164,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
               // Monto total
               TextFormField(
                 controller: _montoCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: _dec('Presupuesto total (\$)', hint: '0.00'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (v) {
@@ -177,7 +177,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
               const SizedBox(height: 12),
 
               // Rango de meses
-              const Text('Período del evento', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              Text('Período del evento', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 8),
               MesRangoSelector(
                 mesInicio: _mesInicio,
@@ -189,7 +189,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
               // Descripción
               TextFormField(
                 controller: _descCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: _dec('Descripción (opcional)', hint: 'Notas sobre el evento...'),
                 maxLines: 2,
               ),
@@ -208,20 +208,20 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Cuota mensual',
+                        Text('Cuota mensual',
                             style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                         Text('${Money.fmt(cuota)}/mes',
                             style: const TextStyle(
                                 color: AppTheme.primary, fontSize: 16, fontWeight: FontWeight.bold)),
                       ]),
                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        const Text('Durante',
+                        Text('Durante',
                             style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                         Text(
                           meses == 1
                               ? _mesesLabel[_mesInicio]
                               : '$meses meses (${_mesesLabel[_mesInicio]}–${_mesesLabel[_mesFin]})',
-                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                         ),
                       ]),
                     ],
@@ -257,16 +257,16 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
   InputDecoration _dec(String label, {String? hint}) => InputDecoration(
     labelText: label,
     hintText: hint,
-    labelStyle: const TextStyle(color: AppTheme.textSecondary),
-    hintStyle: const TextStyle(color: AppTheme.textMuted),
+    labelStyle: TextStyle(color: AppTheme.textSecondary),
+    hintStyle: TextStyle(color: AppTheme.textMuted),
     filled: true,
     fillColor: AppTheme.surfaceAlt,
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.border)),
+        borderSide: BorderSide(color: AppTheme.border)),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.border)),
+        borderSide: BorderSide(color: AppTheme.border)),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: AppTheme.primary)),

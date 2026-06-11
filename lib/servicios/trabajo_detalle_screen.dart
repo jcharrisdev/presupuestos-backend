@@ -43,9 +43,9 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Detalle del trabajo',
+        title: Text('Detalle del trabajo',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text(
+        content: Text(
           'Vista completa del trabajo y su salud financiera:\n\n'
           '• Pagos del cliente — registra anticipos, pagos parciales y pago final.\n'
           '• Colaboradores — asigna personas con su compensación. Toca el ícono + para registrar un pago. El badge muestra Pendiente / Parcial / Pagado.\n'
@@ -143,7 +143,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
               Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(
                   color: AppTheme.textSecondary.withOpacity(0.4), borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Text('Agregar colaborador',
+              Text('Agregar colaborador',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
               const SizedBox(height: 16),
               _miniField(nombreCtrl, 'Nombre del colaborador'),
@@ -151,7 +151,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
               DropdownButtonFormField<String>(
                 value: tipoComp,
                 dropdownColor: AppTheme.surface,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                 decoration: _miniDeco('Tipo de compensación'),
                 items: const [
                   DropdownMenuItem(value: 'fijo', child: Text('Pago fijo')),
@@ -217,12 +217,12 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
                 color: AppTheme.textSecondary.withOpacity(0.4), borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
             Text('Pago a ${member['nombre']}',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             if (montoAcordado > 0)
               Text(
                 'Acordado: ${Money.fmt(montoAcordado)}  ·  Ya pagado: ${Money.fmt(totalPagado)}  ·  Pendiente: ${Money.fmt(pendiente)}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               ),
             const SizedBox(height: 16),
             _miniField(montoCtrl, 'Monto a pagar',
@@ -373,32 +373,32 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
         children: [
           if (job['nombre_cliente'] != null)
             Row(children: [
-              const Icon(Icons.person_outline, size: 14, color: AppTheme.textSecondary),
+              Icon(Icons.person_outline, size: 14, color: AppTheme.textSecondary),
               const SizedBox(width: 6),
               Expanded(child: Text(job['nombre_cliente'] as String,
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
               if (job['telefono_cliente'] != null) ...[
-                const Icon(Icons.phone_outlined, size: 14, color: AppTheme.textSecondary),
+                Icon(Icons.phone_outlined, size: 14, color: AppTheme.textSecondary),
                 const SizedBox(width: 4),
                 Text(job['telefono_cliente'] as String,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               ],
             ]),
           if (job['descripcion'] != null) ...[
             const SizedBox(height: 6),
             Text(job['descripcion'] as String,
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
           ],
           const SizedBox(height: 12),
           Row(children: [
-            const Text('Estado:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('Estado:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(width: 8),
             Expanded(
               child: DropdownButton<String>(
                 value: estado,
                 dropdownColor: AppTheme.surface,
                 isDense: true,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                 underline: const SizedBox(),
                 items: const [
                   DropdownMenuItem(value: 'draft', child: Text('Borrador')),
@@ -443,21 +443,21 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Resumen real ──
-          const Text('Resumen real',
+          Text('Resumen real',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           _filaResumen('Total contratado', montoTotal, AppTheme.textPrimary),
           _filaResumen('Total recibido', recibido, AppTheme.success),
           _filaResumen('Saldo pendiente cliente', pendiente, AppTheme.primary),
-          const Divider(color: AppTheme.background, height: 16),
+          Divider(color: AppTheme.background, height: 16),
           _filaResumen('Gastos operativos', gastos, AppTheme.danger),
           _filaResumen('Pagos a colaboradores', pagosColab, AppTheme.danger),
-          const Divider(color: AppTheme.background, height: 16),
+          Divider(color: AppTheme.background, height: 16),
           _filaResumen('Utilidad neta', utilidad,
               utilidad >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
           const SizedBox(height: 4),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Margen real', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('Margen real', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             Text('${margen.toStringAsFixed(1)}%',
                 style: TextStyle(
                   color: margen >= 0 ? AppTheme.success : AppTheme.danger,
@@ -468,7 +468,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
 
           // ── Proyección ──
           const SizedBox(height: 16),
-          const Divider(color: AppTheme.background, height: 1),
+          Divider(color: AppTheme.background, height: 1),
           const SizedBox(height: 12),
           Row(children: const [
             Icon(Icons.trending_up, color: AppTheme.info, size: 14),
@@ -480,7 +480,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
           _filaResumen('Ingresos esperados', montoTotal, AppTheme.textPrimary),
           _filaResumen('Costos laborales acordados', totalColabAcordado, AppTheme.danger),
           _filaResumen('Gastos operativos actuales', gastos, AppTheme.danger),
-          const Divider(color: AppTheme.background, height: 12),
+          Divider(color: AppTheme.background, height: 12),
           _filaResumen('Ganancia proyectada', gananciaProyectada,
               gananciaProyectada >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
           const SizedBox(height: 8),
@@ -502,11 +502,11 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
             ),
             const SizedBox(width: 10),
             Text('${margenProyectado.toStringAsFixed(1)}%',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
           ]),
           if (tieneGanancias) ...[
             const SizedBox(height: 6),
-            const Text('* Excluye colaboradores a % de ganancias',
+            Text('* Excluye colaboradores a % de ganancias',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
           ],
         ],
@@ -539,7 +539,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
         child: ExpansionTile(
           leading: Icon(icono, color: color, size: 20),
           title: Row(children: [
-            Text(titulo, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(titulo, style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(width: 8),
             if (badge > 0)
               Container(
@@ -578,11 +578,11 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
       dense: true,
       leading: const Icon(Icons.attach_money, color: AppTheme.success, size: 18),
       title: Text('${Money.fmt(monto)}',
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-      subtitle: Text(tipoLabel, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Text(tipoLabel, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
       trailing: p['nota'] != null
           ? Text(p['nota'] as String,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               overflow: TextOverflow.ellipsis)
           : null,
     );
@@ -613,9 +613,9 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
           dense: true,
           leading: const Icon(Icons.person_outline, color: Color(0xFF0EA5E9), size: 18),
           title: Text(m['nombre'] as String? ?? '',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
           subtitle: Text(_labelComp(m, montoTotal),
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             // Badge de estado de pago
             Container(
@@ -648,11 +648,11 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
     return Padding(
       padding: const EdgeInsets.only(left: 52, right: 4, bottom: 4),
       child: Row(children: [
-        const Icon(Icons.subdirectory_arrow_right, color: AppTheme.textMuted, size: 14),
+        Icon(Icons.subdirectory_arrow_right, color: AppTheme.textMuted, size: 14),
         const SizedBox(width: 4),
         Expanded(
           child: Text(nota ?? 'Pago registrado',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               overflow: TextOverflow.ellipsis),
         ),
         Text('${Money.fmt(monto)}',
@@ -673,9 +673,9 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
       dense: true,
       leading: const Icon(Icons.receipt_outlined, color: AppTheme.danger, size: 18),
       title: Text(e['descripcion'] as String? ?? '',
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
       subtitle: e['categoria'] != null
-          ? Text(e['categoria'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11))
+          ? Text(e['categoria'] as String, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11))
           : null,
       trailing: Text('${Money.fmt(monto)}',
           style: const TextStyle(color: AppTheme.danger, fontSize: 13, fontWeight: FontWeight.w600)),
@@ -684,7 +684,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
 
   Widget _emptyItem(String msg) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Text(msg, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        child: Text(msg, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
       );
 
   String _labelComp(Map<String, dynamic> m, double montoTotal) {
@@ -726,7 +726,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
 
   InputDecoration _miniDeco(String hint) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+        hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
         filled: true,
         fillColor: AppTheme.background,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -737,7 +737,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
       TextField(
         controller: ctrl,
         keyboardType: keyboardType,
-        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+        style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
         decoration: _miniDeco(hint),
       );
 }

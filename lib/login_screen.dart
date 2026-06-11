@@ -84,15 +84,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppTheme.primary,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.account_balance_wallet, color: AppTheme.background, size: 38),
+                  child: Icon(Icons.account_balance_wallet, color: AppTheme.background, size: 38),
                 ),
                 const SizedBox(height: 18),
-                const Text(
+                Text(
                   'Salarying',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Gestiona tus finanzas personales',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                 ),
@@ -108,19 +108,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
                       autofocus: true,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: AppTheme.textPrimary),
                       decoration: InputDecoration(
                         labelText: 'Tu email de Gmail',
                         hintText: 'ejemplo@gmail.com',
-                        prefixIcon: const Icon(Icons.email_outlined,
+                        prefixIcon: Icon(Icons.email_outlined,
                             color: AppTheme.textSecondary),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppTheme.border),
+                          borderSide: BorderSide(color: AppTheme.border),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppTheme.border),
+                          borderSide: BorderSide(color: AppTheme.border),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Usa el mismo email con el que iniciaste sesión en la app móvil',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                       textAlign: TextAlign.center,
@@ -154,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: _GoogleSignInButton(onPressed: _signInWithGoogle),
                     ),
                     const SizedBox(height: 24),
-                    const Text(
+                    Text(
                       'Usa tu cuenta de Gmail para acceder',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                       textAlign: TextAlign.center,

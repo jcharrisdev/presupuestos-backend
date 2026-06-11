@@ -171,9 +171,9 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Ahorro y Metas',
+                title: Text('Ahorro y Metas',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Crea metas de ahorro y el sistema calcula cuánto debes apartar en cada período.\n\n'
                   '1. Escribe el nombre de tu meta (ej: "Vacaciones").\n'
                   '2. Ingresa el monto total que quieres ahorrar.\n'
@@ -209,7 +209,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
 
                 // ── METAS EXISTENTES ──────────────────────────────────────
                 if (_metas.isNotEmpty) ...[
-                  const Text('MIS METAS', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+                  Text('MIS METAS', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
                   ..._metas.map((m) {
                     final meta   = double.tryParse(m['monto_meta']?.toString() ?? '0') ?? 0;
@@ -227,7 +227,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                       ),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Row(children: [
-                          Expanded(child: Text(m['nombre']?.toString() ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14))),
+                          Expanded(child: Text(m['nombre']?.toString() ?? '', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14))),
                           Text(done ? '✓ Completada' : '${(pct * 100).toStringAsFixed(0)}%',
                               style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
                         ]),
@@ -238,11 +238,11 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text('${Money.fmt(actual)} de ${Money.fmt(meta)}',
-                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                       ]),
                     );
                   }),
-                  const Divider(color: AppTheme.border, height: 32),
+                  Divider(color: AppTheme.border, height: 32),
                 ],
 
                 // ── INFO CARD — NUEVA META ───────────────────────────────
@@ -253,7 +253,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.colorAhorro.withOpacity(0.2)),
                   ),
-                  child: const Row(children: [
+                  child: Row(children: [
                     Icon(Icons.savings_outlined, color: AppTheme.colorAhorro, size: 28),
                     SizedBox(width: 14),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -271,7 +271,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                 _label('Nombre de la meta'),
                 TextField(
                   controller: _nombreCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: const InputDecoration(hintText: 'Ej: Vacaciones, Auto nuevo...'),
                 ),
                 const SizedBox(height: 16),
@@ -281,7 +281,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                 TextField(
                   controller: _montoCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: const InputDecoration(
                     prefixText: 'B/. ',
                     prefixStyle: TextStyle(color: AppTheme.colorAhorro, fontSize: 20, fontWeight: FontWeight.w700),
@@ -296,14 +296,14 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                 DropdownButtonFormField<int>(
                   value: _presupuestoId,
                   dropdownColor: AppTheme.surfaceAlt,
-                  hint: const Text('Selecciona un presupuesto', style: TextStyle(color: AppTheme.textMuted)),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  hint: Text('Selecciona un presupuesto', style: TextStyle(color: AppTheme.textMuted)),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: const InputDecoration(),
                   items: _presupuestos.map((p) {
                     final tipo = p['tipo_periodo'] == 'quincenal' ? 'Quincenal' : 'Mensual';
                     return DropdownMenuItem<int>(
                       value: p['id'],
-                      child: Text('${p['nombre']} · $tipo', style: const TextStyle(color: AppTheme.textPrimary)),
+                      child: Text('${p['nombre']} · $tipo', style: TextStyle(color: AppTheme.textPrimary)),
                     );
                   }).toList(),
                   onChanged: (v) => setState(() => _presupuestoId = v),
@@ -336,34 +336,34 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                     child: Column(children: [
                       // Cuota por período — dato principal
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Cuota por período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('Cuota por período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         Text(
                           '${Money.fmt(_cuotaPorPeriodo)} / $_tipoPeriodoLabel',
                           style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16),
                         ),
                       ]),
                       const SizedBox(height: 10),
-                      const Divider(color: AppTheme.border, height: 1),
+                      Divider(color: AppTheme.border, height: 1),
                       const SizedBox(height: 10),
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Total de períodos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('Total de períodos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         Text('$_periodosTotales períodos',
-                            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
                       ]),
                       const SizedBox(height: 6),
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Tipo de período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('Tipo de período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         Text(
                           _presupuestoSeleccionado?['tipo_periodo'] == 'quincenal'
                               ? 'Quincenal (14 días)' : 'Mensual (30 días)',
-                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ]),
                       const SizedBox(height: 6),
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Total a ahorrar', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('Total a ahorrar', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         Text('${Money.fmt(monto)}',
-                            style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
                       ]),
                     ]),
                   ),
@@ -384,6 +384,6 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
   /// Etiqueta de campo de formulario con estilo consistente.
   Widget _label(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Text(t, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.4)),
+    child: Text(t, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.4)),
   );
 }

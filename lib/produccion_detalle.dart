@@ -101,13 +101,13 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
               Center(child: Container(width: 36, height: 4,
                   decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Text('Agregar insumo', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              Text('Agregar insumo', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
 
               // Nombre
               TextField(
                 controller: nombreCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(hintText: 'Nombre del insumo (ej: Bolsitas, Harina)'),
               ),
               const SizedBox(height: 12),
@@ -117,9 +117,9 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                 Expanded(child: TextField(
                   controller: cantidadCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   onChanged: (_) => setModalState(() {}),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Unidades compradas',
                     prefixIcon: Icon(Icons.numbers, size: 16, color: AppTheme.textSecondary),
                   ),
@@ -128,7 +128,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                 Expanded(child: TextField(
                   controller: precioCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   onChanged: (_) => setModalState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Precio del paquete',
@@ -138,7 +138,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                 )),
               ]),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Ingresa el precio total que pagaste por el paquete.',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
               ),
@@ -152,7 +152,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   onChanged: (v) => setModalState(() { soloUseParte = v; if (!v) usadasCtrl.clear(); }),
                 ),
                 const SizedBox(width: 8),
-                const Expanded(child: Text(
+                Expanded(child: Text(
                   '¿Solo usé una parte del paquete?',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                 )),
@@ -163,9 +163,9 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                 TextField(
                   controller: usadasCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   onChanged: (_) => setModalState(() {}),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Unidades usadas en esta producción',
                     prefixIcon: Icon(Icons.cut_outlined, size: 16, color: AppTheme.textSecondary),
                   ),
@@ -184,7 +184,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text('Costo asignado a esta producción:',
+                      Text('Costo asignado a esta producción:',
                           style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                       Text('${Money.fmt(costoAsignado)}',
                           style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
@@ -238,8 +238,8 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar ítem', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Confirmas eliminar este ítem?', style: TextStyle(color: AppTheme.textSecondary)),
+        title: Text('Eliminar ítem', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Confirmas eliminar este ítem?', style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
           ElevatedButton(
@@ -269,9 +269,9 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Presupuesto de producción',
+                title: Text('Presupuesto de producción',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Registra los insumos (materiales, ingredientes, etc.) '
                   'que necesitas para producir tu producto o servicio.\n\n'
                   '1. Toca "Ítem" para agregar un insumo.\n'
@@ -304,12 +304,12 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
               // ── ENCABEZADO CON COSTO TOTAL ──────────────────────────────
               Container(
                 width: double.infinity, padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppTheme.surface,
                   border: Border(bottom: BorderSide(color: AppTheme.border)),
                 ),
                 child: Row(children: [
-                  const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('COSTO TOTAL', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1)),
                     SizedBox(height: 4),
                   ]),
@@ -317,7 +317,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     Text('${Money.fmt(_total)}',
                         style: const TextStyle(color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -1)),
-                    Text('${_items.length} ítems', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                    Text('${_items.length} ítems', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   ]),
                 ]),
               ),
@@ -327,9 +327,9 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Icon(Icons.inventory_2_outlined, size: 56, color: AppTheme.textMuted.withOpacity(0.35)),
                       const SizedBox(height: 16),
-                      const Text('Sin ítems', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.w600)),
+                      Text('Sin ítems', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 6),
-                      const Text('Toca "Ítem" para agregar insumos', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                      Text('Toca "Ítem" para agregar insumos', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
                     ]))
                   : ListView.separated(
                       padding: const EdgeInsets.all(16),
@@ -370,22 +370,22 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                             child: Row(children: [
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 Text(item['nombre'],
-                                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                                 const SizedBox(height: 3),
                                 if (tienePaquete)
                                   Text(
                                     '${_fmtNum(cantUsada!)} de ${_fmtNum(cant)} usadas · paquete ${Money.fmt(precioPaq!)}',
-                                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                                   )
                                 else
                                   Text('${_fmtNum(cant)} × \$${_fmtNum(precio)}',
-                                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ])),
                               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                                 Text('${Money.fmt(costoAsig)}',
-                                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+                                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
                                 Text(tienePaquete ? 'asignado' : 'subtotal',
-                                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                               ]),
                             ]),
                           ),

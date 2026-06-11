@@ -91,9 +91,9 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('Registrar como gustito',
+        title: Text('Registrar como gustito',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -107,29 +107,29 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
               border: Border.all(color: AppTheme.border),
             ),
             child: Row(children: [
-              const Icon(Icons.receipt_outlined, color: AppTheme.textSecondary, size: 18),
+              Icon(Icons.receipt_outlined, color: AppTheme.textSecondary, size: 18),
               const SizedBox(width: 10),
               Expanded(child: Text(
                 widget.invoice['merchant_name'] ?? 'Factura QR',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
               )),
               Text('B/. ${_fmt.format(widget.invoice['total_amount'] ?? 0)}',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
             ]),
           ),
           const SizedBox(height: 20),
 
-          const Text('Nombre', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('Nombre', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 6),
           _field(_nameCtrl, '¿Qué compraste?'),
           const SizedBox(height: 16),
 
-          const Text('Monto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('Monto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 6),
           _field(_amountCtrl, '0.00', numeric: true),
           const SizedBox(height: 16),
 
-          const Text('Fecha', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('Fecha', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: () async {
@@ -139,7 +139,7 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
                 firstDate: DateTime(2020),
                 lastDate: DateTime.now(),
                 builder: (ctx, child) => Theme(
-                  data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.dark(
+                  data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.dark(
                     primary: AppTheme.primary, surface: AppTheme.surfaceAlt,
                   )),
                   child: child!,
@@ -155,18 +155,18 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
                 border: Border.all(color: AppTheme.border),
               ),
               child: Row(children: [
-                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
                 const SizedBox(width: 10),
                 Text(
                   '${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                 ),
               ]),
             ),
           ),
           const SizedBox(height: 20),
 
-          const Text('¿Cómo te sentiste?',
+          Text('¿Cómo te sentiste?',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 8),
           Wrap(
@@ -219,10 +219,10 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
       TextField(
         controller: ctrl,
         keyboardType: numeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-        style: const TextStyle(color: AppTheme.textPrimary),
+        style: TextStyle(color: AppTheme.textPrimary),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: AppTheme.textMuted),
+          hintStyle: TextStyle(color: AppTheme.textMuted),
           filled: true,
           fillColor: AppTheme.surface,
           border: OutlineInputBorder(

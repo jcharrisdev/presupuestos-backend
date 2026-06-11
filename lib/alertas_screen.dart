@@ -81,9 +81,9 @@ class _AlertasScreenState extends State<AlertasScreen> {
         backgroundColor: AppTheme.surface,
         title: Text(
           'Alertas ${widget.anio}${noLeidas > 0 ? ' ($noLeidas nuevas)' : ''}',
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
         ),
-        iconTheme: const IconThemeData(color: AppTheme.textSecondary),
+        iconTheme: IconThemeData(color: AppTheme.textSecondary),
         elevation: 0,
         actions: [
           if (noLeidas > 0)
@@ -165,7 +165,7 @@ class _AlertasScreenState extends State<AlertasScreen> {
             ],
           ),
         ),
-        const Divider(color: AppTheme.border, height: 1),
+        Divider(color: AppTheme.border, height: 1),
 
         // Lista
         Expanded(
@@ -194,16 +194,16 @@ class _AlertasScreenState extends State<AlertasScreen> {
 
   Widget _buildVacio() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.notifications_none, color: AppTheme.textMuted, size: 48),
+      Icon(Icons.notifications_none, color: AppTheme.textMuted, size: 48),
       const SizedBox(height: 12),
       Text(
         _filtroNivel == 'todos'
             ? 'Sin alertas para ${widget.anio}'
             : 'Sin alertas de este tipo',
-        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+        style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
       ),
       const SizedBox(height: 6),
-      const Text('Las alertas se generan al registrar gastos en cada mes.',
+      Text('Las alertas se generan al registrar gastos en cada mes.',
           style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
     ]),
   );
@@ -260,7 +260,7 @@ class _GrupoMes extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(label.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
         ),
         ...alertas.map((a) => _AlertaTile(alerta: a, onMarcarLeida: onMarcarLeida)),

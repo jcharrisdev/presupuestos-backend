@@ -84,9 +84,9 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Dashboard financiero',
+        title: Text('Dashboard financiero',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text(
+        content: Text(
           'Vista global de las finanzas de todos tus trabajos de servicio:\n\n'
           '• Total contratado — suma de montos acordados en todos los trabajos.\n'
           '• Total recibido — suma de pagos recibidos de clientes.\n'
@@ -161,7 +161,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
 
   Widget _sectionTitle(String t) => Text(
         t,
-        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.5),
       );
 
   Widget _metricCard(String label, double valor, Color color, IconData icon) => Container(
@@ -173,7 +173,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
             Row(children: [
               Icon(icon, color: color, size: 16),
               const SizedBox(width: 6),
-              Expanded(child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 8),
             Text('${Money.fmt(valor)}',
@@ -189,7 +189,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(width: 12),
-            Expanded(child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+            Expanded(child: Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
             Text('${Money.fmt(valor)}',
                 style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
           ],
@@ -212,7 +212,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
                 Icon(Icons.trending_up_outlined,
                     color: _utilidadNeta >= 0 ? AppTheme.success : AppTheme.danger, size: 22),
                 const SizedBox(width: 10),
-                const Text('Utilidad neta global',
+                Text('Utilidad neta global',
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                 const Spacer(),
                 Text(
@@ -229,7 +229,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Margen de rentabilidad promedio',
+                Text('Margen de rentabilidad promedio',
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                 Text(
                   '${_margenPromedio.toStringAsFixed(1)}%',
@@ -262,10 +262,10 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(job['nombre'] as String? ?? '',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
                 if (job['nombre_cliente'] != null)
                   Text(job['nombre_cliente'] as String,
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
               ],
             ),
           ),

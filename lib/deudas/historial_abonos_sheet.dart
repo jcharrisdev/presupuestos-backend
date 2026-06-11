@@ -94,22 +94,22 @@ class _HistorialBodyState extends State<_HistorialBody> {
             Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Historial de abonos',
-                    style: const TextStyle(color: AppTheme.textPrimary,
+                    style: TextStyle(color: AppTheme.textPrimary,
                         fontSize: 17, fontWeight: FontWeight.w700)),
                 Text(widget.deudaNombre,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               ])),
               if (!_loading && _abonos.isNotEmpty)
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Text('${Money.fmt(_totalAbonado)}',
                       style: const TextStyle(color: AppTheme.success,
                           fontSize: 18, fontWeight: FontWeight.w800)),
-                  const Text('total abonado',
+                  Text('total abonado',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                 ]),
             ]),
             const SizedBox(height: 12),
-            const Divider(color: AppTheme.border, height: 1),
+            Divider(color: AppTheme.border, height: 1),
           ]),
         ),
         // Body
@@ -120,7 +120,7 @@ class _HistorialBodyState extends State<_HistorialBody> {
                   ? Center(child: Text(_error!,
                         style: const TextStyle(color: AppTheme.danger, fontSize: 13)))
                   : _abonos.isEmpty
-                      ? const Center(child: Padding(
+                      ? Center(child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
                             Icon(Icons.history, color: AppTheme.textMuted, size: 40),
@@ -134,7 +134,7 @@ class _HistorialBodyState extends State<_HistorialBody> {
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           itemCount: _abonos.length,
                           separatorBuilder: (_, __) =>
-                              const Divider(color: AppTheme.border, height: 1),
+                              Divider(color: AppTheme.border, height: 1),
                           itemBuilder: (_, i) {
                             final a = _abonos[i];
                             final monto = double.tryParse(a['monto'].toString()) ?? 0.0;
@@ -156,10 +156,10 @@ class _HistorialBodyState extends State<_HistorialBody> {
                                 Expanded(child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start, children: [
                                   Text(nombre,
-                                      style: const TextStyle(color: AppTheme.textPrimary,
+                                      style: TextStyle(color: AppTheme.textPrimary,
                                           fontSize: 13, fontWeight: FontWeight.w600)),
                                   Text(fecha,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: AppTheme.textMuted, fontSize: 11)),
                                 ])),
                                 Text('${Money.fmt(monto)}',

@@ -114,7 +114,7 @@ class SplitSectionState extends State<SplitSection> {
             activeColor: AppTheme.primary,
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('¿Lo compartiste con alguien?',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
@@ -126,11 +126,11 @@ class SplitSectionState extends State<SplitSection> {
 
         if (activo) ...[
           const SizedBox(height: 12),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 12),
 
           // Tipo de división
-          const Text('CÓMO DIVIDIRLO',
+          Text('CÓMO DIVIDIRLO',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
           const SizedBox(height: 8),
           Row(children: [
@@ -174,7 +174,7 @@ class SplitSectionState extends State<SplitSection> {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Tu parte', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                Text('Tu parte', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                 Text(
                   '${_pctRestante.toStringAsFixed(0)}%  ·  ${Money.fmt((_total * _pctRestante / 100))}',
                   style: TextStyle(
@@ -190,7 +190,7 @@ class SplitSectionState extends State<SplitSection> {
           const SizedBox(height: 12),
 
           // Participantes
-          const Text('PARTICIPANTES',
+          Text('PARTICIPANTES',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
           const SizedBox(height: 8),
 
@@ -206,7 +206,7 @@ class SplitSectionState extends State<SplitSection> {
                     controller: p.email,
                     keyboardType: TextInputType.emailAddress,
                     onChanged: (_) => setState(() {}),
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                     decoration: InputDecoration(
                       labelText: 'Correo',
                       hintText: 'correo@ejemplo.com',
@@ -237,7 +237,7 @@ class SplitSectionState extends State<SplitSection> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}\.?\d{0,1}'))],
                       onChanged: (_) => setState(() {}),
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                       decoration: InputDecoration(
                         labelText: '%',
                         suffixText: '%',

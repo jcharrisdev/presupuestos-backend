@@ -46,9 +46,9 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Ofrecimiento de servicios',
+        title: Text('Ofrecimiento de servicios',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text(
+        content: Text(
           'Gestiona trabajos, proyectos y producciones operativas.\n\n'
           'Flujo de trabajo:\n'
           '1. Crea un trabajo y define el cliente y monto acordado.\n'
@@ -169,12 +169,12 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.handshake_outlined, size: 72, color: AppTheme.textSecondary),
+            Icon(Icons.handshake_outlined, size: 72, color: AppTheme.textSecondary),
             const SizedBox(height: 16),
-            const Text('Aún no tienes trabajos',
+            Text('Aún no tienes trabajos',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            const Text('Crea tu primer trabajo para comenzar a registrar clientes, colaboradores y pagos.',
+            Text('Crea tu primer trabajo para comenzar a registrar clientes, colaboradores y pagos.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
             const SizedBox(height: 24),
@@ -227,7 +227,7 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
                   Expanded(
                     child: Text(
                       job['nombre'] as String? ?? '',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -247,10 +247,10 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.person_outline, size: 13, color: AppTheme.textSecondary),
+                    Icon(Icons.person_outline, size: 13, color: AppTheme.textSecondary),
                     const SizedBox(width: 4),
                     Text(job['nombre_cliente'] as String,
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   ],
                 ),
               ],
@@ -260,7 +260,7 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
                 children: [
                   Text(
                     '${Money.fmt(totalRecibido)} / ${Money.fmt(montoTotal)}',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                   Text(
                     _labelPayment(paymentStatus),

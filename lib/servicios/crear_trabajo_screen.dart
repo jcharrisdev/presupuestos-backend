@@ -39,9 +39,9 @@ class _CrearTrabajoScreenState extends State<CrearTrabajoScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Crear trabajo',
+        title: Text('Crear trabajo',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text(
+        content: Text(
           'Completa los datos del nuevo trabajo o proyecto:\n\n'
           '• Nombre: identifica el trabajo (ej. "Boda García mayo").\n'
           '• Cliente: nombre de quien contrata el servicio.\n'
@@ -196,7 +196,7 @@ class _CrearTrabajoScreenState extends State<CrearTrabajoScreen> {
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+        child: Text(text, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
       );
 
   Widget _field(
@@ -211,10 +211,10 @@ class _CrearTrabajoScreenState extends State<CrearTrabajoScreen> {
         keyboardType: keyboardType,
         maxLines: maxLines,
         validator: validator,
-        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+        style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
           filled: true,
           fillColor: AppTheme.surface,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -236,7 +236,7 @@ class _CrearTrabajoScreenState extends State<CrearTrabajoScreen> {
   Widget _dropdownEstado() => DropdownButtonFormField<String>(
         value: _estado,
         dropdownColor: AppTheme.surface,
-        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+        style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
         decoration: InputDecoration(
           filled: true,
           fillColor: AppTheme.surface,
@@ -273,14 +273,14 @@ class _CrearTrabajoScreenState extends State<CrearTrabajoScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.textSecondary),
+            Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.textSecondary),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
-                  Text(texto, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                  Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+                  Text(texto, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                 ],
               ),
             ),

@@ -44,19 +44,19 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('Mis Productos', style: TextStyle(color: AppTheme.textPrimary)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        title: Text('Mis Productos', style: TextStyle(color: AppTheme.textPrimary)),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
               controller: _searchCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Buscar producto...',
-                hintStyle: const TextStyle(color: AppTheme.textMuted),
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+                hintStyle: TextStyle(color: AppTheme.textMuted),
+                prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
                 filled: true,
                 fillColor: AppTheme.surfaceAlt,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -64,7 +64,7 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
+                        icon: Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
                         onPressed: () { _searchCtrl.clear(); _cargar(); },
                       )
                     : null,
@@ -119,22 +119,22 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
         ),
         child: Row(children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p['nombre'] as String, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(p['nombre'] as String, style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(height: 3),
             Row(children: [
               if (merchant.isNotEmpty) ...[
-                const Icon(Icons.store_outlined, size: 11, color: AppTheme.textMuted),
+                Icon(Icons.store_outlined, size: 11, color: AppTheme.textMuted),
                 const SizedBox(width: 3),
-                Text(merchant, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                Text(merchant, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                 const SizedBox(width: 8),
               ],
-              const Icon(Icons.shopping_bag_outlined, size: 11, color: AppTheme.textMuted),
+              Icon(Icons.shopping_bag_outlined, size: 11, color: AppTheme.textMuted),
               const SizedBox(width: 3),
-              Text('$veces vez${veces > 1 ? "es" : ""}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Text('$veces vez${veces > 1 ? "es" : ""}', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               if (ultimaCompra.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Text(ultimaCompra.length >= 10 ? ultimaCompra.substring(0, 10) : ultimaCompra,
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ],
             ]),
             if (p['categoria'] != null) ...[
@@ -149,7 +149,7 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
           const SizedBox(width: 12),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${Money.fmt(ultimoPrecio)}',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 3),
             _tendenciaChip(tendencia, pctCambio),
           ]),
@@ -160,7 +160,7 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
 
   Widget _tendenciaChip(String tendencia, dynamic pct) {
     if (tendencia == 'igual' || pct == null) {
-      return const Text('Sin cambio', style: TextStyle(color: AppTheme.textMuted, fontSize: 11));
+      return Text('Sin cambio', style: TextStyle(color: AppTheme.textMuted, fontSize: 11));
     }
     final sube = tendencia == 'sube';
     final color = sube ? AppTheme.danger : AppTheme.success;
@@ -175,11 +175,11 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
 
   Widget _buildEmpty() => Center(
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Icon(Icons.inventory_2_outlined, color: AppTheme.textSecondary, size: 56),
+      Icon(Icons.inventory_2_outlined, color: AppTheme.textSecondary, size: 56),
       const SizedBox(height: 12),
-      const Text('Sin productos aún', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+      Text('Sin productos aún', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
-      const Text('Escanea una factura QR para\nconstruir tu catálogo automáticamente',
+      Text('Escanea una factura QR para\nconstruir tu catálogo automáticamente',
           textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
     ]),
   );
@@ -225,12 +225,12 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text(widget.nombre, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        title: Text(widget.nombre, style: TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
         actions: [
           if (producto != null)
             IconButton(
-              icon: const Icon(Icons.label_outline, color: AppTheme.textSecondary),
+              icon: Icon(Icons.label_outline, color: AppTheme.textSecondary),
               tooltip: 'Asignar categoría',
               onPressed: () => _showCategoria(producto),
             ),
@@ -239,7 +239,7 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : historial.isEmpty
-              ? const Center(child: Text('Sin historial', style: TextStyle(color: AppTheme.textSecondary)))
+              ? Center(child: Text('Sin historial', style: TextStyle(color: AppTheme.textSecondary)))
               : Column(children: [
                   _buildResumen(historial),
                   Expanded(child: ListView.separated(
@@ -286,7 +286,7 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
   Widget _statCol(String label, String value, Color color) => Column(children: [
     Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
     const SizedBox(height: 2),
-    Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+    Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
   ]);
 
   Widget _historialRow(dynamic h, dynamic anterior) {
@@ -313,11 +313,11 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
       ),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(fecha, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(fecha, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
           if (merchant.isNotEmpty)
-            Text(merchant, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            Text(merchant, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
           if (numFactura.isNotEmpty)
-            Text('Factura #$numFactura', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+            Text('Factura #$numFactura', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ])),
         Row(children: [
           if (tendIcon != null) ...[
@@ -345,7 +345,7 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
       builder: (_) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Asignar categoría', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+          Text('Asignar categoría', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: cats.map((c) {
             final sel = c == current;

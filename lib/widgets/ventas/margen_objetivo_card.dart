@@ -57,7 +57,7 @@ class MargenObjetivoCard extends StatelessWidget {
         Row(children: [
           const Icon(Icons.flag_outlined, color: AppTheme.primary, size: 16),
           const SizedBox(width: 8),
-          const Text('% de ganancia sobre costo',
+          Text('% de ganancia sobre costo',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const Spacer(),
           DropdownButton<double>(
@@ -72,7 +72,7 @@ class MargenObjetivoCard extends StatelessWidget {
               (i) => DropdownMenuItem(
                 value: mrgValues[i],
                 child: Text(mrgLabels[i],
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
               ),
             ),
             onChanged: (v) { if (v != null) onMargenChanged(v); },
@@ -85,7 +85,7 @@ class MargenObjetivoCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
                 color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
-            child: const Row(children: [
+            child: Row(children: [
               Icon(Icons.info_outline, color: AppTheme.textMuted, size: 14),
               SizedBox(width: 8),
               Expanded(child: Text(
@@ -96,14 +96,14 @@ class MargenObjetivoCard extends StatelessWidget {
           ),
         ] else ...[
           const SizedBox(height: 12),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 12),
 
           // Ventas necesarias para el margen objetivo
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Expanded(child: Text(
               'Ventas para ${(margenObjetivo * 100).toStringAsFixed(0)}% de ganancia',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             )),
             const SizedBox(width: 8),
             Text('${Money.fmt(ventasNecesarias)}',
@@ -116,7 +116,7 @@ class MargenObjetivoCard extends StatelessWidget {
             // Progreso hacia el objetivo
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('Ventas proyectadas: ${Money.fmt(esperado)}',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               Text(
                 '${(pctAvance * 100).toStringAsFixed(0)}% del objetivo',
                 style: TextStyle(
@@ -172,7 +172,7 @@ class MargenObjetivoCard extends StatelessWidget {
             ),
           ] else ...[
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Agrega clientes para comparar con el objetivo.',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
             ),

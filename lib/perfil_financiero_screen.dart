@@ -133,7 +133,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         color: AppTheme.surface,
-        child: const Text(
+        child: Text(
           'Configura tu ingreso para ver tu disponible real.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
           textAlign: TextAlign.center,
@@ -208,7 +208,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
             ),
             child: Column(children: [
-              const Text('Neto mensual que recibes',
+              Text('Neto mensual que recibes',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 4),
               Text('${Money.fmt(_ingreso)}',
@@ -217,7 +217,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                 _income!['frecuencia_cobro'] == 'quincenal'
                     ? 'Quincenal: ${Money.fmt((_ingreso / 2))}'
                     : 'Mensual',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
             ]),
           ),
           const SizedBox(height: 16),
@@ -258,7 +258,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
             hayGastos
                 ? '${_gastos.length} gastos · ${Money.fmt(_totalMensual)}/mes'
                 : 'Sin gastos registrados',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           )),
           TextButton.icon(
             onPressed: _mostrarFormGasto,
@@ -323,12 +323,12 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                         const SizedBox(width: 12),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text('${_deudas.length} deuda${_deudas.length == 1 ? '' : 's'} activa${_deudas.length == 1 ? '' : 's'}',
-                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 2),
                           const Text('Ver y gestionar mis deudas →',
                               style: TextStyle(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.w600)),
                         ])),
-                        const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+                        Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
                       ]),
                     ),
                   ),
@@ -395,8 +395,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text(
+        title: Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text(
           '¿Eliminar este gasto del perfil? Se borrará también su recordatorio del calendario.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         actions: [
@@ -419,8 +419,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar ingreso', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text(
+        title: Text('Eliminar ingreso', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text(
           '¿Seguro que quieres eliminar tu ingreso configurado? '
           'Los cálculos de disponible quedarán en cero hasta que lo vuelvas a configurar.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
@@ -457,10 +457,10 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
           decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppTheme.border)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Gastos variables presupuestados',
+            Text('Gastos variables presupuestados',
                 style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
             const SizedBox(height: 4),
-            const Text('Supermercado, gasolina, medicinas… gastos esperados pero de monto variable.',
+            Text('Supermercado, gasolina, medicinas… gastos esperados pero de monto variable.',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(height: 10),
             Row(children: [
@@ -477,9 +477,9 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(children: [
-                const Icon(Icons.shopping_cart_outlined, color: AppTheme.textMuted, size: 48),
+                Icon(Icons.shopping_cart_outlined, color: AppTheme.textMuted, size: 48),
                 const SizedBox(height: 12),
-                const Text('Sin gastos variables base', style: TextStyle(color: AppTheme.textSecondary)),
+                Text('Sin gastos variables base', style: TextStyle(color: AppTheme.textSecondary)),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: _agregarVariableBase,
@@ -526,7 +526,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
         final bottom = MediaQuery.of(ctx).viewInsets.bottom;
         return Container(
           padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
@@ -535,22 +535,22 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               Center(child: Container(width: 36, height: 4,
                   decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Text('Nuevo gasto variable base',
+              Text('Nuevo gasto variable base',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-              const Text('Gastos esperados pero de monto variable (súper, gasolina, etc.)',
+              Text('Gastos esperados pero de monto variable (súper, gasolina, etc.)',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 16),
               TextField(
                 controller: nombreCtrl,
                 decoration: const InputDecoration(labelText: 'Nombre (ej: Supermercado, Gasolina)'),
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Monto estimado (\$)', prefixText: 'B/. '),
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
               ),
               const SizedBox(height: 16),
               // Categoría con soporte de "Otro" personalizado
@@ -564,7 +564,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                 value: frecuencia,
                 decoration: const InputDecoration(labelText: 'Frecuencia de pago'),
                 dropdownColor: AppTheme.surfaceAlt,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 items: const [
                   DropdownMenuItem(value: 'mensual',   child: Text('Mensual')),
                   DropdownMenuItem(value: 'quincenal', child: Text('Quincenal (×2 al mes)')),
@@ -628,9 +628,9 @@ class _SeccionHeader extends StatelessWidget {
     const SizedBox(width: 8),
     Text(titulo, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
     const SizedBox(width: 6),
-    Text('($cantidad)', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+    Text('($cantidad)', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
     const Spacer(),
-    Text(monto, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+    Text(monto, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
   ]);
 }
 
@@ -667,7 +667,7 @@ class _ResumenItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.5)),
+    Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.5)),
     const SizedBox(height: 2),
     Text('$prefix$value', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
   ]);
@@ -718,10 +718,10 @@ class _EmptyState extends StatelessWidget {
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, color: AppTheme.textMuted, size: 48),
       const SizedBox(height: 12),
-      Text(title, style: const TextStyle(
+      Text(title, style: TextStyle(
           color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
       const SizedBox(height: 6),
-      Text(subtitle, style: const TextStyle(
+      Text(subtitle, style: TextStyle(
           color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
           textAlign: TextAlign.center),
       const SizedBox(height: 20),
@@ -772,7 +772,7 @@ class _GastoTile extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(gasto['descripcion'] as String? ?? '',
-                style: const TextStyle(
+                style: TextStyle(
                     color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
             const SizedBox(height: 4),
             Wrap(spacing: 6, children: [
@@ -789,18 +789,18 @@ class _GastoTile extends StatelessWidget {
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${Money.fmt(monto)}',
-                style: const TextStyle(
+                style: TextStyle(
                     color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
             Text(frecuencia == 'variable' ? '~estimado/mes' : '/mes',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
           ]),
           const SizedBox(width: 6),
           PopupMenuButton<String>(
             color: AppTheme.surfaceAlt,
-            icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
+            icon: Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
             onSelected: (v) { if (v == 'edit') onEdit(); else onDelete(); },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit',
+              PopupMenuItem(value: 'edit',
                   child: Text('Editar', style: TextStyle(color: AppTheme.textPrimary))),
               const PopupMenuItem(value: 'delete',
                   child: Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
@@ -895,7 +895,7 @@ class _AhorroTile extends StatelessWidget {
             color: AppTheme.colorAhorro, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nombre, style: const TextStyle(
+          Text(nombre, style: TextStyle(
               color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
           const SizedBox(height: 4),
           Wrap(spacing: 6, children: [
@@ -910,10 +910,10 @@ class _AhorroTile extends StatelessWidget {
           Text('${Money.fmt(cuotaMensual)}',
               style: const TextStyle(
                   color: AppTheme.colorAhorro, fontWeight: FontWeight.bold, fontSize: 15)),
-          const Text('/mes', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+          Text('/mes', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ]),
         const SizedBox(width: 6),
-        const Tooltip(
+        Tooltip(
           message: 'Gestiona tus ahorros desde\n"Ahorro y Metas" en el menú',
           child: Icon(Icons.info_outline, color: AppTheme.textMuted, size: 16),
         ),
@@ -1031,13 +1031,13 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Expanded(child: Text('¿Cuánto recibes?',
+            Expanded(child: Text('¿Cuánto recibes?',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700))),
-            IconButton(icon: const Icon(Icons.close, color: AppTheme.textMuted),
+            IconButton(icon: Icon(Icons.close, color: AppTheme.textMuted),
                 onPressed: () => Navigator.pop(context)),
           ]),
           const SizedBox(height: 4),
-          const Text('Ingresa tu salario o ingreso mensual neto.',
+          Text('Ingresa tu salario o ingreso mensual neto.',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 20),
           _label('Tipo de ingreso'),
@@ -1105,7 +1105,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
             _buildCampo('Salario bruto mensual', _brutoCtrl),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Calcular deducciones (Panamá)',
+              Text('Calcular deducciones (Panamá)',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
               Switch(value: _autoCalc, activeColor: AppTheme.primary,
                   onChanged: (v) { setState(() => _autoCalc = v); if (v) _calcular(); }),
@@ -1129,13 +1129,13 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
                   border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4)),
                 ),
                 child: Column(children: [
-                  const Text('Neto mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  Text('Neto mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   const SizedBox(height: 4),
                   Text('${Money.fmt(_netoCalculado)}',
                       style: const TextStyle(color: AppTheme.success, fontSize: 24, fontWeight: FontWeight.bold)),
                   if (_frecuencia == 'quincenal')
                     Text('Quincenal: ${Money.fmt((_netoCalculado / 2))}',
-                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                 ]),
               ),
           ] else ...[
@@ -1160,7 +1160,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
                 _porQuincena
                     ? '× 2 = ${Money.fmt((_parseD(_netoCtrl.text) * 2))} al mes · esto es lo que se guarda'
                     : '≈ ${Money.fmt((_parseD(_netoCtrl.text) / 2))} por quincena · ingresa el total del mes',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ],
           ],
           const SizedBox(height: 24),
@@ -1178,7 +1178,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
 
   Widget _label(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Text(t, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+    child: Text(t, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
   );
 
   // Q1 — chip para elegir si el monto escrito es mensual o por quincena
@@ -1210,9 +1210,9 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
       style: TextStyle(color: readOnly ? AppTheme.textMuted : AppTheme.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+        labelStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
         prefixText: 'B/. ',
-        prefixStyle: const TextStyle(color: AppTheme.textSecondary),
+        prefixStyle: TextStyle(color: AppTheme.textSecondary),
       ),
     );
 }
@@ -1331,17 +1331,17 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(esEdicion ? 'Editar gasto' : 'Agregar gasto',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700))),
-            IconButton(icon: const Icon(Icons.close, color: AppTheme.textMuted),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700))),
+            IconButton(icon: Icon(Icons.close, color: AppTheme.textMuted),
                 onPressed: () => Navigator.pop(context)),
           ]),
           const SizedBox(height: 16),
 
           // ── Tipo de gasto: Fijo o Variable ─────────────────────────────
-          const Text('¿Es un gasto fijo o variable?',
+          Text('¿Es un gasto fijo o variable?',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          const Text('Fijo: siempre el mismo monto (hipoteca, carro). Variable: estimado que varía (comida, gasolina).',
+          Text('Fijo: siempre el mismo monto (hipoteca, carro). Variable: estimado que varía (comida, gasolina).',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
           const SizedBox(height: 8),
           Row(children: [
@@ -1371,7 +1371,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
 
           TextField(
             controller: _descCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
                 labelText: 'Descripción (ej: Hipoteca, Carro, Internet, Supermercado)'),
           ),
@@ -1380,7 +1380,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
             controller: _montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               labelText: _frecuencia == 'variable' ? 'Estimado mensual' : 'Monto mensual',
               prefixText: 'B/. ',
@@ -1389,7 +1389,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
           const SizedBox(height: 16),
 
           // ── Categoría ──────────────────────────────────────────────────
-          const Text('Categoría',
+          Text('Categoría',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: _tipos.map((t) =>
@@ -1415,7 +1415,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
           const SizedBox(height: 16),
 
           // ── Clasificación ──────────────────────────────────────────────
-          const Text('Prioridad',
+          Text('Prioridad',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Row(children: [
@@ -1456,8 +1456,8 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
             controller: _diaPagoCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(
+            style: TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
               labelText: 'Día de pago (1–31, opcional)',
               helperText: 'Ej: 15 para el quince de cada mes',
               helperStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11),
@@ -1474,8 +1474,8 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
             controller: _diaPago2Ctrl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(
+            style: TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
               labelText: 'Segundo día de pago (opcional — para quincenas)',
               helperText: 'Ej: 30 si pagas los días 15 y 30',
               helperStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11),
@@ -1538,7 +1538,7 @@ class _SwitchRow extends StatelessWidget {
         Text(label, style: TextStyle(
             color: enabled ? AppTheme.textPrimary : AppTheme.textMuted, fontSize: 13)),
         const SizedBox(height: 2),
-        Text(sublabel, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+        Text(sublabel, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       ])),
       Switch(
         value: value,
@@ -1577,12 +1577,12 @@ class _VariableBaseTile extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(gasto['nombre'] as String? ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-          Text(gasto['categoria'] as String? ?? '', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+          Text(gasto['nombre'] as String? ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(gasto['categoria'] as String? ?? '', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${Money.fmt(monto)}', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700, fontSize: 14)),
-          Text('/$frecLabel', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+          Text('/$frecLabel', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ]),
         const SizedBox(width: 8),
         IconButton(
@@ -1591,8 +1591,8 @@ class _VariableBaseTile extends StatelessWidget {
             context: context,
             builder: (_) => AlertDialog(
               backgroundColor: AppTheme.surface,
-              title: const Text('Eliminar', style: TextStyle(color: AppTheme.textPrimary)),
-              content: Text('¿Eliminar "${gasto['nombre']}"?', style: const TextStyle(color: AppTheme.textSecondary)),
+              title: Text('Eliminar', style: TextStyle(color: AppTheme.textPrimary)),
+              content: Text('¿Eliminar "${gasto['nombre']}"?', style: TextStyle(color: AppTheme.textSecondary)),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
                 TextButton(onPressed: () { Navigator.pop(context); onDelete(); },

@@ -13,8 +13,8 @@ Future<bool> showConfirmDialog(
     builder: (_) => AlertDialog(
       backgroundColor: AppTheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text(title, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-      content: Text(content, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+      title: Text(title, style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+      content: Text(content, style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),

@@ -156,16 +156,16 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Registrar en estado financiero',
+        title: Text('Registrar en estado financiero',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('B/. ${NumberFormat('#,##0.00', 'en_US').format(total)}',
               style: const TextStyle(color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          const Text('¿Esta factura corresponde a un gasto que ya tenías planificado?',
+          Text('¿Esta factura corresponde a un gasto que ya tenías planificado?',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 4),
-          const Text('Ej: gasolina, supermercado, servicio mensual...',
+          Text('Ej: gasolina, supermercado, servicio mensual...',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         ]),
         actions: [
@@ -205,14 +205,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         builder: (_) => AlertDialog(
           backgroundColor: AppTheme.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('¿Cuál gasto es este pago?',
+          title: Text('¿Cuál gasto es este pago?',
               style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: todos.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: AppTheme.border),
+              separatorBuilder: (_, __) => Divider(height: 1, color: AppTheme.border),
               itemBuilder: (_, i) {
                 final g = todos[i];
                 final presup = _d(g['monto_presupuestado']);
@@ -226,7 +226,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     size: 20,
                   ),
                   title: Text(g['nombre'] as String,
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
                   subtitle: Text(
                     'Presupuestado: B/. ${presup.toStringAsFixed(2)}${yaRegistrado ? ' · ya registrado' : ''}',
                     style: TextStyle(
@@ -278,7 +278,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
           backgroundColor: AppTheme.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Categoría del gasto',
+          title: Text('Categoría del gasto',
               style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(
@@ -287,7 +287,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: catSel, isExpanded: true, dropdownColor: AppTheme.surface,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                   items: cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                   onChanged: (v) => setD(() => catSel = v!),
                 ),
@@ -477,11 +477,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     child: Row(children: [
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(it['descripcion'] ?? '-',
-                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                       ])),
                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                         Text('B/. ${_fmt.format(_d(it['subtotal']))}',
-                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                         GestureDetector(
                           onTap: () async {
                             final nombreNorm = (it['descripcion'] as String? ?? '').trim().toLowerCase();

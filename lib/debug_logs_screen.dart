@@ -60,8 +60,8 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Limpiar logs', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('Elimina logs de más de 7 días. ¿Continuar?',
+        title: Text('Limpiar logs', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('Elimina logs de más de 7 días. ¿Continuar?',
             style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
@@ -94,7 +94,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
           const Text('Logs del servidor', style: TextStyle(fontSize: 16)),
           if (!_loading)
             Text('$_total errores en total · mostrando ${_logs.length}',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
         ]),
         actions: [
           IconButton(icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
@@ -118,7 +118,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
               decoration: const InputDecoration(
                   labelText: 'Nivel', isDense: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
               items: const [
                 DropdownMenuItem(value: 'todos', child: Text('Todos')),
                 DropdownMenuItem(value: 'error', child: Text('Error')),
@@ -134,7 +134,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
             // Buscar por UID
             Expanded(flex: 2, child: TextField(
               controller: _uidCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 labelText: 'Filtrar por usuario',
                 isDense: true,
@@ -165,7 +165,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                     ]),
                   ))
                 : _logs.isEmpty
-                    ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.checklist_outlined, color: AppTheme.textMuted, size: 48),
                         SizedBox(height: 12),
                         Text('Sin actividad reciente',
@@ -242,14 +242,14 @@ class _LogTileState extends State<_LogTile> {
               ),
               const SizedBox(width: 8),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(ruta, style: const TextStyle(color: AppTheme.textPrimary,
+                Text(ruta, style: TextStyle(color: AppTheme.textPrimary,
                     fontSize: 12, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text(mensaje, maxLines: _expanded ? 20 : 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(fechaStr, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                Text(fechaStr, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                 const SizedBox(height: 4),
                 Icon(_expanded ? Icons.expand_less : Icons.expand_more,
                     color: AppTheme.textMuted, size: 16),
@@ -286,7 +286,7 @@ class _LogTileState extends State<_LogTile> {
 
   Widget _campo(String label, String valor, {bool mono = false}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(color: AppTheme.textMuted,
+      Text(label, style: TextStyle(color: AppTheme.textMuted,
           fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
       const SizedBox(height: 4),
       Container(

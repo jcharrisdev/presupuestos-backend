@@ -39,7 +39,7 @@ class CostosProduccionCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(child: Text(pp['nombre']?.toString() ?? '',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
               Text('${Money.fmt(ppTotal)}',
                   style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w700, fontSize: 13)),
             ]),
@@ -54,7 +54,7 @@ class CostosProduccionCard extends StatelessWidget {
               border: Border.all(color: AppTheme.colorFijo.withOpacity(0.2)),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Total invertido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              Text('Total invertido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               Text('${Money.fmt(invertido)}',
                   style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800, fontSize: 14)),
             ]),

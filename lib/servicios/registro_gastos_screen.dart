@@ -33,9 +33,9 @@ class _RegistroGastosScreenState extends State<RegistroGastosScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Registrar gasto operativo',
+        title: Text('Registrar gasto operativo',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text(
+        content: Text(
           'Registra un gasto relacionado con la ejecución del trabajo:\n\n'
           '• Descripción: qué se compró o gastó.\n'
           '• Monto: cuánto costó.\n'
@@ -93,7 +93,7 @@ class _RegistroGastosScreenState extends State<RegistroGastosScreen> {
               _label('Descripción *'),
               TextFormField(
                 controller: _descripcionCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                 decoration: _deco('Ej. Compra de materiales decorativos'),
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
               ),
@@ -102,7 +102,7 @@ class _RegistroGastosScreenState extends State<RegistroGastosScreen> {
               TextFormField(
                 controller: _montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                 decoration: _deco('Ej. 350.00'),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Campo requerido';
@@ -161,12 +161,12 @@ class _RegistroGastosScreenState extends State<RegistroGastosScreen> {
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+        child: Text(text, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
       );
 
   InputDecoration _deco(String hint) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
         filled: true,
         fillColor: AppTheme.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

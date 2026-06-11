@@ -24,6 +24,7 @@ import 'widgets/widgets.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
 import 'eventos/eventos_screen.dart';
+import 'services/theme_pref.dart';
 
 class HomeShell extends StatefulWidget {
   final String firebaseUid;
@@ -303,11 +304,11 @@ class _MasTab extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Bienvenido',
+                Text('Bienvenido',
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                 Text(
                   name.length > 24 ? '${name.substring(0, 24)}...' : name,
-                  style: const TextStyle(color: AppTheme.textPrimary,
+                  style: TextStyle(color: AppTheme.textPrimary,
                       fontWeight: FontWeight.w600, fontSize: 14),
                 ),
               ]),
@@ -459,7 +460,7 @@ class _MasTab extends StatelessWidget {
                     modoNegocio
                         ? 'Ventas y servicios habilitados'
                         : '¿Tienes un negocio? Actívalo aquí',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                   ),
                 ])),
                 togglingNegocio || loadingSettings
@@ -472,6 +473,35 @@ class _MasTab extends StatelessWidget {
                         activeColor: AppTheme.success,
                         onChanged: onToggleNegocio,
                       ),
+              ]),
+            ),
+
+            const SizedBox(height: 28),
+            const SectionHeader('APARIENCIA'),
+            const SizedBox(height: 12),
+            // ── Toggle tema claro/oscuro ──────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(children: [
+                Icon(AppTheme.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                    color: AppTheme.primary, size: 22),
+                const SizedBox(width: 14),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(AppTheme.isDark ? 'Tema oscuro' : 'Tema claro',
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text('Cambia la apariencia entre claro y oscuro',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                ])),
+                Switch(
+                  value: AppTheme.isDark,
+                  activeColor: AppTheme.primary,
+                  onChanged: (v) => ThemePref.set(v),
+                ),
               ]),
             ),
             const SizedBox(height: 20),
@@ -528,9 +558,9 @@ class _ModuloCard extends StatelessWidget {
             ),
         ]),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(
+          Text(title, style: TextStyle(
               color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
-          Text(subtitle, style: const TextStyle(
+          Text(subtitle, style: TextStyle(
               color: AppTheme.textSecondary, fontSize: 10)),
         ]),
       ]),

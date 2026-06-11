@@ -29,7 +29,7 @@ class MesRangoSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('PERÍODO DE VIGENCIA',
+      Text('PERÍODO DE VIGENCIA',
           style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
       const SizedBox(height: 8),
       Row(children: [
@@ -38,7 +38,7 @@ class MesRangoSelector extends StatelessWidget {
           valor: mesInicio,
           onChanged: (v) => onChange(v, mesFin < v ? v : mesFin),
         )),
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(horizontal: 10),
           child: Text('→', style: TextStyle(color: AppTheme.textMuted, fontSize: 18)),
         ),
@@ -50,7 +50,7 @@ class MesRangoSelector extends StatelessWidget {
       ]),
       const SizedBox(height: 4),
       if (mesInicio == 1 && mesFin == 12)
-        const Text('Aplica todo el año', style: TextStyle(color: AppTheme.textMuted, fontSize: 11))
+        Text('Aplica todo el año', style: TextStyle(color: AppTheme.textMuted, fontSize: 11))
       else
         Text(
           'Aplica de ${_meses[mesInicio - 1]} a ${_meses[mesFin - 1]} (${mesFin - mesInicio + 1} meses)',
@@ -79,7 +79,7 @@ class _DropMes extends StatelessWidget {
       value: valor,
       decoration: InputDecoration(labelText: label),
       dropdownColor: AppTheme.surfaceAlt,
-      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+      style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
       items: List.generate(12, (i) => DropdownMenuItem(
         value: i + 1,
         child: Text(_meses[i]),

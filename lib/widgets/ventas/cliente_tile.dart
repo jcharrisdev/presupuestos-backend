@@ -80,14 +80,14 @@ class ClienteTile extends StatelessWidget {
               color: cobrado ? AppTheme.textSecondary : AppTheme.textPrimary,
               fontWeight: FontWeight.w600, fontSize: 14,
             ))),
-            const Icon(Icons.account_circle_outlined, color: AppTheme.textMuted, size: 18),
+            Icon(Icons.account_circle_outlined, color: AppTheme.textMuted, size: 18),
           ]),
           const SizedBox(height: 3),
           Row(children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(4)),
-              child: Text(condicion, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+              child: Text(condicion, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             ),
             if (cobrado && montoCobrado != null) ...[
               const SizedBox(width: 6),
@@ -107,7 +107,7 @@ class ClienteTile extends StatelessWidget {
           if (!cobrado)
             Row(children: [
               GestureDetector(onTap: onEliminar,
-                  child: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16)),
+                  child: Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16)),
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: onCobrar,
@@ -131,7 +131,7 @@ class ClienteTile extends StatelessWidget {
         // ── DETALLE DE ITEMS (solo si hay pedido con catálogo) ───────────────
         if (items.isNotEmpty) ...[
           const SizedBox(height: 10),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 8),
           ...items.map((item) {
             final cant   = double.tryParse(item['cantidad']?.toString() ?? '1') ?? 1;
@@ -140,14 +140,14 @@ class ClienteTile extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 4, left: 4),
               child: Row(children: [
-                const Icon(Icons.circle, size: 5, color: AppTheme.textMuted),
+                Icon(Icons.circle, size: 5, color: AppTheme.textMuted),
                 const SizedBox(width: 8),
                 Expanded(child: Text(
                   '${cant % 1 == 0 ? cant.toInt() : cant} × ${item['descripcion'] ?? ''}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                 )),
                 Text('${Money.fmt(sub)}',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               ]),
             );
           }),

@@ -92,10 +92,10 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Lista de compras',
+                title: Text('Lista de compras',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16,
                         fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Calculada automáticamente desde las recetas de cada variante vendida.\n\n'
                   'Fórmula:\n'
                   '  insumo_necesario = cantidad_receta × unidades_vendidas ÷ rendimiento_tanda\n\n'
@@ -137,11 +137,11 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           child: const Icon(Icons.shopping_cart_outlined, color: AppTheme.primary, size: 40),
         ),
         const SizedBox(height: 24),
-        const Text('Sin datos para calcular',
+        Text('Sin datos para calcular',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Para generar la lista de compras necesitas:\n'
           '1. Clientes con pedidos usando el catálogo de productos.\n'
           '2. Recetas definidas para las variantes vendidas.',
@@ -178,7 +178,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 const Icon(Icons.shopping_cart_outlined, color: AppTheme.primary, size: 18),
                 const SizedBox(width: 10),
                 Text('${widget.ventaNombre}',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                     overflow: TextOverflow.ellipsis),
               ]),
               const SizedBox(height: 14),
@@ -254,13 +254,13 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       if ((insumo['fuentes']?.toString() ?? '').isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Text(insumo['fuentes'].toString(),
-                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
                       if (precio != null) ...[
                         const SizedBox(height: 3),
                         Text('${Money.fmt(precio)} / ${insumo['unidad'] ?? ''}',
-                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                       ],
                     ])),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -311,7 +311,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       const Icon(Icons.circle, size: 5, color: AppTheme.warning),
                       const SizedBox(width: 10),
                       Expanded(child: Text(sr['descripcion']?.toString() ?? '',
-                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
                       Text('$cantStr uds',
                           style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700,
                               fontSize: 12)),
@@ -319,7 +319,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                   );
                 }),
                 const SizedBox(height: 10),
-                const Text('Ve a Cobros → Productos → Receta para definirlas.',
+                Text('Ve a Cobros → Productos → Receta para definirlas.',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
             ),
@@ -348,7 +348,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       child: Column(children: [
         Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
         const SizedBox(height: 3),
-        Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 9),
+        Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 9),
             textAlign: TextAlign.center),
       ]),
     ),
@@ -357,13 +357,13 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   Widget _labelDivider(String label) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: Row(children: [
-      const Expanded(child: Divider(color: AppTheme.border)),
+      Expanded(child: Divider(color: AppTheme.border)),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Text(label,
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
       ),
-      const Expanded(child: Divider(color: AppTheme.border)),
+      Expanded(child: Divider(color: AppTheme.border)),
     ]),
   );
 }

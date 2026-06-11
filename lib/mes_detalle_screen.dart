@@ -282,7 +282,7 @@ class _TabResumen extends StatelessWidget {
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(
                 hayReal ? 'Te queda disponible' : 'Estimado disponible',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
               ),
               const SizedBox(width: 6),
               // V2 — define qué compone el total para que cuadre en todas las pantallas
@@ -293,7 +293,7 @@ class _TabResumen extends StatelessWidget {
                 message: 'Lo gastado incluye todo lo registrado este mes: '
                     'gastos fijos, deudas pagadas, variables, no presupuestados, '
                     'gustitos, compartido y eventos. Es el mismo total en Dashboard y Estado Anual.',
-                child: const Icon(Icons.info_outline, size: 13, color: AppTheme.textMuted),
+                child: Icon(Icons.info_outline, size: 13, color: AppTheme.textMuted),
               ),
             ]),
             const SizedBox(height: 6),
@@ -306,7 +306,7 @@ class _TabResumen extends StatelessWidget {
               hayReal
                   ? 'de ${Money.fmt(ingresoRef)} · ya gastaste ${Money.fmt(yaGastado)}'
                   : 'basado en tu planificación — registra gastos para ver el real',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
@@ -323,7 +323,7 @@ class _TabResumen extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               ingresoRef > 0 ? 'Usaste el ${(yaGastado / ingresoRef * 100).toStringAsFixed(0)}% de tu ingreso' : '',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
             ),
           ]),
         ),
@@ -374,9 +374,9 @@ class _TabResumen extends StatelessWidget {
             iconColor: AppTheme.primary,
             collapsedIconColor: AppTheme.textMuted,
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
-            title: const Text('Detalle del mes',
+            title: Text('Detalle del mes',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-            subtitle: const Text('Comparación, uso del ingreso y compromisos',
+            subtitle: Text('Comparación, uso del ingreso y compromisos',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             children: [
               const SizedBox(height: 8),
@@ -412,7 +412,7 @@ class _TabResumen extends StatelessWidget {
                   ]),
                 ),
               ],
-              const Divider(color: AppTheme.border, height: 24),
+              Divider(color: AppTheme.border, height: 24),
               _FilaComparativa('Te sobra', remEst, remReal,
                   remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
               const SizedBox(height: 24),
@@ -433,7 +433,7 @@ class _TabResumen extends StatelessWidget {
         // Botón cierre mensual (solo si el mes está activo)
         if ((data['mes']?['estado'] as String? ?? '') == 'activo') ...[
           const SizedBox(height: 28),
-          const Divider(color: AppTheme.border),
+          Divider(color: AppTheme.border),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -442,7 +442,7 @@ class _TabResumen extends StatelessWidget {
               label: Text('Ver cómo me fue en $labelMes'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.textSecondary,
-                side: const BorderSide(color: AppTheme.border),
+                side: BorderSide(color: AppTheme.border),
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -471,7 +471,7 @@ class _TabResumen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Guarda un resumen de cómo te fue. Tu historial se conserva — no pierdes acceso.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
@@ -484,7 +484,7 @@ class _TabResumen extends StatelessWidget {
 
   Widget _seccion(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Text(t, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+    child: Text(t, style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
   );
 
   double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
@@ -508,7 +508,7 @@ class _FilaComparativa extends StatelessWidget {
             style: TextStyle(color: AppTheme.textSecondary, fontSize: bold ? 14 : 13,
                 fontWeight: bold ? FontWeight.w700 : FontWeight.normal))),
         Expanded(flex: 2, child: Text('${Money.fmt(estimado)}',
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 12))),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 12))),
         Expanded(flex: 2, child: Text('${Money.fmt(real)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: bold ? 15 : 13))),
         if (estimado > 0) SizedBox(
@@ -547,7 +547,7 @@ class _BarraUso extends StatelessWidget {
       ),
       const SizedBox(height: 6),
       Text('${(pct * 100).toStringAsFixed(1)}% del ingreso usado · ${Money.fmt(total)} de ${Money.fmt(ingreso)}',
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
     ]);
   }
 }
@@ -619,7 +619,7 @@ class _TabGastosState extends State<_TabGastos> {
               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
           Text('Pagar ${g['nombre']}',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           // Resumen planeado / pagado / falta
           Container(
@@ -638,7 +638,7 @@ class _TabGastosState extends State<_TabGastos> {
           TextField(
             controller: montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               labelText: '¿Cuánto pagaste?',
               prefixText: 'B/. ',
@@ -669,12 +669,12 @@ class _TabGastosState extends State<_TabGastos> {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Row(children: [
-                const Icon(Icons.calendar_today, color: AppTheme.textMuted, size: 16),
+                Icon(Icons.calendar_today, color: AppTheme.textMuted, size: 16),
                 const SizedBox(width: 10),
                 Text('Fecha: ${fmtFecha(fecha)}',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                 const Spacer(),
-                const Icon(Icons.edit, color: AppTheme.textMuted, size: 14),
+                Icon(Icons.edit, color: AppTheme.textMuted, size: 14),
               ]),
             ),
           ),
@@ -719,7 +719,7 @@ class _TabGastosState extends State<_TabGastos> {
           // Pagos ya registrados (eliminar para corregir)
           if (regs.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const Text('Pagos registrados',
+            Text('Pagos registrados',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
             const SizedBox(height: 6),
             ...regs.map((r) => Padding(
@@ -729,7 +729,7 @@ class _TabGastosState extends State<_TabGastos> {
                 const SizedBox(width: 8),
                 Expanded(child: Text(
                   '${Money.fmt(_num(r['monto']))} · ${(r['fecha']?.toString() ?? '').split('T').first}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                 )),
                 GestureDetector(
                   onTap: () async {
@@ -764,8 +764,8 @@ class _TabGastosState extends State<_TabGastos> {
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.history, color: AppTheme.info),
-            title: const Text('Ver historial de pagos', style: TextStyle(color: AppTheme.textPrimary)),
-            subtitle: const Text('Qué meses lo has pagado este año',
+            title: Text('Ver historial de pagos', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text('Qué meses lo has pagado este año',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             onTap: () {
               Navigator.pop(context);
@@ -774,8 +774,8 @@ class _TabGastosState extends State<_TabGastos> {
           ),
           ListTile(
             leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
-            title: const Text('Editar gasto fijo', style: TextStyle(color: AppTheme.textPrimary)),
-            subtitle: const Text('Cambia nombre o monto para todos los meses',
+            title: Text('Editar gasto fijo', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text('Cambia nombre o monto para todos los meses',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             onTap: () {
               Navigator.pop(context);
@@ -793,7 +793,7 @@ class _TabGastosState extends State<_TabGastos> {
           ListTile(
             leading: const Icon(Icons.delete_outline, color: AppTheme.danger),
             title: const Text('Eliminar gasto fijo', style: TextStyle(color: AppTheme.danger)),
-            subtitle: const Text('Se elimina de todos los meses',
+            subtitle: Text('Se elimina de todos los meses',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             onTap: () async {
               Navigator.pop(context);
@@ -801,11 +801,11 @@ class _TabGastosState extends State<_TabGastos> {
                 context: context,
                 builder: (_) => AlertDialog(
                   backgroundColor: AppTheme.surface,
-                  title: const Text('¿Eliminar gasto fijo?',
+                  title: Text('¿Eliminar gasto fijo?',
                       style: TextStyle(color: AppTheme.textPrimary)),
                   content: Text(
                     'Se eliminará "${g['nombre']}" de todos los meses. Esta acción no se puede deshacer.',
-                    style: const TextStyle(color: AppTheme.textSecondary),
+                    style: TextStyle(color: AppTheme.textSecondary),
                   ),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(context, false),
@@ -860,13 +860,13 @@ class _TabGastosState extends State<_TabGastos> {
             const SizedBox(height: 14),
             Row(children: [
               Expanded(child: Text(catLabel,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700))),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700))),
               Text('${delCat.length} ${delCat.length == 1 ? 'gasto' : 'gastos'} · ${Money.fmt(total)}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             ]),
             const SizedBox(height: 12),
             if (delCat.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(child: Text('Sin gastos registrados en esta categoría este mes.',
                     style: TextStyle(color: AppTheme.textSecondary))),
@@ -875,7 +875,7 @@ class _TabGastosState extends State<_TabGastos> {
               Expanded(child: ListView.separated(
                 controller: scrollCtrl,
                 itemCount: delCat.length,
-                separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
+                separatorBuilder: (_, __) => Divider(color: AppTheme.border, height: 1),
                 itemBuilder: (_, i) {
                   final r = delCat[i];
                   final fecha = (r['fecha']?.toString() ?? '');
@@ -885,12 +885,12 @@ class _TabGastosState extends State<_TabGastos> {
                     child: Row(children: [
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(r['nombre']?.toString() ?? '—',
-                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
-                        Text(fechaCorta, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                        Text(fechaCorta, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                       ])),
                       Text('${Money.fmt(_num(r['monto']))}',
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+                          style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
                     ]),
                   );
                 },
@@ -921,7 +921,7 @@ class _TabGastosState extends State<_TabGastos> {
                   child: Center(child: CircularProgressIndicator(color: AppTheme.primary)));
             }
             if (!snap.hasData || snap.data!.statusCode != 200) {
-              return const SizedBox(height: 120,
+              return SizedBox(height: 120,
                   child: Center(child: Text('No se pudo cargar el historial',
                       style: TextStyle(color: AppTheme.textSecondary))));
             }
@@ -935,10 +935,10 @@ class _TabGastosState extends State<_TabGastos> {
                   decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 14),
               Text(data['nombre']?.toString() ?? 'Gasto fijo',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text('Presupuestado: ${Money.fmt(presup)}/mes · ${widget.anio}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 16),
               // Grid de 12 meses
               Wrap(spacing: 8, runSpacing: 8, children: meses.map((m) {
@@ -973,7 +973,7 @@ class _TabGastosState extends State<_TabGastos> {
                   promedio > presup
                       ? 'Pagas en promedio ${Money.fmt(promedio - presup)} más que lo presupuestado.'
                       : 'Pagas en promedio ${Money.fmt(presup - promedio)} menos que lo presupuestado.',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3),
                 ),
               ],
             ]);
@@ -987,7 +987,7 @@ class _TabGastosState extends State<_TabGastos> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w800)),
-      Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+      Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
     ],
   );
 
@@ -1024,10 +1024,10 @@ class _TabGastosState extends State<_TabGastos> {
             const SizedBox(height: 14),
             Text(
               'Presupuesto · ${categoria[0].toUpperCase()}${categoria.substring(1)}',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
-            const Text('Mantén presionado una línea para editarla',
+            Text('Mantén presionado una línea para editarla',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 14),
             ...lineas.map((g) => _LineaVariableRow(
@@ -1148,7 +1148,7 @@ class _TabGastosState extends State<_TabGastos> {
                 if ((a['accion_sugerida'] as String? ?? '').isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(a['accion_sugerida'] as String,
-                      style: const TextStyle(color: AppTheme.textSecondary,
+                      style: TextStyle(color: AppTheme.textSecondary,
                           fontSize: 11, height: 1.3)),
                 ],
               ])),
@@ -1164,7 +1164,7 @@ class _TabGastosState extends State<_TabGastos> {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(children: [
-                const Text('SOBRES DEL MES',
+                Text('SOBRES DEL MES',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 10,
                         fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                 const Spacer(),
@@ -1181,7 +1181,7 @@ class _TabGastosState extends State<_TabGastos> {
               onLongPress: () => _mostrarOpcionesVariable(
                   context, c['categoria'] as String),
             )),
-          const Divider(color: AppTheme.border, height: 24),
+          Divider(color: AppTheme.border, height: 24),
         ],
 
         // ── COMPROMISOS FIJOS DEL MES ────────────────────────────
@@ -1215,7 +1215,7 @@ class _TabGastosState extends State<_TabGastos> {
               onTap: (_operando || deudaId < 0) ? null : () => _marcarDeuda(d, pagado, deudaARegistroId[deudaId]),
             );
           }),
-          const Divider(color: AppTheme.border, height: 24),
+          Divider(color: AppTheme.border, height: 24),
         ],
 
         // ── REGISTROS REALES ────────────────────────────────────
@@ -1224,19 +1224,19 @@ class _TabGastosState extends State<_TabGastos> {
           if (registros.length > 3) ...[
             TextField(
               controller: _buscadorCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
               onChanged: (v) => setState(() => _busqueda = v),
               decoration: InputDecoration(
                 hintText: 'Buscar gasto…',
-                hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+                hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
                 suffixIcon: _busqueda.isNotEmpty
                     ? GestureDetector(
                         onTap: () => setState(() {
                           _busqueda = '';
                           _buscadorCtrl.clear();
                         }),
-                        child: const Icon(Icons.clear, color: AppTheme.textMuted, size: 16),
+                        child: Icon(Icons.clear, color: AppTheme.textMuted, size: 16),
                       )
                     : null,
                 filled: true,
@@ -1334,7 +1334,7 @@ class _TabGastosState extends State<_TabGastos> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(children: [
                   Expanded(child: Text('GASTOS REGISTRADOS',
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11,
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11,
                           fontWeight: FontWeight.w600, letterSpacing: 0.6))),
                   GestureDetector(
                     onTap: () => setState(() => _orden = nextOrden),
@@ -1345,7 +1345,7 @@ class _TabGastosState extends State<_TabGastos> {
                           style: const TextStyle(color: AppTheme.primary, fontSize: 11)),
                       const SizedBox(width: 6),
                       Text(label,
-                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                     ]),
                   ),
                 ]),
@@ -1354,7 +1354,7 @@ class _TabGastosState extends State<_TabGastos> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text('Sin resultados para "$_busqueda"',
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                 )
               else
                 ...filtrados.map((r) => _RegistroTile(
@@ -1414,7 +1414,7 @@ class _TabGastosState extends State<_TabGastos> {
         Container(width: 8, height: 8,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 8),
-        Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
       ]),
       Text(Money.fmt(monto),
           style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
@@ -1479,10 +1479,10 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('¿Eliminar línea?',
+        title: Text('¿Eliminar línea?',
             style: TextStyle(color: AppTheme.textPrimary)),
         content: Text('Se eliminará "${widget.g['nombre']}" del presupuesto.',
-            style: const TextStyle(color: AppTheme.textSecondary)),
+            style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancelar')),
@@ -1518,7 +1518,7 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           TextField(
             controller: _nombreCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Nombre', isDense: true,
               contentPadding: EdgeInsets.symmetric(vertical: 8),
@@ -1528,7 +1528,7 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
           TextField(
             controller: _montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Monto (\$)', prefixText: 'B/. ', isDense: true,
               contentPadding: EdgeInsets.symmetric(vertical: 8),
@@ -1591,12 +1591,12 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
       dense: true,
       contentPadding: EdgeInsets.zero,
       title: Text(widget.g['nombre'] as String? ?? '',
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
       subtitle: Text('$frec',
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         Text('${Money.fmt(monto)}',
-            style: const TextStyle(color: AppTheme.textSecondary,
+            style: TextStyle(color: AppTheme.textSecondary,
                 fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(width: 8),
         GestureDetector(
@@ -1644,12 +1644,12 @@ class _SobreRow extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(nombre,
-                style: const TextStyle(color: AppTheme.textSecondary,
+                style: TextStyle(color: AppTheme.textSecondary,
                     fontSize: 12, fontWeight: FontWeight.w600))),
             if (onTap != null)
-              const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 13),
+              Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 13),
             if (onLongPress != null)
-              const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 11),
+              Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 11),
             const SizedBox(width: 4),
             Text(
               excede
@@ -1685,9 +1685,9 @@ class _SeccionLabel extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 10),
     child: Row(children: [
       Expanded(child: Text(titulo,
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11,
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11,
               fontWeight: FontWeight.w600, letterSpacing: 0.6))),
-      Text(subtitulo, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+      Text(subtitulo, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
     ]),
   );
 }
@@ -1762,7 +1762,7 @@ class _PlanTile extends StatelessWidget {
                 style: const TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w600))
           else if (cuotasRestantes != null)
             Text('$cuotasRestantes cuotas restantes',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${Money.fmt(monto)}',
@@ -1775,9 +1775,9 @@ class _PlanTile extends StatelessWidget {
           else if (parcial)
             const Text('Pago parcial', style: TextStyle(color: AppTheme.warning, fontSize: 9))
           else if (onTap != null)
-            const Text('Toca para pagar', style: TextStyle(color: AppTheme.textMuted, fontSize: 9))
+            Text('Toca para pagar', style: TextStyle(color: AppTheme.textMuted, fontSize: 9))
           else
-            const Text('Pendiente', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
+            Text('Pendiente', style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
         ]),
       ]),
     ),
@@ -1793,7 +1793,7 @@ class _ResumenPago extends StatelessWidget {
   const _ResumenPago(this.label, this.valor, this.color);
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+    Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
     const SizedBox(height: 3),
     Text(Money.fmt(valor),
         style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -1826,15 +1826,15 @@ class EditarGastoFijoSheet {
           Center(child: Container(width: 36, height: 4,
               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
-          const Text('Editar gasto fijo',
+          Text('Editar gasto fijo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          const Text('El cambio aplica a todos los meses',
+          Text('El cambio aplica a todos los meses',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           const SizedBox(height: 20),
           TextField(
             controller: nombreCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Nombre'),
             textCapitalization: TextCapitalization.sentences,
           ),
@@ -1842,7 +1842,7 @@ class EditarGastoFijoSheet {
           TextField(
             controller: montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Monto mensual (\$)', prefixText: 'B/. '),
             onChanged: (_) => setS(() {}),
           ),
@@ -1947,10 +1947,10 @@ class _RegistroTile extends StatelessWidget {
             ? Icon(Icons.bolt, color: color, size: 16)
             : Icon(_iconCategoria(reg['categoria'] as String? ?? ''), color: color, size: 16),
       ),
-      title: Text(reg['nombre'] as String? ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+      title: Text(reg['nombre'] as String? ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
       subtitle: Row(children: [
         Text('${reg['categoria']} · $tipoLabel',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
         if (esGustito) ...[
           const SizedBox(width: 4),
           Container(
@@ -2001,7 +2001,7 @@ class _RegistroTile extends StatelessWidget {
             ),
           ListTile(
             leading: const Icon(Icons.check_circle_outline, color: AppTheme.success),
-            title: const Text('Marcar pagado/pendiente', style: TextStyle(color: AppTheme.textPrimary)),
+            title: Text('Marcar pagado/pendiente', style: TextStyle(color: AppTheme.textPrimary)),
             onTap: () async {
               Navigator.pop(context);
               final pagado = (reg['pagado'] as int? ?? 0) == 1;
@@ -2012,7 +2012,7 @@ class _RegistroTile extends StatelessWidget {
           if (!esGustito) ...[
             ListTile(
               leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
-              title: const Text('Editar', style: TextStyle(color: AppTheme.textPrimary)),
+              title: Text('Editar', style: TextStyle(color: AppTheme.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 _mostrarEditarSheet(context);
@@ -2020,7 +2020,7 @@ class _RegistroTile extends StatelessWidget {
             ),
             if (reg['tipo'] == 'no_presupuestado') ListTile(
               leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
-              title: const Text('Convertir a gasto variable base', style: TextStyle(color: AppTheme.textPrimary)),
+              title: Text('Convertir a gasto variable base', style: TextStyle(color: AppTheme.textPrimary)),
               onTap: () async {
                 Navigator.pop(context);
                 await RegistrosService.convertirAVariable(uid, reg['id'] as int);
@@ -2093,7 +2093,7 @@ class _RegistroTile extends StatelessWidget {
                   decoration: BoxDecoration(color: AppTheme.border,
                       borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Text('Editar gasto',
+              Text('Editar gasto',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 17,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
@@ -2132,7 +2132,7 @@ class _RegistroTile extends StatelessWidget {
               // Nombre
               TextField(
                 controller: nombreCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(labelText: 'Nombre del gasto'),
               ),
               const SizedBox(height: 12),
@@ -2141,7 +2141,7 @@ class _RegistroTile extends StatelessWidget {
               TextField(
                 controller: montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(
                     labelText: 'Monto', prefixText: 'B/. '),
               ),
@@ -2183,11 +2183,11 @@ class _RegistroTile extends StatelessWidget {
                     border: Border.all(color: AppTheme.border),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.calendar_today,
+                    Icon(Icons.calendar_today,
                         color: AppTheme.textSecondary, size: 16),
                     const SizedBox(width: 10),
                     Text(fmt(fecha),
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppTheme.textPrimary, fontSize: 14)),
                   ]),
                 ),
@@ -2197,7 +2197,7 @@ class _RegistroTile extends StatelessWidget {
               // Notas
               TextField(
                 controller: notasCtrl,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(
                     labelText: 'Notas (opcional)'),
               ),
@@ -2241,7 +2241,7 @@ class _RegistroTile extends StatelessWidget {
                     }
                   },
                   child: guardando
-                      ? const SizedBox(height: 18, width: 18,
+                      ? SizedBox(height: 18, width: 18,
                           child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: AppTheme.background))
@@ -2278,10 +2278,10 @@ class _CompromisosSection extends StatelessWidget {
     if (gastosFijos.isEmpty && deudas.isEmpty && eventos.isEmpty) return const SizedBox.shrink();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('COMPROMISOS DEL MES',
+      Text('COMPROMISOS DEL MES',
           style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
       const SizedBox(height: 4),
-      const Text('Gastos fijos y deudas activos este mes',
+      Text('Gastos fijos y deudas activos este mes',
           style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       const SizedBox(height: 10),
 
@@ -2391,10 +2391,10 @@ class _CompromisoTile extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nombre, style: const TextStyle(color: AppTheme.textPrimary,
+          Text(nombre, style: TextStyle(color: AppTheme.textPrimary,
               fontSize: 13, fontWeight: FontWeight.w600)),
           if (subtitulo.isNotEmpty)
-            Text(subtitulo, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            Text(subtitulo, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
         ])),
         Text('${Money.fmt(monto)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
@@ -2463,7 +2463,7 @@ class _TabQuincenasState extends State<_TabQuincenas> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 36),
             const SizedBox(height: 12),
-            const Text('No se pudo cargar la vista quincenal.',
+            Text('No se pudo cargar la vista quincenal.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
             const SizedBox(height: 16),
@@ -2507,7 +2507,7 @@ class _TabQuincenasState extends State<_TabQuincenas> {
             onRefresh: _cargar,
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Tus gastos fijos y variables aparecen automáticamente en cada quincena. '
             'Registrar un gasto en el + lo añade a la quincena de su fecha.',
             textAlign: TextAlign.center,
@@ -2685,7 +2685,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(4)),
-                    child: const Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
+                    child: Text('HOY', style: TextStyle(color: AppTheme.background, fontSize: 9, fontWeight: FontWeight.w800)),
                   ),
                 if (cerrada)
                   Container(
@@ -2698,14 +2698,14 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                         color: resultadoColor, fontSize: 9, fontWeight: FontWeight.w800)),
                   ),
               ]),
-              Text('Días $dias', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Text('Días $dias', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
             const Spacer(),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('${Money.fmt(disponible)}',
                   style: TextStyle(color: dispColor, fontSize: 22, fontWeight: FontWeight.w800)),
               Text(cerrada ? 'resultado final' : 'disponible',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             ]),
           ]),
         ),
@@ -2728,17 +2728,17 @@ class _QuincenaCardState extends State<_QuincenaCard> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('Ingreso: ${Money.fmt(ingQ)}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
             Text('Gastado: ${Money.fmt(gastado)}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
           ]),
         ),
         if (compromisos.isNotEmpty) ...[
-          const Divider(color: AppTheme.border, height: 20),
+          Divider(color: AppTheme.border, height: 20),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
             child: Row(children: [
-              const Text('COMPROMISOS',
+              Text('COMPROMISOS',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8, fontWeight: FontWeight.w700)),
               const Spacer(),
               if (_operando)
@@ -2767,7 +2767,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                   )),
               // B2 — aclarar que es media cuota cuando el fijo se paga 2 veces al mes
               subtitle: c['medio'] == true
-                  ? const Text('½ de tu cuota · pagas 2 veces al mes',
+                  ? Text('½ de tu cuota · pagas 2 veces al mes',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 10))
                   : null,
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -2800,11 +2800,11 @@ class _QuincenaCardState extends State<_QuincenaCard> {
           }),
         ],
         if (registros.isNotEmpty) ...[
-          const Divider(color: AppTheme.border, height: 20),
+          Divider(color: AppTheme.border, height: 20),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Text('${registros.length} gastos registrados',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
           ),
           ...registros.take(5).map((r) {
             final esMensual = r['es_mensual'] == true || r['es_mensual'] == 1;
@@ -2813,7 +2813,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
               title: Row(children: [
                 Expanded(child: Text(r['nombre'] as String? ?? '—',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
                 if (esMensual)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
@@ -2827,19 +2827,19 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                   ),
               ]),
               subtitle: Text(r['categoria'] as String? ?? '',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               trailing: Text('${Money.fmt(_d(r['monto']))}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
             );
           }),
           if (registros.length > 5)
             Padding(
               padding: const EdgeInsets.only(left: 16, bottom: 8),
               child: Text('+${registros.length - 5} más',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ),
         ] else if (compromisos.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 4, 16, 14),
             child: Text(
               'Sin compromisos ni gastos en esta quincena aún.',
@@ -2896,7 +2896,7 @@ class _TabAnalisisState extends State<_TabAnalisis> {
       children: [
         // ── Recomendaciones de aprendizaje ─────────────────────────────
         if (!_loadingRec && conRec.isNotEmpty) ...[
-          const Text('RECOMENDACIONES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+          Text('RECOMENDACIONES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           ...conRec.map((r) => _RecomendacionCard(rec: r)),
           const SizedBox(height: 20),
@@ -2907,10 +2907,10 @@ class _TabAnalisisState extends State<_TabAnalisis> {
             child: LinearProgressIndicator(minHeight: 2, color: AppTheme.primary),
           ),
         // ── Análisis por categoría este mes ────────────────────────────
-        const Text('PRESUPUESTADO VS REAL ESTE MES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.6)),
+        Text('PRESUPUESTADO VS REAL ESTE MES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.6)),
         const SizedBox(height: 12),
         if (cats.isEmpty)
-          const Center(child: Text('Agrega gastos para ver el análisis.',
+          Center(child: Text('Agrega gastos para ver el análisis.',
               style: TextStyle(color: AppTheme.textSecondary), textAlign: TextAlign.center))
         else
           ...sorted.map((c) => _CategoriaCard(cat: c)),
@@ -2947,7 +2947,7 @@ class _RecomendacionCard extends StatelessWidget {
           Icon(icon, color: color, size: 18),
           const SizedBox(width: 8),
           Expanded(child: Text(rec['nombre'] as String,
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14))),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14))),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
@@ -2957,7 +2957,7 @@ class _RecomendacionCard extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         Text(r['mensaje'] as String,
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
         const SizedBox(height: 8),
         Row(children: [
           _statMin('Actual', '${Money.fmt(presupActual)}', AppTheme.textMuted),
@@ -2976,7 +2976,7 @@ class _RecomendacionCard extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
-      Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+      Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
     ],
   );
 }
@@ -3011,7 +3011,7 @@ class _CategoriaCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(child: Text(nombre,
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14))),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14))),
           if (pctVal != null && pctVal.abs() > 5)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -3029,7 +3029,7 @@ class _CategoriaCard extends StatelessWidget {
         const SizedBox(height: 8),
         Row(children: [
           Expanded(child: Text('Presup: ${Money.fmt(presup)}',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 11))),
           Expanded(child: Text('Real: ${Money.fmt(total)}',
               style: TextStyle(color: excedido ? AppTheme.danger : AppTheme.success,
                   fontSize: 11, fontWeight: FontWeight.w600))),
@@ -3086,7 +3086,7 @@ class _IngresoRealCard extends StatelessWidget {
             color: tieneReal ? AppTheme.success : AppTheme.textMuted, size: 20),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Ingreso cobrado este mes',
+          Text('Ingreso cobrado este mes',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 2),
           Text(
@@ -3123,18 +3123,18 @@ class _IngresoRealCard extends StatelessWidget {
             20, 20, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
         child: Column(mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Ingreso real del mes',
+          Text('Ingreso real del mes',
               style: TextStyle(color: AppTheme.textPrimary,
                   fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text('Estimado: ${Money.fmt(ingEst)}',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           const SizedBox(height: 16),
           TextField(
             controller: ctrl,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 18),
             decoration: const InputDecoration(
               labelText: 'Monto cobrado',
               prefixText: 'B/. ',
@@ -3199,7 +3199,7 @@ class _AlertaMesCard extends StatelessWidget {
                   fontSize: 12, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(alerta['mensaje'] as String? ?? '',
-              style: const TextStyle(color: AppTheme.textSecondary,
+              style: TextStyle(color: AppTheme.textSecondary,
                   fontSize: 11, height: 1.4)),
           if ((alerta['accion_sugerida'] as String?)?.isNotEmpty == true) ...[
             const SizedBox(height: 4),

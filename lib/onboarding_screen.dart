@@ -446,12 +446,12 @@ class _Paso1IncomeState extends State<_Paso1Income> {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Paso 1 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        Text('Paso 1 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('¿Cuánto recibes al mes?',
+        Text('¿Cuánto recibes al mes?',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Salario, negocio, freelance, alquiler — cualquier ingreso cuenta. Define cuánto recibes realmente.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.5),
         ),
@@ -485,19 +485,19 @@ class _Paso1IncomeState extends State<_Paso1Income> {
               border: Border.all(color: AppTheme.border),
             ),
             child: Row(children: [
-              const Icon(Icons.account_balance_outlined, color: AppTheme.textSecondary, size: 18),
+              Icon(Icons.account_balance_outlined, color: AppTheme.textSecondary, size: 18),
               const SizedBox(width: 10),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Aplicar CSS + Educativo (11%)',
+                Text('Aplicar CSS + Educativo (11%)',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-                const Text('Descuentos de nómina obligatorios en Panamá',
+                Text('Descuentos de nómina obligatorios en Panamá',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                 // Q2 — fecha de vigencia + camino manual
                 const SizedBox(height: 4),
                 Text(widget.aplicarCss
                         ? 'Tasas estimadas 2025 · Verifica con tu empleador. ¿Conoces tu neto exacto? Apaga esto e ingresa arriba el monto que te llega a la mano.'
                         : 'Estás ingresando tu neto exacto: escribe arriba el monto que te llega a la mano (sin descuentos automáticos).',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, fontStyle: FontStyle.italic, height: 1.3)),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10, fontStyle: FontStyle.italic, height: 1.3)),
               ])),
               Switch(
                 value: widget.aplicarCss,
@@ -521,7 +521,7 @@ class _Paso1IncomeState extends State<_Paso1Income> {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(
                     widget.aplicarCss ? 'Neto estimado (con descuentos)' : 'Neto completo (sin descuentos)',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                   ),
                   Text('B/. ${widget.fmt.format(widget.netoEstimado)}',
                       style: const TextStyle(color: AppTheme.success, fontSize: 20, fontWeight: FontWeight.bold)),
@@ -562,7 +562,7 @@ class _Paso1IncomeState extends State<_Paso1Income> {
           widget.frecuencia == 'quincenal'
               ? 'Recibirás dos pagos al mes: B/. ${widget.fmt.format(widget.netoEstimado > 0 ? widget.netoEstimado / 2 : widget.porQuincena ? (double.tryParse(widget.netoCtrl.text) ?? 0) : (double.tryParse(widget.netoCtrl.text) ?? 0) / 2)} c/u'
               : 'Un pago al mes.',
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
         ),
         const SizedBox(height: 32),
 
@@ -572,7 +572,7 @@ class _Paso1IncomeState extends State<_Paso1Income> {
           onPressed: widget.onContinuar,
         ),
         const SizedBox(height: 12),
-        const Center(
+        Center(
           child: Text(
             'Necesitamos saber cuánto recibes para mostrarte tu panorama financiero. Puedes ajustarlo después.',
             textAlign: TextAlign.center,
@@ -718,7 +718,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
           backgroundColor: AppTheme.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('$nombre — monto mensual',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             // Resumen de lo ya agregado
             if (widget.gastosFijos.isNotEmpty)
@@ -727,11 +727,11 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Ya agregados:', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  Text('Ya agregados:', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                   const SizedBox(height: 4),
                   ...widget.gastosFijos.map((g) => Text(
                     '• ${g['nombre']}  B/. ${(g['monto'] as double).toStringAsFixed(2)}',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
                   )),
                 ]),
               ),
@@ -739,8 +739,8 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
               controller: montoCtrl,
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20),
-              decoration: const InputDecoration(
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 20),
+              decoration: InputDecoration(
                 prefixText: 'B/. ',
                 prefixStyle: TextStyle(color: AppTheme.textSecondary),
                 hintText: '0.00',
@@ -786,7 +786,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
         builder: (ctx, setDlg) => AlertDialog(
           backgroundColor: AppTheme.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Otro gasto fijo',
+          title: Text('Otro gasto fijo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             if (widget.gastosFijos.isNotEmpty)
@@ -795,18 +795,18 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Ya agregados:', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  Text('Ya agregados:', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                   const SizedBox(height: 4),
                   ...widget.gastosFijos.map((g) => Text(
                     '• ${g['nombre']}  B/. ${(g['monto'] as double).toStringAsFixed(2)}',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
                   )),
                 ]),
               ),
             TextField(
               controller: nombreCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
+              style: TextStyle(color: AppTheme.textPrimary),
+              decoration: InputDecoration(
                 hintText: 'Nombre del gasto',
                 hintStyle: TextStyle(color: AppTheme.textMuted),
               ),
@@ -815,8 +815,8 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
             TextField(
               controller: montoCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
+              style: TextStyle(color: AppTheme.textPrimary),
+              decoration: InputDecoration(
                 prefixText: 'B/. ',
                 hintText: '0.00',
                 hintStyle: TextStyle(color: AppTheme.textMuted),
@@ -857,12 +857,12 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Paso 2 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        Text('Paso 2 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('¿Qué pagas cada mes?',
+        Text('¿Qué pagas cada mes?',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Los gastos fijos son compromisos que tienes todos los meses sin importar lo que pase.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.5),
         ),
@@ -879,9 +879,9 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
             border: Border.all(color: _compartidos ? AppTheme.info.withValues(alpha: 0.5) : AppTheme.border),
           ),
           child: Row(children: [
-            const Icon(Icons.group_outlined, color: AppTheme.textSecondary, size: 18),
+            Icon(Icons.group_outlined, color: AppTheme.textSecondary, size: 18),
             const SizedBox(width: 10),
-            const Expanded(child: Text(
+            Expanded(child: Text(
               '¿La mayoría de tus gastos son compartidos con alguien?',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
             )),
@@ -937,7 +937,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
               label: const Text('Plantilla', style: TextStyle(fontSize: 13)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.textSecondary,
-                side: const BorderSide(color: AppTheme.border),
+                side: BorderSide(color: AppTheme.border),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -946,11 +946,11 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
           ),
         ]),
         const SizedBox(height: 6),
-        const Text('Solo archivos .csv — exporta tu Excel como CSV primero.',
+        Text('Solo archivos .csv — exporta tu Excel como CSV primero.',
             style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
         const SizedBox(height: 20),
 
-        const Text('O agrega manualmente:',
+        Text('O agrega manualmente:',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -991,7 +991,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppTheme.border),
               ),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.add, color: AppTheme.textMuted, size: 14),
                 SizedBox(width: 5),
                 Text('Otro...', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
@@ -1002,25 +1002,25 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
 
         if (widget.gastosFijos.isNotEmpty) ...[
           const SizedBox(height: 20),
-          const Divider(color: AppTheme.border),
+          Divider(color: AppTheme.border),
           ...widget.gastosFijos.map((g) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(children: [
               const Icon(Icons.check_circle, color: AppTheme.success, size: 15),
               const SizedBox(width: 8),
               Expanded(child: Text(g['nombre'] as String,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
               _TipoBadge((g['clasificacion'] ?? g['tipo'] ?? 'esencial') as String),
               const SizedBox(width: 8),
               Text('B/. ${widget.fmt.format(g['monto'] as double)}',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                  style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
             ]),
           )),
-          const Divider(color: AppTheme.border),
+          Divider(color: AppTheme.border),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Total fijos', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
+            Text('Total fijos', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
             Text('B/. ${widget.fmt.format(widget.totalFijos)}',
-                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+                style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
           ]),
         ],
 
@@ -1034,7 +1034,7 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
           ),
         // H1 — comunicar que lo que sigue es opcional (configuración rápida)
         const SizedBox(height: 10),
-        Row(children: const [
+        Row(children: [
           Icon(Icons.bolt_outlined, color: AppTheme.textMuted, size: 14),
           SizedBox(width: 6),
           Expanded(child: Text(
@@ -1107,7 +1107,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
           return AlertDialog(
             backgroundColor: AppTheme.surface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Agregar deuda',
+            title: Text('Agregar deuda',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
             content: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1142,7 +1142,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
                 // Nombre
                 TextField(
                   controller: nombreCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                   decoration: _deco('Nombre de la deuda (ej: Tarjeta BAC)'),
                 ),
                 const SizedBox(height: 10),
@@ -1151,7 +1151,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
                 TextField(
                   controller: montoCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                   onChanged: (_) => setDlg(() {}),
                   decoration: _deco('Monto total adeudado (B/.)'),
                 ),
@@ -1161,7 +1161,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
                 TextField(
                   controller: tasaCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                   onChanged: (_) => setDlg(() {}),
                   decoration: _deco('Tasa de interés anual (%)'),
                 ),
@@ -1171,7 +1171,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
                 TextField(
                   controller: plazoCtrl,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                   onChanged: (_) => setDlg(() {}),
                   decoration: _deco('Plazo en meses (ej: 36)'),
                 ),
@@ -1188,19 +1188,19 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
                     ),
                     child: Column(children: [
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Cuota mensual:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text('Cuota mensual:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         Text('B/. ${cuota.toStringAsFixed(2)}',
                             style: const TextStyle(color: AppTheme.primary, fontSize: 16, fontWeight: FontWeight.bold)),
                       ]),
                       if (plazo > 0) ...[
                         const SizedBox(height: 4),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          const Text('Total a pagar:', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                          Text('Total a pagar:', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                           Text('B/. ${(cuota * plazo).toStringAsFixed(2)}',
-                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                         ]),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          const Text('Total intereses:', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                          Text('Total intereses:', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                           Text('B/. ${(cuota * plazo - principal).toStringAsFixed(2)}',
                               style: const TextStyle(color: AppTheme.warning, fontSize: 11)),
                         ]),
@@ -1231,7 +1231,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
 
   static InputDecoration _deco(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+    hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 13),
     filled: true,
     fillColor: AppTheme.surfaceAlt,
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
@@ -1243,12 +1243,12 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Paso 3 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        Text('Paso 3 de 4', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('¿Tienes deudas?',
+        Text('¿Tienes deudas?',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Tarjetas de crédito, préstamos, letras. Agrégalos para ver tu disponible real.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.5),
         ),
@@ -1277,7 +1277,7 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
 
         if (widget.deudas.isNotEmpty) ...[
           const SizedBox(height: 20),
-          const Divider(color: AppTheme.border),
+          Divider(color: AppTheme.border),
           ...widget.deudas.map((d) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(children: [
@@ -1285,17 +1285,17 @@ class _Paso3DeudasState extends State<_Paso3Deudas> {
               const SizedBox(width: 8),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(d['nombre'] as String,
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                 Text('${(d['tasa'] as double).toStringAsFixed(1)}% anual · ${d['plazo']} meses',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ])),
               Text('−B/. ${(d['cuota'] as double).toStringAsFixed(2)}/mes',
                   style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w600, fontSize: 13)),
             ]),
           )),
-          const Divider(color: AppTheme.border),
+          Divider(color: AppTheme.border),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Total cuotas/mes', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
+            Text('Total cuotas/mes', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
             Text('B/. ${widget.fmt.format(widget.totalDeudas)}',
                 style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 15)),
           ]),
@@ -1338,12 +1338,12 @@ class _Paso4Variables extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Paso 4 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        Text('Paso 4 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('¿Cuánto quieres presupuestar al mes?',
+        Text('¿Cuánto quieres presupuestar al mes?',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text('Este es tu tope objetivo por categoría (comida, ocio, etc.), no lo que ya gastaste. Puedes ajustarlo después.',
+        Text('Este es tu tope objetivo por categoría (comida, ocio, etc.), no lo que ya gastaste. Puedes ajustarlo después.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
         const SizedBox(height: 20),
 
@@ -1372,7 +1372,7 @@ class _Paso4Variables extends StatelessWidget {
                           fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
                 if (activa) ...[
-                  const Text('\$', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  Text('\$', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                   const SizedBox(width: 4),
                   SizedBox(
                     width: 64,
@@ -1380,7 +1380,7 @@ class _Paso4Variables extends StatelessWidget {
                       controller: ctrl,
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.right,
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
                       decoration: const InputDecoration(
                         isDense: true,
                         contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
@@ -1410,7 +1410,7 @@ class _Paso4Variables extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Total variables estimado',
+            Text('Total variables estimado',
                 style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
             Text('${Money.fmt(totalVariables)}/mes',
                 style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
@@ -1435,7 +1435,7 @@ class _Paso4Variables extends StatelessWidget {
         Center(
           child: TextButton(
             onPressed: onContinuar,
-            child: const Text('Saltar por ahora', style: TextStyle(color: AppTheme.textMuted)),
+            child: Text('Saltar por ahora', style: TextStyle(color: AppTheme.textMuted)),
           ),
         ),
       ]),
@@ -1477,10 +1477,10 @@ class _Paso5Resumen extends StatelessWidget {
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 56),
           const SizedBox(height: 20),
-          const Text('Falta tu ingreso',
+          Text('Falta tu ingreso',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Para generar tu estado financiero necesitas registrar cuánto ganas.\n\nVuelve al Paso 1 y completa tu ingreso.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.6),
@@ -1506,12 +1506,12 @@ class _Paso5Resumen extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Paso 5 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        Text('Paso 5 de 5', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 8),
-        const Text('Tu perfil financiero',
+        Text('Tu perfil financiero',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text('Resumen de lo que configuraste. Salarying proyectará tus 12 meses.',
+        Text('Resumen de lo que configuraste. Salarying proyectará tus 12 meses.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, height: 1.5)),
         const SizedBox(height: 28),
 
@@ -1525,7 +1525,7 @@ class _Paso5Resumen extends StatelessWidget {
           child: Column(children: [
             _ResRow('Ingreso neto mensual',
                 'B/. ${fmt.format(ingresoNeto)}', AppTheme.success),
-            const Divider(color: AppTheme.border, height: 20),
+            Divider(color: AppTheme.border, height: 20),
             _ResRow('Gastos fijos ($cantGastos)',
                 '− B/. ${fmt.format(totalFijos)}', AppTheme.textSecondary),
             if (cantDeudas > 0) ...[
@@ -1538,9 +1538,9 @@ class _Paso5Resumen extends StatelessWidget {
               _ResRow('Variables estimadas ($cantVariables)',
                   '− B/. ${fmt.format(totalVariables)}', AppTheme.warning),
             ],
-            const Divider(color: AppTheme.border, height: 20),
+            Divider(color: AppTheme.border, height: 20),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Te sobra al mes',
+              Text('Te sobra al mes',
                   style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
               Text('B/. ${fmt.format(remanente)}',
                   style: TextStyle(color: remColor, fontWeight: FontWeight.w800, fontSize: 24)),
@@ -1567,7 +1567,7 @@ class _Paso5Resumen extends StatelessWidget {
                 )),
               ]),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'No estás solo/a en esto. Salarying te ayudará a entender dónde ajustar. Puedes revisar tus gastos ahora o continuar y ajustarlos después.',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
               ),
@@ -1623,7 +1623,7 @@ class _Paso5Resumen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        const Center(
+        Center(
           child: Text('Puedes ajustar todo desde tu Perfil Financiero en cualquier momento.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
@@ -1642,7 +1642,7 @@ class _ResRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+      Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
       Text(valor, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
     ],
   );
@@ -1681,18 +1681,18 @@ class _RevisionCsvDialogState extends State<_RevisionCsvDialog> {
         const Icon(Icons.checklist_outlined, color: AppTheme.primary, size: 20),
         const SizedBox(width: 8),
         Text('Revisar importación (${_rows.length})',
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
       ]),
       content: SizedBox(
         width: 480,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Row(children: [
+          Row(children: [
             SizedBox(width: 28),
             Expanded(flex: 3, child: Text('Descripción', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600))),
             Expanded(flex: 2, child: Text('Monto', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600))),
             Expanded(flex: 2, child: Text('Tipo', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600))),
           ]),
-          const Divider(color: AppTheme.border, height: 12),
+          Divider(color: AppTheme.border, height: 12),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 320),
             child: ListView.builder(
@@ -1706,14 +1706,14 @@ class _RevisionCsvDialogState extends State<_RevisionCsvDialog> {
                     // Eliminar fila
                     GestureDetector(
                       onTap: () => setState(() => _rows.removeAt(i)),
-                      child: const Icon(Icons.remove_circle_outline, color: AppTheme.textMuted, size: 16),
+                      child: Icon(Icons.remove_circle_outline, color: AppTheme.textMuted, size: 16),
                     ),
                     const SizedBox(width: 6),
                     // Descripción (editable)
                     Expanded(flex: 3, child: TextFormField(
                       initialValue: r['descripcion'] as String,
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                      decoration: InputDecoration(
                         isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                         filled: true, fillColor: AppTheme.surfaceAlt,
                         border: OutlineInputBorder(borderSide: BorderSide.none),
@@ -1725,8 +1725,8 @@ class _RevisionCsvDialogState extends State<_RevisionCsvDialog> {
                     Expanded(flex: 2, child: TextFormField(
                       initialValue: (r['monto_mensual'] as num).toStringAsFixed(2),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                      decoration: InputDecoration(
                         isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                         filled: true, fillColor: AppTheme.surfaceAlt,
                         border: OutlineInputBorder(borderSide: BorderSide.none),
@@ -1749,12 +1749,12 @@ class _RevisionCsvDialogState extends State<_RevisionCsvDialog> {
               },
             ),
           ),
-          const Divider(color: AppTheme.border, height: 12),
+          Divider(color: AppTheme.border, height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('${_rows.length} gastos · Total mensual',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             Text('B/. ${_total.toStringAsFixed(2)}',
-                style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+                style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
           ]),
         ]),
       ),
@@ -1791,13 +1791,13 @@ class _ClasifDropdown extends StatelessWidget {
   Widget build(BuildContext context) => DropdownButtonFormField<String>(
     value: value,
     isDense: true,
-    decoration: const InputDecoration(
+    decoration: InputDecoration(
       isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       filled: true, fillColor: AppTheme.surfaceAlt,
       border: OutlineInputBorder(borderSide: BorderSide.none),
     ),
     dropdownColor: AppTheme.surface,
-    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 11),
+    style: TextStyle(color: AppTheme.textPrimary, fontSize: 11),
     items: const [
       DropdownMenuItem(value: 'esencial',   child: Text('Esencial')),
       DropdownMenuItem(value: 'importante', child: Text('Importante')),
@@ -1820,7 +1820,7 @@ class _InfoBox extends StatelessWidget {
       border: Border.all(color: AppTheme.border),
     ),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 14),
+      Icon(Icons.lightbulb_outline, color: AppTheme.textMuted, size: 14),
       const SizedBox(width: 8),
       Expanded(child: Text(text, style: TextStyle(
         color: AppTheme.textSecondary,
@@ -1836,7 +1836,7 @@ class _Label extends StatelessWidget {
   const _Label(this.text);
   @override
   Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600));
+      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600));
 }
 
 // Q1 — chip para elegir si el monto informal escrito es mensual o por quincena
@@ -1877,13 +1877,13 @@ class _Input extends StatelessWidget {
   Widget build(BuildContext context) => TextField(
     controller: ctrl,
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20),
+    style: TextStyle(color: AppTheme.textPrimary, fontSize: 20),
     onChanged: onChanged,
     decoration: InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textMuted),
+      hintStyle: TextStyle(color: AppTheme.textMuted),
       prefixText: 'B/. ',
-      prefixStyle: const TextStyle(color: AppTheme.textSecondary),
+      prefixStyle: TextStyle(color: AppTheme.textSecondary),
       filled: true,
       fillColor: AppTheme.surface,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),

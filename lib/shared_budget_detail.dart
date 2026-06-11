@@ -113,10 +113,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
         title: Row(children: [
-          Expanded(child: Text(nombre, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16))),
+          Expanded(child: Text(nombre, style: TextStyle(color: AppTheme.textPrimary, fontSize: 16))),
           if (_miRol.isNotEmpty) _rolChip(_miRol),
         ]),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
         actions: [
           IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _recargar),
           if (_esCreador)
@@ -150,7 +150,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     _buildBalanceCard(),
                   ],
                   const SizedBox(height: 20),
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(bottom: 12),
                     child: Text('MOVIMIENTOS',
                         style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
@@ -185,12 +185,12 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         border: Border.all(color: AppTheme.border),
       ),
       child: Row(children: [
-        const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 14),
+        Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 14),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             inicio.toString().isNotEmpty ? '$inicio → $fin' : 'Período activo',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
         ),
         if (regla.toString().isNotEmpty)
@@ -218,10 +218,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         border: Border.all(color: AppTheme.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Mi presupuesto total', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        Text('Mi presupuesto total', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
         Text('${Money.fmt(totalMio)}',
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
@@ -234,7 +234,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         const SizedBox(height: 10),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Pagado ${Money.fmt(pagado)}',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           Text(
             pendiente > 0 ? 'Pendiente ${Money.fmt(pendiente)}' : '✓ Todo pagado',
             style: TextStyle(
@@ -274,12 +274,12 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
           Text('${(pct * 100).toInt()}%',
               style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
         ]),
-        const SizedBox(width: 14),
+        SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Progreso de pagos',
+          Text('Progreso de pagos',
               style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
           Text('$pagados de $total movimientos confirmados',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         ])),
       ]),
     );
@@ -288,7 +288,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   Widget _buildBalanceCard() {
     final balance = double.tryParse(_budget?['balance_neto']?.toString() ?? '0') ?? 0.0;
     final otroUid = _otroUid();
-    if (balance == 0.0 && otroUid.isEmpty) return const SizedBox.shrink();
+    if (balance == 0.0 && otroUid.isEmpty) return SizedBox.shrink();
 
     final debes = balance > 0.01;
     final teDeben = balance < -0.01;
@@ -302,7 +302,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             : 'Sin deudas pendientes';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -313,18 +313,18 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
           liquidado ? Icons.check_circle_outline : Icons.account_balance_wallet_outlined,
           color: color, size: 20,
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(child: Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600))),
         if (!liquidado)
           TextButton(
             onPressed: () => _showLiquidarDialog(balance, otroUid),
             style: TextButton.styleFrom(
               foregroundColor: AppTheme.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Liquidar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text('Liquidar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
           ),
       ]),
     );
@@ -343,32 +343,32 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           debes ? 'Registrar pago que hiciste' : 'Registrar pago que recibiste',
-          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(
             debes
                 ? 'Registra cuánto le pagaste a ${_shortUid(otroUid)}.'
                 : 'Registra cuánto te pagó ${_shortUid(otroUid)}.',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           TextField(
             controller: montoCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               prefixText: 'B/. ',
-              prefixStyle: const TextStyle(color: AppTheme.textMuted),
+              prefixStyle: TextStyle(color: AppTheme.textMuted),
               filled: true,
               fillColor: AppTheme.surfaceAlt,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancelar')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
             onPressed: () async {
@@ -395,7 +395,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                 if (ok) _recargar();
               }
             },
-            child: const Text('Guardar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: Text('Guardar', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -403,7 +403,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   }
 
   Widget _rolChip(String rol) {
-    const colors = {
+    final colors = {
       'creador': AppTheme.primary,
       'owner': AppTheme.primary,
       'admin': AppTheme.info,
@@ -468,7 +468,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             label: const Text('Editar división entre miembros'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.primary,
-              side: const BorderSide(color: AppTheme.border),
+              side: BorderSide(color: AppTheme.border),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -485,7 +485,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             label: const Text('Gestionar miembros y roles'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.textSecondary,
-              side: const BorderSide(color: AppTheme.border),
+              side: BorderSide(color: AppTheme.border),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -509,20 +509,20 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         border: Border.all(color: AppTheme.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('FONDO COMÚN', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1)),
+        Text('FONDO COMÚN', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1)),
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Total aportes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          Text('${Money.fmt(totalContrib)}', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
+          Text('Total aportes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('${Money.fmt(totalContrib)}', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 4),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Total gastado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('Total gastado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           Text('${Money.fmt(totalGastos)}', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700)),
         ]),
-        const Divider(color: AppTheme.border, height: 20),
+        Divider(color: AppTheme.border, height: 20),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Disponible', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text('Disponible', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
           Text(
             '${Money.fmt(balance)}',
             style: TextStyle(
@@ -532,7 +532,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
           ),
         ]),
         const SizedBox(height: 12),
-        const Text('APORTES POR PERSONA', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
+        Text('APORTES POR PERSONA', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
         const SizedBox(height: 6),
         ...members.map((m) {
           final contrib = double.tryParse(m['contribucion_mensual']?.toString() ?? '0') ?? 0;
@@ -540,14 +540,14 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text(_shortUid(m['firebase_uid'] as String),
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               Row(children: [
                 if ((m['rol'] as String?) != null && (m['rol'] as String).isNotEmpty) ...[
                   _rolChip(m['rol'] as String),
                   const SizedBox(width: 6),
                 ],
                 Text('${Money.fmt(contrib)}',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
               ]),
             ]),
           );
@@ -590,7 +590,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             const SizedBox(height: 16),
             Text(
               isPct ? 'Editar porcentajes' : 'Editar contribuciones mensuales',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
             ...members.map((m) {
@@ -598,19 +598,19 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Row(children: [
-                  Expanded(child: Text(_shortUid(uid), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                  Expanded(child: Text(_shortUid(uid), style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
                   const SizedBox(width: 12),
                   SizedBox(
                     width: 100,
                     child: TextField(
                       controller: controllers[uid],
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: AppTheme.textPrimary),
                       textAlign: TextAlign.right,
                       onChanged: (_) => setM(() {}),
                       decoration: InputDecoration(
                         suffixText: isPct ? '%' : 'B/.',
-                        suffixStyle: const TextStyle(color: AppTheme.textSecondary),
+                        suffixStyle: TextStyle(color: AppTheme.textSecondary),
                         isDense: true,
                       ),
                     ),
@@ -655,7 +655,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   Widget _buildEmpty() => Container(
     padding: const EdgeInsets.symmetric(vertical: 40),
     alignment: Alignment.center,
-    child: const Column(mainAxisSize: MainAxisSize.min, children: [
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
       Icon(Icons.receipt_long_outlined, color: AppTheme.textSecondary, size: 48),
       SizedBox(height: 10),
       Text('Sin gastos aún', style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
@@ -687,8 +687,8 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: AppTheme.surface,
-          title: const Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary)),
-          content: const Text('¿Estás seguro?', style: TextStyle(color: AppTheme.textSecondary)),
+          title: Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary)),
+          content: Text('¿Estás seguro?', style: TextStyle(color: AppTheme.textSecondary)),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
             TextButton(
@@ -730,7 +730,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(e['descripcion'] ?? '',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                 const SizedBox(height: 4),
                 Row(children: [
                   Container(
@@ -748,23 +748,23 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(fecha, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  Text(fecha, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                 ]),
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 // Mi parte — número grande
                 Text('${Money.fmt(miResp)}',
-                    style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
                 // Total — número pequeño
                 Text('Total ${Money.fmt(monto)}',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
               // Z3 — editar gasto (solo quien puede editar)
               if (_puedeEditar)
                 GestureDetector(
                   onTap: () => _showAgregarGasto(e),
                   behavior: HitTestBehavior.opaque,
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.only(left: 8),
                     child: Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 16),
                   ),
@@ -858,15 +858,15 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirmar pago',
+        title: Text('Confirmar pago',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(e['descripcion'] ?? '', style: const TextStyle(color: AppTheme.textSecondary)),
+          Text(e['descripcion'] ?? '', style: TextStyle(color: AppTheme.textSecondary)),
           const SizedBox(height: 10),
           Text('${Money.fmt(miResp)}',
               style: const TextStyle(color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          const Text('¿Confirmas que realizaste este pago?',
+          Text('¿Confirmas que realizaste este pago?',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         ]),
         actions: [
@@ -911,10 +911,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               Center(child: Container(width: 36, height: 4,
                   decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Text('Gestionar miembros',
+              Text('Gestionar miembros',
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-              const Text('Cambia roles o invita a alguien nuevo.',
+              Text('Cambia roles o invita a alguien nuevo.',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 16),
               // ── Lista de miembros actuales ──────────────────────────
@@ -928,9 +928,9 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                   child: Row(children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(_shortUid(uid),
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                          style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                       if (esMismo)
-                        const Text('(tú)', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                        Text('(tú)', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                     ])),
                     if (esCreadorMiembro || esMismo)
                       _rolChip(rol)
@@ -942,7 +942,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                           child: DropdownButton<String>(
                             value: rol,
                             dropdownColor: AppTheme.surface,
-                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                             items: const [
                               DropdownMenuItem(value: 'admin', child: Text('admin')),
                               DropdownMenuItem(value: 'participante', child: Text('participante')),
@@ -980,17 +980,17 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                 );
               }),
               // ── Invitar nuevo participante ──────────────────────────
-              const Divider(color: AppTheme.border, height: 28),
-              const Text('Invitar a alguien nuevo',
+              Divider(color: AppTheme.border, height: 28),
+              Text('Invitar a alguien nuevo',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               TextField(
                 controller: emailCtrl,
                 keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'correo@gmail.com',
-                  hintStyle: const TextStyle(color: AppTheme.textMuted),
+                  hintStyle: TextStyle(color: AppTheme.textMuted),
                   filled: true,
                   fillColor: AppTheme.surfaceAlt,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -1006,7 +1006,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     value: rolNuevoInvitado,
                     isExpanded: true,
                     dropdownColor: AppTheme.surface,
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                     items: const [
                       DropdownMenuItem(value: 'admin',        child: Text('Admin — puede invitar y editar')),
                       DropdownMenuItem(value: 'participante', child: Text('Participante — puede agregar gastos')),
@@ -1054,12 +1054,12 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               ),
               // ── Z4 · O comparte un código de invitación ──────────────
               const SizedBox(height: 18),
-              const Divider(color: AppTheme.border, height: 1),
+              Divider(color: AppTheme.border, height: 1),
               const SizedBox(height: 14),
-              const Text('O comparte un código',
+              Text('O comparte un código',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              const Text('Cualquiera con el código se une con el rol elegido arriba. Útil si la persona aún no usa Salarying.',
+              Text('Cualquiera con el código se une con el rol elegido arriba. Útil si la persona aún no usa Salarying.',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.3)),
               const SizedBox(height: 10),
               SizedBox(
@@ -1102,10 +1102,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Código de invitación',
+        title: Text('Código de invitación',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Compártelo por WhatsApp o SMS. Quien lo reciba entra desde Compartido → "Unirme con código".',
+          Text('Compártelo por WhatsApp o SMS. Quien lo reciba entra desde Compartido → "Unirme con código".',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
           const SizedBox(height: 16),
           Container(
@@ -1121,12 +1121,12 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     fontWeight: FontWeight.bold, letterSpacing: 4)),
           ),
           const SizedBox(height: 6),
-          const Text('Válido por 30 días', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          Text('Válido por 30 días', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
         ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Cerrar', style: TextStyle(color: AppTheme.textSecondary)),
           ),
           ElevatedButton.icon(
             icon: const Icon(Icons.copy, size: 16, color: Colors.black),
@@ -1151,19 +1151,19 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Eliminar presupuesto',
+        title: Text('Eliminar presupuesto',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.warning_amber_outlined, color: AppTheme.danger, size: 36),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Se enviará una solicitud de eliminación al co-dueño. El presupuesto solo se eliminará si ambos lo aprueban.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
           ),
           if (otroUid.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text('Co-dueño: ${_shortUid(otroUid)}',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           ],
         ]),
         actions: [
@@ -1209,7 +1209,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
           padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(editando ? 'Editar gasto' : 'Agregar gasto',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             _modalInput(descCtrl, 'Descripción'),
             const SizedBox(height: 10),
@@ -1217,13 +1217,13 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             const SizedBox(height: 10),
             // Z3 — al editar solo cambian descripción y monto (el reparto se recalcula)
             if (editando)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(bottom: 4),
                 child: Text('Se actualiza la división entre miembros automáticamente.',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ),
             if (!editando && !esPersonal) ...[
-              const Text('¿Quién lo pagará / ya pagó?', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Text('¿Quién lo pagará / ya pagó?', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1233,7 +1233,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     value: pagadoPor,
                     isExpanded: true,
                     dropdownColor: AppTheme.surface,
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: AppTheme.textPrimary),
                     items: [
                       DropdownMenuItem(value: widget.firebaseUid, child: Text('Yo (${_shortUid(widget.firebaseUid)})')),
                       if (otroUid.isNotEmpty)
@@ -1265,7 +1265,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                     ),
                     Text(
                       yaPagado ? 'Se confirma el pago del pagador al guardar' : 'Nadie paga aún — se confirma después',
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                     ),
                   ]),
                   Switch(
@@ -1279,7 +1279,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             ],
             if (!editando) ...[
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Gasto personal (no se divide)',
+                Text('Gasto personal (no se divide)',
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                 Switch(
                   value: esPersonal,
@@ -1298,10 +1298,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(10)),
                   child: Row(children: [
-                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                    Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
                     const SizedBox(width: 8),
                     Text(DateFormat('dd/MM/yyyy').format(fecha),
-                        style: const TextStyle(color: AppTheme.textPrimary)),
+                        style: TextStyle(color: AppTheme.textPrimary)),
                   ]),
                 ),
               ),
@@ -1358,10 +1358,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
   Widget _modalInput(TextEditingController ctrl, String hint, {bool numeric = false}) => TextField(
     controller: ctrl,
     keyboardType: numeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-    style: const TextStyle(color: AppTheme.textPrimary),
+    style: TextStyle(color: AppTheme.textPrimary),
     decoration: InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textMuted),
+      hintStyle: TextStyle(color: AppTheme.textMuted),
       filled: true,
       fillColor: AppTheme.surfaceAlt,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),

@@ -87,8 +87,8 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('Nuevo compartido', style: TextStyle(color: AppTheme.textPrimary)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        title: Text('Nuevo compartido', style: TextStyle(color: AppTheme.textPrimary)),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -125,7 +125,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
             const SizedBox(height: 6),
             _input(_contribucionCtrl, '0.00', numeric: true),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'El invitado declarará su contribución al aceptar la invitación. '
               'El fondo total = tu aporte + el de tu compañero.',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
@@ -136,7 +136,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
           const SizedBox(height: 6),
           _input(_aporteCtrl, '0.00', numeric: true),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Este monto se descuenta de tu disponible personal en el Perfil Financiero.',
             style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
           ),
@@ -155,7 +155,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
                 value: _rolInvitado,
                 isExpanded: true,
                 dropdownColor: AppTheme.surface,
-                style: const TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: AppTheme.textPrimary),
                 items: const [
                   DropdownMenuItem(value: 'admin',        child: Text('Admin — puede invitar y editar')),
                   DropdownMenuItem(value: 'participante', child: Text('Participante — puede agregar gastos')),
@@ -166,7 +166,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text('El invitado verá la invitación cuando abra la sección "Compartido".',
+          Text('El invitado verá la invitación cuando abra la sección "Compartido".',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           const SizedBox(height: 32),
           SizedBox(
@@ -188,15 +188,15 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
     );
   }
 
-  Widget _label(String text) => Text(text, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600));
+  Widget _label(String text) => Text(text, style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600));
 
   Widget _input(TextEditingController ctrl, String hint, {TextInputType? keyboard, bool numeric = false}) => TextField(
     controller: ctrl,
     keyboardType: numeric ? const TextInputType.numberWithOptions(decimal: true) : keyboard,
-    style: const TextStyle(color: AppTheme.textPrimary),
+    style: TextStyle(color: AppTheme.textPrimary),
     decoration: InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textMuted),
+      hintStyle: TextStyle(color: AppTheme.textMuted),
       filled: true,
       fillColor: AppTheme.surfaceAlt,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -237,7 +237,7 @@ class _SharedBudgetCreateScreenState extends State<SharedBudgetCreateScreen> {
         value: _regla,
         isExpanded: true,
         dropdownColor: AppTheme.surface,
-        style: const TextStyle(color: AppTheme.textPrimary),
+        style: TextStyle(color: AppTheme.textPrimary),
         items: const [
           DropdownMenuItem(value: 'equitativo', child: Text('50/50 equitativo')),
           DropdownMenuItem(value: 'porcentual', child: Text('Porcentual manual')),

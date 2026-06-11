@@ -77,25 +77,25 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Registrar gasto del evento',
+                Text('Registrar gasto del evento',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: nombreCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: _dec('Descripción del gasto'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: montoCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: _dec('Monto (\$)'),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: notasCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.textPrimary),
                   decoration: _dec('Notas (opcional)'),
                   maxLines: 2,
                 ),
@@ -149,12 +149,12 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
+        title: Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
         content: Text('¿Eliminar "${gasto['nombre']}"?',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary))),
+              child: Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
@@ -192,12 +192,12 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Cancelar evento', style: TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
-        content: const Text('¿Cancelar este evento? Los gastos registrados se preservan.',
+        title: Text('Cancelar evento', style: TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
+        content: Text('¿Cancelar este evento? Los gastos registrados se preservan.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('No', style: TextStyle(color: AppTheme.textSecondary))),
+              child: Text('No', style: TextStyle(color: AppTheme.textSecondary))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
@@ -225,8 +225,8 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
         title: Text(_evento != null ? (_evento!['nombre'] as String? ?? 'Evento') : 'Evento',
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
-        iconTheme: const IconThemeData(color: AppTheme.textSecondary),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+        iconTheme: IconThemeData(color: AppTheme.textSecondary),
         elevation: 0,
         actions: [
           if (_evento != null) ...[
@@ -289,13 +289,13 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(e['nombre'] as String? ?? '',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                   Text(
                     mesIni == mesFin
                         ? _mesesLabel[mesIni]
                         : '${_mesesLabel[mesIni]} → ${_mesesLabel[mesFin]} · $numMeses meses',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
                   ),
                 ]),
               ),
@@ -327,16 +327,16 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
               Text('${pct.toStringAsFixed(1)}% usado',
                   style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
               Text('${Money.fmt(cuota)}/mes por $numMeses mes${numMeses > 1 ? 'es' : ''}',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
 
             // Descripción
             if ((e['descripcion'] as String? ?? '').isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Divider(color: AppTheme.border, height: 1),
+              Divider(color: AppTheme.border, height: 1),
               const SizedBox(height: 12),
               Text(e['descripcion'] as String,
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
             ],
           ]),
         ),
@@ -344,11 +344,11 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
 
         // Lista de gastos
         Row(children: [
-          const Text('GASTOS REGISTRADOS',
+          Text('GASTOS REGISTRADOS',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
           const SizedBox(width: 8),
           Text('(${_gastos.length})',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
         ]),
         const SizedBox(height: 10),
 
@@ -360,7 +360,7 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppTheme.border),
             ),
-            child: const Center(
+            child: Center(
               child: Text('Sin gastos registrados aún.\nToca + para agregar el primero.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.5)),
@@ -377,7 +377,7 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
   Widget _statCol(String label, String valor, Color color) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+      Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       const SizedBox(height: 4),
       Text(valor, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
     ],
@@ -385,15 +385,15 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
 
   InputDecoration _dec(String label) => InputDecoration(
     labelText: label,
-    labelStyle: const TextStyle(color: AppTheme.textSecondary),
+    labelStyle: TextStyle(color: AppTheme.textSecondary),
     filled: true,
     fillColor: AppTheme.surfaceAlt,
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.border)),
+        borderSide: BorderSide(color: AppTheme.border)),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.border)),
+        borderSide: BorderSide(color: AppTheme.border)),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: AppTheme.primary)),
@@ -420,16 +420,16 @@ class _GastoTile extends StatelessWidget {
         border: Border.all(color: AppTheme.border),
       ),
       child: Row(children: [
-        const Icon(Icons.receipt_long_outlined, color: AppTheme.textMuted, size: 18),
+        Icon(Icons.receipt_long_outlined, color: AppTheme.textMuted, size: 18),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(gasto['nombre'] as String? ?? '',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
             if (fecha.isNotEmpty || notas.isNotEmpty)
               Text(
                 [if (fecha.isNotEmpty) fecha, if (notas.isNotEmpty) notas].join(' · '),
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
               ),
           ]),
         ),
@@ -438,7 +438,7 @@ class _GastoTile extends StatelessWidget {
         const SizedBox(width: 8),
         GestureDetector(
           onTap: onEliminar,
-          child: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 18),
+          child: Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 18),
         ),
       ]),
     );

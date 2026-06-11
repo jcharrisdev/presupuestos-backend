@@ -91,7 +91,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         // U4 — rol del Dashboard: el AHORA (hoy, esta quincena, alertas)
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -126,10 +126,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     child: Padding(
       padding: const EdgeInsets.all(24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.cloud_off, color: AppTheme.textMuted, size: 48),
+        Icon(Icons.cloud_off, color: AppTheme.textMuted, size: 48),
         const SizedBox(height: 12),
         Text(_error!, textAlign: TextAlign.center,
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         const SizedBox(height: 16),
         ElevatedButton(onPressed: _cargar, child: const Text('Reintentar')),
       ]),
@@ -220,7 +220,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if ((alertaUrgente['accion_sugerida'] as String? ?? '').isNotEmpty) ...[
                     const SizedBox(height: 3),
                     Text(alertaUrgente['accion_sugerida'] as String,
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
                   ],
                 ])),
                 const Icon(Icons.chevron_right, color: AppTheme.danger, size: 20),
@@ -258,7 +258,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
                 ),
                 const Spacer(),
-                const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
+                Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 18),
               ]),
               const SizedBox(height: 16),
               Row(children: [
@@ -283,7 +283,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 6),
               Text('${(pct * 100).toStringAsFixed(1)}% del ingreso usado',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               if (ingReal == 0) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -382,7 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(nombre,
                         maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppTheme.textPrimary,
+                        style: TextStyle(color: AppTheme.textPrimary,
                             fontSize: 11, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     ClipRRect(
@@ -432,10 +432,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 10),
                 Expanded(child: Text(
                   '${_d(r['hormiga_count']).toInt()} gastos hormiga · ${Money.fmt(_d(r['hormiga_total']))} acumulado',
-                  style: const TextStyle(color: AppTheme.textSecondary,
+                  style: TextStyle(color: AppTheme.textSecondary,
                       fontSize: 13, fontWeight: FontWeight.w500),
                 )),
-                const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 16),
+                Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 16),
               ]),
             ),
           ),
@@ -500,7 +500,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final f = DateTime.tryParse(p['fecha_evento']?.toString() ?? '');
                 final esSemana = f != null && !f.isAfter(finSemana);
                 return Column(children: [
-                  if (i > 0) const Divider(color: AppTheme.border, height: 1),
+                  if (i > 0) Divider(color: AppTheme.border, height: 1),
                   ListTile(
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
@@ -515,7 +515,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: Row(children: [
                       Flexible(child: Text(p['titulo'] as String? ?? '',
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: AppTheme.textPrimary,
+                          style: TextStyle(color: AppTheme.textPrimary,
                               fontSize: 13, fontWeight: FontWeight.w600))),
                       if (esSemana) ...[
                         const SizedBox(width: 6),
@@ -532,7 +532,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ]),
                     subtitle: Text(fecha,
-                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                     trailing: Text('${Money.fmt(monto)}',
                         style: TextStyle(color: esSemana ? AppTheme.warning : AppTheme.info,
                             fontWeight: FontWeight.w700, fontSize: 13)),
@@ -552,7 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppTheme.border),
             ),
-            child: const Text('Sin pagos pendientes este mes.',
+            child: Text('Sin pagos pendientes este mes.',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
           ),
         ],
@@ -578,7 +578,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Expanded(child: Text(nombre,
-                      style: const TextStyle(color: AppTheme.textPrimary,
+                      style: TextStyle(color: AppTheme.textPrimary,
                           fontSize: 13, fontWeight: FontWeight.w600))),
                   Text('${Money.fmt0(actual)} / ${Money.fmt0(meta)}',
                       style: const TextStyle(color: AppTheme.colorAhorro,
@@ -596,7 +596,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text('${(pctM * 100).toStringAsFixed(0)}% completado',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
             );
           }),
@@ -639,7 +639,7 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(label, style: const TextStyle(color: AppTheme.textMuted,
+    Text(label, style: TextStyle(color: AppTheme.textMuted,
         fontSize: 10, letterSpacing: 0.4)),
     const SizedBox(height: 4),
     Text(value, style: TextStyle(color: color,
@@ -736,14 +736,14 @@ class _QuincenalCard extends StatelessWidget {
         const SizedBox(height: 12),
         _FilaQ('Cobro estimado', ingresoQ, AppTheme.success),
         _FilaQ('Compromisos Q$quincena', -compQ, AppTheme.textSecondary),
-        const Divider(color: AppTheme.border, height: 14),
+        Divider(color: AppTheme.border, height: 14),
         _FilaQ('Disponible libre', disponible, color, bold: true),
         const SizedBox(height: 4),
         Text(
           disponible > 0
               ? 'Después de compromisos fijos de esta quincena'
               : 'Compromisos superan el cobro quincenal',
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
         ),
       ]),
     );

@@ -68,8 +68,8 @@ class _EventosScreenState extends State<EventosScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
         title: Text('Eventos ${widget.anio}',
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
-        iconTheme: const IconThemeData(color: AppTheme.textSecondary),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+        iconTheme: IconThemeData(color: AppTheme.textSecondary),
         elevation: 0,
       ),
       floatingActionButton: FloatingActionButton(
@@ -128,7 +128,7 @@ class _EventosScreenState extends State<EventosScreen> {
             border: Border.all(color: AppTheme.border),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Resumen de eventos',
+            Text('Resumen de eventos',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
             const SizedBox(height: 12),
             Row(children: [
@@ -150,7 +150,7 @@ class _EventosScreenState extends State<EventosScreen> {
             ),
             const SizedBox(height: 4),
             Text('${(pct * 100).toStringAsFixed(0)}% del presupuesto total usado',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
           ]),
         ),
         const SizedBox(height: 16),
@@ -175,7 +175,7 @@ class _EventosScreenState extends State<EventosScreen> {
   Widget _statCol(String label, String valor, Color color) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+      Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       const SizedBox(height: 4),
       Text(valor, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold)),
     ],
@@ -219,21 +219,21 @@ class _EventoCard extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(evento['nombre'] as String? ?? '',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                 Text(
                   mesIni == mesFin
                       ? mesesLabel[mesIni]
                       : '${mesesLabel[mesIni]} → ${mesesLabel[mesFin]} ($numMeses meses)',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                 ),
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('${Money.fmt(monto)}',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
               Text('${Money.fmt(cuota)}/mes',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
           ]),
           const SizedBox(height: 12),

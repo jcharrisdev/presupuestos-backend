@@ -85,14 +85,14 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
         iconTheme: IconThemeData(color: AppTheme.textPrimary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.inventory_2_outlined, color: AppTheme.textSecondary),
+            icon: Icon(Icons.inventory_2_outlined, color: AppTheme.textSecondary),
             tooltip: 'Mis Productos',
             onPressed: () => Navigator.push(context, MaterialPageRoute(
               builder: (_) => ProductosCatalogoScreen(firebaseUid: widget.firebaseUid),
             )),
           ),
           IconButton(
-            icon: const Icon(Icons.filter_list, color: AppTheme.textSecondary),
+            icon: Icon(Icons.filter_list, color: AppTheme.textSecondary),
             onPressed: _mostrarFiltros,
           ),
         ],

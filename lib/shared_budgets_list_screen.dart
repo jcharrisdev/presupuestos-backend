@@ -96,10 +96,10 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
       builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Unirme con código',
+        title: Text('Unirme con código',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Pega el código que te compartieron para unirte al presupuesto.',
+          Text('Pega el código que te compartieron para unirte al presupuesto.',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 14),
           TextField(
@@ -107,11 +107,11 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
             autofocus: true,
             textCapitalization: TextCapitalization.characters,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18,
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 18,
                 letterSpacing: 3, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               hintText: 'CÓDIGO',
-              hintStyle: const TextStyle(color: AppTheme.textMuted, letterSpacing: 2),
+              hintStyle: TextStyle(color: AppTheme.textMuted, letterSpacing: 2),
               filled: true,
               fillColor: AppTheme.surfaceAlt,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -121,7 +121,7 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
         actions: [
           TextButton(
             onPressed: uniendo ? null : () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
@@ -144,9 +144,9 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
               }
             },
             child: uniendo
-                ? const SizedBox(width: 16, height: 16,
+                ? SizedBox(width: 16, height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                : const Text('Unirme', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                : Text('Unirme', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       )),
@@ -159,18 +159,18 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('Compartido', style: TextStyle(color: AppTheme.textPrimary)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        title: Text('Compartido', style: TextStyle(color: AppTheme.textPrimary)),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.vpn_key_outlined, color: AppTheme.textPrimary),
+            icon: Icon(Icons.vpn_key_outlined, color: AppTheme.textPrimary),
             tooltip: 'Unirme con código',
             onPressed: _unirmeConCodigoDialog,
           ),
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.mail_outline, color: AppTheme.textPrimary),
+                icon: Icon(Icons.mail_outline, color: AppTheme.textPrimary),
                 onPressed: () async {
                   await Navigator.push(context, MaterialPageRoute(
                     builder: (_) => SharedBudgetInvitationsScreen(firebaseUid: widget.firebaseUid),
@@ -183,9 +183,9 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
                 Positioned(
                   right: 8, top: 8,
                   child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
-                    child: Text('$_pendingInvitations', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
+                    child: Text('$_pendingInvitations', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                   ),
                 ),
             ],
@@ -193,9 +193,9 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : Column(children: [
-              if (_refreshing) const LinearProgressIndicator(minHeight: 2, color: AppTheme.primary),
+              if (_refreshing) LinearProgressIndicator(minHeight: 2, color: AppTheme.primary),
               Expanded(
                 child: _budgets.isEmpty
                     ? _empty()
@@ -203,9 +203,9 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
                         color: AppTheme.primary,
                         onRefresh: () => _cargar(silencioso: true),
                         child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(16),
                           itemCount: _budgets.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) => SizedBox(height: 10),
                           itemBuilder: (_, i) => _card(_budgets[i]),
                         ),
                       ),
@@ -219,14 +219,14 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
           ));
           _cargar(silencioso: true);
         },
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('Nuevo', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        icon: Icon(Icons.add, color: Colors.black),
+        label: Text('Nuevo', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   Widget _rolChip(String rol) {
-    const colors = {
+    final colors = {
       'creador': AppTheme.primary,
       'owner': AppTheme.primary,
       'admin': AppTheme.info,
@@ -262,7 +262,7 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Expanded(
-              child: Text(b['nombre'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(b['nombre'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
             ),
             Row(children: [
               if ((b['rol'] as String?) != null) ...[
@@ -283,11 +283,11 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
           Row(children: [
             Icon(Icons.sync_alt, size: 14, color: AppTheme.textSecondary),
             const SizedBox(width: 4),
-            Text(b['tipo_periodo'] == 'quincenal' ? 'Quincenal' : 'Mensual', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            Text(b['tipo_periodo'] == 'quincenal' ? 'Quincenal' : 'Mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             const SizedBox(width: 12),
             Icon(Icons.balance, size: 14, color: AppTheme.textSecondary),
             const SizedBox(width: 4),
-            Text(_reglaNombre(b['regla_reparto'] ?? ''), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            Text(_reglaNombre(b['regla_reparto'] ?? ''), style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           ]),
           if (b['estado'] == 'active') ...[
             const SizedBox(height: 8),
@@ -311,11 +311,11 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
     color: AppTheme.background,
     child: Center(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.group_outlined, color: AppTheme.textSecondary, size: 56),
+        Icon(Icons.group_outlined, color: AppTheme.textSecondary, size: 56),
         const SizedBox(height: 12),
-        const Text('Sin presupuestos compartidos', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+        Text('Sin presupuestos compartidos', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
-        const Text('Crea uno y compártelo con otra persona', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+        Text('Crea uno y compártelo con otra persona', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
       ]),
     ),
   );

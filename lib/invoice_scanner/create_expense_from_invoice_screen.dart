@@ -111,9 +111,9 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('Nuevo gasto desde factura',
+        title: Text('Nuevo gasto desde factura',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -129,12 +129,12 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
                 border: Border.all(color: AppTheme.border),
               ),
               child: Row(children: [
-                const Icon(Icons.receipt_outlined, color: AppTheme.textSecondary, size: 16),
+                Icon(Icons.receipt_outlined, color: AppTheme.textSecondary, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     '${widget.invoice['merchant_name'] ?? 'Factura QR'}  •  B/. ${_fmt.format(monto)}',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                   ),
                 ),
               ]),
@@ -142,24 +142,24 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
             const SizedBox(height: 20),
 
             // Nombre
-            const Text('Nombre del gasto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('Nombre del gasto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(height: 6),
             TextField(
               controller: _nombreCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Nombre del gasto',
-                hintStyle: const TextStyle(color: AppTheme.textMuted),
+                hintStyle: TextStyle(color: AppTheme.textMuted),
                 filled: true, fillColor: AppTheme.surfaceAlt,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.border)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.border)),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
               ),
             ),
             const SizedBox(height: 16),
 
             // Tipo
-            const Text('Tipo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('Tipo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(height: 6),
             Row(
               children: _tipos.map((t) {
@@ -194,7 +194,7 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
             const SizedBox(height: 16),
 
             // Categoría
-            const Text('Categoría', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('Categoría', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(height: 6),
             CategoriaSelector(
               firebaseUid: widget.firebaseUid,
@@ -205,7 +205,7 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
             const SizedBox(height: 16),
 
             // Fecha
-            const Text('Fecha', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+            Text('Fecha', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             const SizedBox(height: 6),
             GestureDetector(
               onTap: () async {
@@ -216,7 +216,7 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
                   lastDate: DateTime.now(),
                   builder: (ctx, child) => Theme(
                     data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.dark(
+                      colorScheme: ColorScheme.dark(
                           primary: AppTheme.primary, surface: AppTheme.surfaceAlt),
                     ),
                     child: child!,
@@ -232,9 +232,9 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
                   border: Border.all(color: AppTheme.border),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                  Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
                   const SizedBox(width: 10),
-                  Text(_fechaStr, style: const TextStyle(color: AppTheme.textPrimary)),
+                  Text(_fechaStr, style: TextStyle(color: AppTheme.textPrimary)),
                 ]),
               ),
             ),

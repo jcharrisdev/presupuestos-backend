@@ -99,17 +99,17 @@ class _RecetaScreenState extends State<RecetaScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
           Text(_receta != null ? 'Editar receta' : 'Crear receta',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text('Para: ${widget.varianteNombre}',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 20),
 
           Row(children: [
             Expanded(child: TextField(
               controller: rendCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(
                 labelText: 'Rendimiento',
                 helperText: 'Unidades por tanda',
@@ -118,7 +118,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: unidadCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Unidad de tanda',
                 helperText: 'Ej: tanda, horneada',
@@ -128,7 +128,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: notasCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
               labelText: 'Notas (opcional)',
               helperText: 'Ej: Temp. horno 180°C, 45 min',
@@ -179,15 +179,15 @@ class _RecetaScreenState extends State<RecetaScreen> {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
-          const Text('Nuevo insumo',
+          Text('Nuevo insumo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('Cantidad por tanda completa',
+          Text('Cantidad por tanda completa',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 20),
           TextField(
             controller: nombreCtrl, autofocus: true,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Nombre del insumo',
                 hintText: 'Ej: Queso crema, Harina'),
           ),
@@ -196,13 +196,13 @@ class _RecetaScreenState extends State<RecetaScreen> {
             Expanded(child: TextField(
               controller: cantidadCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(labelText: 'Cantidad'),
             )),
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: unidadCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Unidad',
                 hintText: 'g, kg, ml, unidad',
@@ -213,7 +213,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
           TextField(
             controller: precioCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
               labelText: 'Precio por unidad (opcional)',
               prefixText: 'B/. ',
@@ -273,12 +273,12 @@ class _RecetaScreenState extends State<RecetaScreen> {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _handle(),
-          const Text('Editar insumo',
+          Text('Editar insumo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
           TextField(
             controller: nombreCtrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Nombre del insumo'),
           ),
           const SizedBox(height: 12),
@@ -286,13 +286,13 @@ class _RecetaScreenState extends State<RecetaScreen> {
             Expanded(child: TextField(
               controller: cantidadCtrl, autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(labelText: 'Cantidad'),
             )),
             const SizedBox(width: 12),
             Expanded(child: TextField(
               controller: unidadCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Unidad'),
             )),
           ]),
@@ -300,7 +300,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
           TextField(
             controller: precioCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
               labelText: 'Precio por unidad (opcional)',
               prefixText: 'B/. ',
@@ -340,8 +340,8 @@ class _RecetaScreenState extends State<RecetaScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar insumo', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Eliminar este insumo de la receta?',
+        title: Text('Eliminar insumo', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Eliminar este insumo de la receta?',
             style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
@@ -364,8 +364,8 @@ class _RecetaScreenState extends State<RecetaScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar receta', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Eliminar la receta completa y todos sus insumos?',
+        title: Text('Eliminar receta', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Eliminar la receta completa y todos sus insumos?',
             style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
@@ -399,9 +399,9 @@ class _RecetaScreenState extends State<RecetaScreen> {
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Receta de producción',
+                title: Text('Receta de producción',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Una receta define cuánto necesitas de cada insumo para producir una tanda.\n\n'
                   '• Rendimiento: cuántas unidades produce una tanda.\n'
                   '  Ej: una tanda produce 12 cheesecakes.\n\n'
@@ -461,10 +461,10 @@ class _RecetaScreenState extends State<RecetaScreen> {
         ),
         const SizedBox(height: 24),
         Text('Sin receta para\n${widget.varianteNombre}',
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16,
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 16,
                 fontWeight: FontWeight.w700), textAlign: TextAlign.center),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Crea una receta para definir cuántos insumos necesitas por tanda y '
           'calcular automáticamente la lista de compras.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
@@ -516,26 +516,26 @@ class _RecetaScreenState extends State<RecetaScreen> {
                   ),
                   const SizedBox(width: 14),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('CONFIGURACIÓN DE TANDA',
+                    Text('CONFIGURACIÓN DE TANDA',
                         style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 1.1,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 3),
                     Text('${rendimiento % 1 == 0 ? rendimiento.toInt() : rendimiento} '
                         '${widget.varianteNombre} por $unidad',
-                        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15,
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 15,
                             fontWeight: FontWeight.w700)),
                   ])),
-                  const Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 16),
+                  Icon(Icons.edit_outlined, color: AppTheme.textMuted, size: 16),
                 ]),
                 if (notas.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Divider(color: AppTheme.border, height: 1),
+                  Divider(color: AppTheme.border, height: 1),
                   const SizedBox(height: 10),
                   Row(children: [
-                    const Icon(Icons.sticky_note_2_outlined, color: AppTheme.textMuted, size: 14),
+                    Icon(Icons.sticky_note_2_outlined, color: AppTheme.textMuted, size: 14),
                     const SizedBox(width: 8),
                     Expanded(child: Text(notas,
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12))),
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12))),
                   ]),
                 ],
               ]),
@@ -558,10 +558,10 @@ class _RecetaScreenState extends State<RecetaScreen> {
               child: Column(children: [
                 Icon(Icons.science_outlined, size: 40, color: AppTheme.textMuted.withOpacity(0.4)),
                 const SizedBox(height: 12),
-                const Text('Sin insumos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14,
+                Text('Sin insumos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14,
                     fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
-                const Text('Toca "Insumo" para agregar el primer ingrediente.',
+                Text('Toca "Insumo" para agregar el primer ingrediente.',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 12), textAlign: TextAlign.center),
               ]),
             )
@@ -595,11 +595,11 @@ class _RecetaScreenState extends State<RecetaScreen> {
                       const SizedBox(width: 14),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(ins['nombre']?.toString() ?? '',
-                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 14,
                                 fontWeight: FontWeight.w600)),
                         if (precio != null)
                           Text('${Money.fmt(precio)} / ${ins['unidad'] ?? ''}',
-                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                              style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                       ])),
                       Text('$cantStr ${ins['unidad'] ?? ''}',
                           style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700,
@@ -635,13 +635,13 @@ class _RecetaScreenState extends State<RecetaScreen> {
   Widget _labelDivider(String label) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: Row(children: [
-      const Expanded(child: Divider(color: AppTheme.border)),
+      Expanded(child: Divider(color: AppTheme.border)),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Text(label,
-            style: const TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
       ),
-      const Expanded(child: Divider(color: AppTheme.border)),
+      Expanded(child: Divider(color: AppTheme.border)),
     ]),
   );
 
@@ -689,7 +689,7 @@ class __CalculadoraInsumosState extends State<_CalculadoraInsumos> {
           const Icon(Icons.calculate_outlined, color: AppTheme.primary, size: 18),
           const SizedBox(width: 10),
           Expanded(child: Text('¿Cuántas ${widget.varianteNombre} quieres producir?',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12))),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12))),
           Text('${_unidades.toInt()}',
               style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 18)),
         ]),
@@ -704,7 +704,7 @@ class __CalculadoraInsumosState extends State<_CalculadoraInsumos> {
         ),
 
         const SizedBox(height: 4),
-        const Divider(color: AppTheme.border, height: 1),
+        Divider(color: AppTheme.border, height: 1),
         const SizedBox(height: 14),
 
         // Tabla de resultados
@@ -716,10 +716,10 @@ class __CalculadoraInsumosState extends State<_CalculadoraInsumos> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(children: [
-              const Icon(Icons.arrow_right, color: AppTheme.textMuted, size: 16),
+              Icon(Icons.arrow_right, color: AppTheme.textMuted, size: 16),
               const SizedBox(width: 6),
               Expanded(child: Text(ins['nombre']?.toString() ?? '',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
               Text('$neededStr ${ins['unidad'] ?? ''}',
                   style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700,
                       fontSize: 13)),

@@ -31,7 +31,7 @@ class AbonoDeudaSheet {
               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
           Text('Registrar abono — ${deuda['nombre']}',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text('Saldo pendiente: ${Money.fmt(montoPendiente)}',
               style: const TextStyle(color: AppTheme.danger, fontSize: 13)),
@@ -40,7 +40,7 @@ class AbonoDeudaSheet {
           TextField(
             controller: montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
             decoration: const InputDecoration(prefixText: 'B/. ', hintText: '0.00'),
             autofocus: true,
           ),
@@ -55,7 +55,7 @@ class AbonoDeudaSheet {
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
                 builder: (ctx, child) => Theme(
-                  data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.dark(
+                  data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.dark(
                     primary: AppTheme.primary, surface: AppTheme.surfaceAlt)),
                   child: child!,
                 ),
@@ -69,7 +69,7 @@ class AbonoDeudaSheet {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Row(children: [
-                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
+                Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 16),
                 const SizedBox(width: 10),
                 Text(
                   fechaProximoPago != null

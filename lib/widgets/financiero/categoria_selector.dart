@@ -85,7 +85,7 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
     ];
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('CATEGORÍA',
+      Text('CATEGORÍA',
           style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
       const SizedBox(height: 8),
       // Y2 — grid (Wrap) para ver todas las categorías de golpe, sin scroll horizontal
@@ -144,8 +144,8 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
             child: TextField(
               controller: _customCtrl,
               autofocus: true,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
+              style: TextStyle(color: AppTheme.textPrimary),
+              decoration: InputDecoration(
                 hintText: 'Nombre de la categoría (ej: Mascotas)',
                 prefixIcon: Icon(Icons.label_outline, color: AppTheme.textSecondary, size: 18),
               ),
@@ -169,7 +169,7 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
           ),
         ]),
         const SizedBox(height: 4),
-        const Text('Se guardará para usarla en el futuro',
+        Text('Se guardará para usarla en el futuro',
             style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       ],
     ]);

@@ -142,7 +142,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -157,7 +157,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text('Agregar gasto',
+                Text('Agregar gasto',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Container(
@@ -178,12 +178,12 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
 
             // ── GASTOS ANTERIORES ─────────────────────────────────────────────
             if (_loadingDefs)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(bottom: 12),
                 child: LinearProgressIndicator(color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt, minHeight: 2),
               )
             else if (_definiciones.isNotEmpty) ...[
-              const Text('GASTOS ANTERIORES',
+              Text('GASTOS ANTERIORES',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
               const SizedBox(height: 8),
               SingleChildScrollView(
@@ -228,13 +228,13 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Divider(color: AppTheme.border, height: 1),
+              Divider(color: AppTheme.border, height: 1),
               const SizedBox(height: 16),
             ],
 
             // ── Tipo (solo en modo detalle; en rápido se auto-detecta) ───────
             if (_modoDetalle) ...[
-              const Text('TIPO', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
+              Text('TIPO', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
               const SizedBox(height: 8),
               Row(children: _tipos.map((t) {
                 final sel = _tipo == t['value'];
@@ -270,7 +270,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             // ── Nombre ───────────────────────────────────────────────────────
             TextFormField(
               controller: _nombre,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre del gasto'),
               onChanged: (_) => setState(() => _defSeleccionada = null),
               validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
@@ -281,7 +281,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             TextFormField(
               controller: _monto,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Monto (\$)', prefixText: 'B/. '),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Requerido';
@@ -350,11 +350,11 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                   border: Border.all(color: AppTheme.border),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.calendar_today, color: AppTheme.textSecondary, size: 16),
+                  Icon(Icons.calendar_today, color: AppTheme.textSecondary, size: 16),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(DateFormat('dd MMM yyyy', 'es').format(_fecha),
-                        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -375,7 +375,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
             // ── Notas ────────────────────────────────────────────────────
             TextFormField(
               controller: _notas,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Notas (opcional)'),
             ),
             const SizedBox(height: 16),
@@ -395,7 +395,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                       value: _guardarComoBase,
                       onChanged: (v) => setState(() => _guardarComoBase = v ?? false),
                     ),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '¿Repites este gasto cada mes? Agrégalo a tu presupuesto',
                         style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
@@ -403,7 +403,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                     ),
                   ]),
                   // O3 — explicar qué es "base" para que el usuario construya presupuesto
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(left: 12, right: 4, bottom: 2),
                     child: Text(
                       'Crea un tope mensual para este gasto. Te avisaremos si te pasas.',
@@ -412,7 +412,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                   ),
                   if (_guardarComoBase) ...[
                     const SizedBox(height: 12),
-                    const Text('Frecuencia',
+                    Text('Frecuencia',
                         style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.8)),
                     const SizedBox(height: 6),
                     Row(children: [
@@ -478,7 +478,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               child: ElevatedButton(
                 onPressed: _guardando ? null : _guardar,
                 child: _guardando
-                    ? const SizedBox(height: 18, width: 18,
+                    ? SizedBox(height: 18, width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.background))
                     : const Text('Guardar gasto'),
               ),
@@ -617,20 +617,20 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Gasto fuera de tu plan',
+        title: Text('Gasto fuera de tu plan',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
         content: Text(
           'Registraste ${Money.fmt(monto)} en "$catLabel" que no estaba presupuestado.\n\n'
           '¿Quieres agregar esta categoría a tu presupuesto para controlarla cada mes?',
-          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Ahora no', style: TextStyle(color: AppTheme.textMuted))),
+              child: Text('Ahora no', style: TextStyle(color: AppTheme.textMuted))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-            child: const Text('Agregar al presupuesto',
+            child: Text('Agregar al presupuesto',
                 style: TextStyle(color: AppTheme.background)),
           ),
         ],
@@ -689,7 +689,7 @@ class _CatBalanceHint extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.account_balance_wallet_outlined, size: 14, color: AppTheme.textSecondary),
+          Icon(Icons.account_balance_wallet_outlined, size: 14, color: AppTheme.textSecondary),
           const SizedBox(width: 8),
           Expanded(child: Text(
             excede

@@ -62,14 +62,14 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Ingreso mensual', style: TextStyle(color: AppTheme.textPrimary)),
+        title: Text('Ingreso mensual', style: TextStyle(color: AppTheme.textPrimary)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Este presupuesto usa reparto proporcional. Ingresa tu ingreso mensual para calcular tu responsabilidad.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text('Este presupuesto usa reparto proporcional. Ingresa tu ingreso mensual para calcular tu responsabilidad.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: 12),
           TextField(
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Ingreso mensual', prefixText: 'B/. '),
           ),
         ]),
@@ -90,9 +90,9 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Tu contribución mensual', style: TextStyle(color: AppTheme.textPrimary)),
+        title: Text('Tu contribución mensual', style: TextStyle(color: AppTheme.textPrimary)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text(
+          Text(
             'Este presupuesto usa fondo común. Ingresa cuánto aportarás mensualmente al fondo compartido.',
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
           ),
@@ -100,7 +100,7 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
           TextField(
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(labelText: 'Contribución mensual', prefixText: 'B/. '),
           ),
         ]),
@@ -121,8 +121,8 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('Invitaciones', style: TextStyle(color: AppTheme.textPrimary)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        title: Text('Invitaciones', style: TextStyle(color: AppTheme.textPrimary)),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
@@ -152,10 +152,10 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
         border: Border.all(color: AppTheme.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(inv['presupuesto_nombre'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(inv['presupuesto_nombre'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text('De: ${inv['owner_uid']}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-        Text('Expira: $expiresStr', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+        Text('De: ${inv['owner_uid']}', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        Text('Expira: $expiresStr', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         const SizedBox(height: 12),
         Row(children: [
           Expanded(
@@ -180,7 +180,7 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
 
   Widget _empty() => Container(
     color: AppTheme.background,
-    child: const Center(
+    child: Center(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.mail_outline, color: AppTheme.textSecondary, size: 56),
         SizedBox(height: 12),

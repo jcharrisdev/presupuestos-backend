@@ -50,9 +50,9 @@ class _SelectTargetScreenState extends State<SelectTargetScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: const Text('¿Dónde asignar la factura?',
+        title: Text('¿Dónde asignar la factura?',
             style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -60,7 +60,7 @@ class _SelectTargetScreenState extends State<SelectTargetScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('B/. ${invoice['total_amount']?.toStringAsFixed(2) ?? '-'}  •  ${invoice['merchant_name'] ?? 'Factura'}',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             const SizedBox(height: 16),
 
             if (!_verMas) ...[
@@ -79,7 +79,7 @@ class _SelectTargetScreenState extends State<SelectTargetScreen> {
                 subtitle: 'Gustito, compartido, negocio, inventario, archivar…',
                 color: AppTheme.textSecondary,
                 onTap: () => setState(() => _verMas = true),
-                trailing: const Icon(Icons.chevron_right, color: AppTheme.textMuted),
+                trailing: Icon(Icons.chevron_right, color: AppTheme.textMuted),
               ),
             ] else ...[
               // ── Nivel 2: opciones especializadas ──────────────────────
@@ -156,9 +156,9 @@ class _BigOption extends StatelessWidget {
         ),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+          Text(title, style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 3),
-          Text(subtitle, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+          Text(subtitle, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
         ])),
         if (trailing != null) trailing!,
       ]),
@@ -186,11 +186,11 @@ class _OptionCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(opt.title,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 4),
           Text(opt.subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
         ],
       ),
     ),

@@ -196,8 +196,8 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar evento', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Eliminar solo este o todos los futuros?',
+        title: Text('Eliminar evento', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Eliminar solo este o todos los futuros?',
             style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
@@ -232,9 +232,9 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
               builder: (_) => AlertDialog(
                 backgroundColor: AppTheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: const Text('Calendario de pagos',
+                title: Text('Calendario de pagos',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                content: const Text(
+                content: Text(
                   'Muestra todos tus pagos y cobros programados en el mes.\n\n'
                   'Vista Calendario:\n'
                   '  • Los puntitos de colores indican eventos en ese día.\n'
@@ -313,10 +313,10 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
             outsideDaysVisible: false,
             selectedDecoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
             todayDecoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.2), shape: BoxShape.circle),
-            defaultTextStyle:  const TextStyle(color: AppTheme.textPrimary),
-            weekendTextStyle:  const TextStyle(color: AppTheme.textSecondary),
-            outsideTextStyle:  const TextStyle(color: AppTheme.textMuted),
-            selectedTextStyle: const TextStyle(color: AppTheme.background, fontWeight: FontWeight.bold),
+            defaultTextStyle:  TextStyle(color: AppTheme.textPrimary),
+            weekendTextStyle:  TextStyle(color: AppTheme.textSecondary),
+            outsideTextStyle:  TextStyle(color: AppTheme.textMuted),
+            selectedTextStyle: TextStyle(color: AppTheme.background, fontWeight: FontWeight.bold),
             todayTextStyle:    const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
             markersMaxCount: 4,
             cellMargin: const EdgeInsets.all(3),
@@ -339,7 +339,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
               );
             },
           ),
-          headerStyle: const HeaderStyle(
+          headerStyle: HeaderStyle(
             formatButtonVisible: false,
             titleCentered: true,
             titleTextStyle:  TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
@@ -347,14 +347,14 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
             rightChevronIcon: Icon(Icons.chevron_right, color: AppTheme.textSecondary, size: 20),
             decoration: BoxDecoration(color: AppTheme.surface),
           ),
-          daysOfWeekStyle: const DaysOfWeekStyle(
+          daysOfWeekStyle: DaysOfWeekStyle(
             weekdayStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             weekendStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
           rowHeight: 44,
         ),
       ),
-      const Divider(color: AppTheme.border, height: 1),
+      Divider(color: AppTheme.border, height: 1),
 
       // Panel inferior: eventos del día seleccionado.
       // FIX: Container con fondo explícito — sin esto el panel aparece blanco
@@ -370,7 +370,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                     _selectedDay == null
                         ? 'Selecciona un día'
                         : 'Sin eventos — ${_fmtFecha(_selectedDay!)}',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                   ),
                 ]))
               : ListView(
@@ -380,7 +380,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Text(
                         _selectedDay != null ? _fmtFechaLarga(_selectedDay!) : '',
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5),
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, letterSpacing: 0.5),
                       ),
                     ),
                     ...eventosHoy.map((e) => _EventoCard(
@@ -430,7 +430,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
           )).toList()),
         ),
       ),
-      const Divider(color: AppTheme.border, height: 1),
+      Divider(color: AppTheme.border, height: 1),
       Expanded(
         child: Container(
           color: AppTheme.background,
@@ -438,9 +438,9 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
               ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textMuted.withOpacity(0.4)),
                   const SizedBox(height: 12),
-                  const Text('Sin eventos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                  Text('Sin eventos', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
                   const SizedBox(height: 6),
-                  const Text('Crea gastos con fecha fija para verlos aquí',
+                  Text('Crea gastos con fecha fija para verlos aquí',
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                 ]))
               : ListView.separated(
@@ -503,7 +503,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
   Widget _buildFlujoTab() {
     if (_eventos.isEmpty) return Container(
       color: AppTheme.background,
-      child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.waterfall_chart, size: 48, color: AppTheme.textMuted),
         SizedBox(height: 12),
         Text('Sin eventos este mes', style: TextStyle(color: AppTheme.textSecondary)),
@@ -545,7 +545,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
             return [
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(fecha, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
+                child: Text(fecha, style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
               ),
               ...items.map((e) {
                 final cobro = e['tipo'] == 'cobro';
@@ -574,7 +574,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                       const SizedBox(width: 12),
                       Expanded(child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Text(e['titulo']?.toString() ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                        child: Text(e['titulo']?.toString() ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                       )),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -606,7 +606,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
               border: Border.all(color: balance >= 0 ? AppTheme.success.withOpacity(0.3) : AppTheme.danger.withOpacity(0.3)),
             ),
             child: Row(children: [
-              const Text('Balance total del mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Text('Balance total del mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const Spacer(),
               Text(
                 '${balance >= 0 ? '+' : ''}${Money.fmt(balance)}',
@@ -632,10 +632,10 @@ class _TabHint extends StatelessWidget {
   const _TabHint(this.texto);
   @override
   Widget build(BuildContext context) => Row(children: [
-    const Icon(Icons.info_outline, color: AppTheme.textMuted, size: 13),
+    Icon(Icons.info_outline, color: AppTheme.textMuted, size: 13),
     const SizedBox(width: 6),
     Expanded(child: Text(texto,
-        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, fontStyle: FontStyle.italic))),
+        style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontStyle: FontStyle.italic))),
   ]);
 }
 
@@ -728,7 +728,7 @@ class _EventoCard extends StatelessWidget {
             // Fecha opcional (vista Lista)
             if (showDate && fechaStr.isNotEmpty) ...[
               const SizedBox(width: 6),
-              Text(fechaStr, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+              Text(fechaStr, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             ],
           ]),
         ])),
@@ -745,7 +745,7 @@ class _EventoCard extends StatelessWidget {
             Row(children: [
               // Botón eliminar
               GestureDetector(onTap: onEliminar,
-                  child: const Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16)),
+                  child: Icon(Icons.delete_outline, color: AppTheme.textMuted, size: 16)),
               const SizedBox(width: 8),
               // Botón Pagar / Cobrar
               GestureDetector(

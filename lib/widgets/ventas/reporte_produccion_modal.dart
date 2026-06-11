@@ -39,18 +39,18 @@ class ReporteProduccionModal {
               Row(children: [
                 const Icon(Icons.summarize_outlined, color: AppTheme.primary, size: 20),
                 const SizedBox(width: 10),
-                const Text('Reporte de Producción',
+                Text('Reporte de Producción',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text('${lista.length} producto${lista.length != 1 ? 's' : ''}',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
               ]),
               const SizedBox(height: 12),
-              const Divider(color: AppTheme.border, height: 1),
+              Divider(color: AppTheme.border, height: 1),
             ]),
           ),
           Expanded(child: lista.isEmpty
-              ? const Center(child: Padding(
+              ? Center(child: Padding(
                   padding: EdgeInsets.all(32),
                   child: Text(
                     'Ningún cliente tiene productos del catálogo.\nAgrega clientes con pedidos del catálogo para ver el reporte.',
@@ -62,7 +62,7 @@ class ReporteProduccionModal {
                   controller: sc,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
                   itemCount: lista.length,
-                  separatorBuilder: (_, __) => const Divider(color: AppTheme.border, height: 1),
+                  separatorBuilder: (_, __) => Divider(color: AppTheme.border, height: 1),
                   itemBuilder: (_, i) {
                     final item  = lista[i];
                     final cant  = item['cantidad'] as double;
@@ -78,17 +78,17 @@ class ReporteProduccionModal {
                         const SizedBox(width: 14),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(item['descripcion'].toString(),
-                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
+                              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14,
                                   fontWeight: FontWeight.w600)),
                           Text('${Money.fmt(precio)} c/u',
-                              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                              style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                         ])),
                         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                           Text('$cantStr uds',
                               style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800,
                                   fontSize: 16)),
                           Text('${Money.fmt((cant * precio))}',
-                              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                         ]),
                       ]),
                     );

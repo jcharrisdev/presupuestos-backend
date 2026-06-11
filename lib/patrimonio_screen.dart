@@ -49,8 +49,8 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
       appBar: AppBar(title: const Text('Patrimonio Neto')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _agregarActivo,
-        icon: const Icon(Icons.add, color: AppTheme.background),
-        label: const Text('Agregar activo', style: TextStyle(color: AppTheme.background)),
+        icon: Icon(Icons.add, color: AppTheme.background),
+        label: Text('Agregar activo', style: TextStyle(color: AppTheme.background)),
         backgroundColor: AppTheme.primary,
       ),
       body: _loading
@@ -67,7 +67,7 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
                     border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
                   ),
                   child: Column(children: [
-                    const Text('Tu patrimonio neto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                    Text('Tu patrimonio neto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                     const SizedBox(height: 8),
                     Text('${Money.fmt(patNeto)}',
                         style: TextStyle(color: color, fontSize: 36, fontWeight: FontWeight.w800)),
@@ -91,7 +91,7 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
                   ),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Icon(Icons.lightbulb_outline, color: AppTheme.info, size: 16),
                     SizedBox(width: 10),
                     Expanded(child: Text(
@@ -133,12 +133,12 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
 
   Widget _seccion(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Text(t, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
+    child: Text(t, style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600)),
   );
 
   Widget _empty(String msg) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Text(msg, style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+    child: Text(msg, style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
   );
 
   Future<void> _agregarActivo([Map<String, dynamic>? existing]) async {
@@ -159,8 +159,8 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar activo', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Estás seguro?', style: TextStyle(color: AppTheme.textSecondary)),
+        title: Text('Eliminar activo', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Estás seguro?', style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
           TextButton(onPressed: () => Navigator.pop(context, true),
@@ -184,7 +184,7 @@ class _MiniKpi extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: [
     Text('${Money.fmt(valor)}',
         style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
-    Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+    Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
   ]);
 }
 
@@ -231,8 +231,8 @@ class _ActivoTile extends StatelessWidget {
         Icon(icon, color: AppTheme.success, size: 20),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(activo['nombre'] as String, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-          Text(activo['tipo'] as String? ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          Text(activo['nombre'] as String, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(activo['tipo'] as String? ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
           if (desactualizado)
             GestureDetector(
               onTap: onEdit,
@@ -251,7 +251,7 @@ class _ActivoTile extends StatelessWidget {
             style: const TextStyle(color: AppTheme.success, fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(width: 8),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
+          icon: Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
           onSelected: (v) { if (v == 'edit') onEdit(); else onDelete(); },
           itemBuilder: (_) => const [
             PopupMenuItem(value: 'edit', child: Text('Editar')),
@@ -284,8 +284,8 @@ class _PasivoTile extends StatelessWidget {
           const Icon(Icons.credit_card, color: AppTheme.danger, size: 20),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(deuda['nombre'] as String? ?? '—', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-            Text(deuda['tipo'] as String? ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            Text(deuda['nombre'] as String? ?? '—', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            Text(deuda['tipo'] as String? ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             if (onVerDeuda != null) ...[
               const SizedBox(height: 3),
               Row(children: const [
@@ -368,28 +368,28 @@ class _ActivoFormState extends State<_ActivoForm> {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.existing != null ? 'Editar activo' : 'Nuevo activo',
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           // R2 — explicar para qué sirve registrar un activo
-          const Text(
+          Text(
             'Registrar tus activos te ayuda a ver tu salud financiera completa. No afecta tu presupuesto mensual.',
             style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.35),
           ),
           const SizedBox(height: 16),
           TextField(controller: _nombreCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre (ej: Apartamento, Toyota Yaris)')),
           const SizedBox(height: 12),
           TextField(controller: _valorCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Valor en dólares', prefixText: 'B/. ')),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _tipo,
             dropdownColor: AppTheme.surface,
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
             decoration: const InputDecoration(labelText: 'Tipo'),
             items: _tipos.map((t) => DropdownMenuItem(
               value: t['value'] as String,
@@ -399,7 +399,7 @@ class _ActivoFormState extends State<_ActivoForm> {
           ),
           const SizedBox(height: 12),
           TextField(controller: _descCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Descripción (opcional)')),
           const SizedBox(height: 20),
           SizedBox(

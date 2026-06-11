@@ -42,8 +42,8 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
       appBar: AppBar(title: const Text('Objetivos Financieros')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _crearObjetivo,
-        icon: const Icon(Icons.add, color: AppTheme.background),
-        label: const Text('Nuevo objetivo', style: TextStyle(color: AppTheme.background)),
+        icon: Icon(Icons.add, color: AppTheme.background),
+        label: Text('Nuevo objetivo', style: TextStyle(color: AppTheme.background)),
         backgroundColor: AppTheme.primary,
       ),
       body: _loading
@@ -55,7 +55,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                       itemCount: _objetivos.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      separatorBuilder: (_, __) => SizedBox(height: 12),
                       itemBuilder: (_, i) => _ObjetivoCard(
                         objetivo: _objetivos[i],
                         uid: widget.firebaseUid,
@@ -69,21 +69,21 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
 
   Widget _buildEmpty() => Center(
     child: Padding(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.flag_outlined, color: AppTheme.primary, size: 64),
-        const SizedBox(height: 16),
-        const Text('Sin objetivos aún', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        const Text(
+        Icon(Icons.flag_outlined, color: AppTheme.primary, size: 64),
+        SizedBox(height: 16),
+        Text('Sin objetivos aún', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+        SizedBox(height: 8),
+        Text(
           'Define metas financieras concretas: un fondo de emergencia, un carro, vacaciones.\nSalarying te dice cuánto necesitás ahorrar por mes.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: 24),
         ElevatedButton.icon(
-          icon: const Icon(Icons.add, color: Colors.black),
-          label: const Text('Crear mi primer objetivo', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          icon: Icon(Icons.add, color: Colors.black),
+          label: Text('Crear mi primer objetivo', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           onPressed: _crearObjetivo,
         ),
       ]),
@@ -95,7 +95,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => _ObjetivoForm(uid: widget.firebaseUid),
     );
     if (ok == true) _cargar();
@@ -106,12 +106,12 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Eliminar objetivo', style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('¿Estás seguro?', style: TextStyle(color: AppTheme.textSecondary)),
+        title: Text('Eliminar objetivo', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Estás seguro?', style: TextStyle(color: AppTheme.textSecondary)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancelar')),
           TextButton(onPressed: () => Navigator.pop(context, true),
-              child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
+              child: Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
         ],
       ),
     );
@@ -128,14 +128,14 @@ class _ObjetivoCard extends StatelessWidget {
   final VoidCallback onChanged;
   final VoidCallback onDelete;
 
-  const _ObjetivoCard({
+  _ObjetivoCard({
     required this.objetivo, required this.uid,
     required this.onChanged, required this.onDelete,
   });
 
   double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
 
-  static const _tipoColor = {
+  static final _tipoColor = {
     'ahorro':      AppTheme.success,
     'compra':      AppTheme.primary,
     'emergencia':  AppTheme.warning,
@@ -184,13 +184,13 @@ class _ObjetivoCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(objetivo['nombre'] as String? ?? '—',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
             if ((objetivo['fecha_limite'] as String?) != null)
               Text('Meta: ${objetivo['fecha_limite']}',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
           ])),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
+            icon: Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
             onSelected: (v) {
               if (v == 'abonar') { _abonar(context); }
               if (v == 'delete') { onDelete(); }
@@ -216,7 +216,7 @@ class _ObjetivoCard extends StatelessWidget {
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('${Money.fmt(actual)} de ${Money.fmt(meta)}',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
           Text('${(pct * 100).toStringAsFixed(0)}%',
               style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
         ]),
@@ -265,12 +265,12 @@ class _ObjetivoCard extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
-        title: const Text('Registrar abono', style: TextStyle(color: AppTheme.textPrimary)),
+        title: Text('Registrar abono', style: TextStyle(color: AppTheme.textPrimary)),
         content: TextField(
           controller: ctrl,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           autofocus: true,
-          style: const TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: AppTheme.textPrimary),
           decoration: const InputDecoration(labelText: 'Monto a abonar', prefixText: 'B/. '),
         ),
         actions: [
@@ -366,7 +366,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
       lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(primary: AppTheme.primary, surface: AppTheme.surfaceAlt),
+          colorScheme: ColorScheme.dark(primary: AppTheme.primary, surface: AppTheme.surfaceAlt),
         ),
         child: child!,
       ),
@@ -381,25 +381,25 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Nuevo objetivo', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+          Text('Nuevo objetivo', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
 
           TextField(controller: _nombreCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre (ej: Fondo emergencia, Carro nuevo)')),
           const SizedBox(height: 12),
 
           TextField(controller: _metaCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(labelText: 'Monto meta', prefixText: 'B/. ')),
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
             value: _tipo,
             dropdownColor: AppTheme.surface,
-            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
             decoration: const InputDecoration(labelText: 'Tipo'),
             items: _tipos.map((t) => DropdownMenuItem(value: t['value'], child: Text(t['label']!))).toList(),
             onChanged: (v) => setState(() => _tipo = v ?? 'ahorro'),
@@ -408,7 +408,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
 
           // Toggle plazo / fecha límite
           Row(children: [
-            const Text('Plazo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            Text('Plazo', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             const Spacer(),
             GestureDetector(
               onTap: () => setState(() { _usarPlazo = !_usarPlazo; }),
@@ -451,7 +451,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
                   border: Border.all(color: AppTheme.colorAhorro.withValues(alpha: 0.25)),
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  const Text('Cuota mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  Text('Cuota mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                   Text('${Money.fmt(cuota)}/mes',
                       style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16)),
                 ]),
@@ -465,7 +465,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
                   border: Border(bottom: BorderSide(color: AppTheme.border)),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textMuted, size: 18),
+                  Icon(Icons.calendar_today_outlined, color: AppTheme.textMuted, size: 18),
                   const SizedBox(width: 10),
                   Text(
                     _fechaLimite != null
@@ -480,7 +480,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
           const SizedBox(height: 12),
 
           TextField(controller: _descCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Descripción (opcional)')),
           const SizedBox(height: 20),
 
