@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/api_client.dart';
+import '../utils/money.dart';
 
 class HistorialAbonosSheet {
   static void show(
@@ -100,7 +101,7 @@ class _HistorialBodyState extends State<_HistorialBody> {
               ])),
               if (!_loading && _abonos.isNotEmpty)
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('\$${_totalAbonado.toStringAsFixed(2)}',
+                  Text('${Money.fmt(_totalAbonado)}',
                       style: const TextStyle(color: AppTheme.success,
                           fontSize: 18, fontWeight: FontWeight.w800)),
                   const Text('total abonado',
@@ -161,7 +162,7 @@ class _HistorialBodyState extends State<_HistorialBody> {
                                       style: const TextStyle(
                                           color: AppTheme.textMuted, fontSize: 11)),
                                 ])),
-                                Text('\$${monto.toStringAsFixed(2)}',
+                                Text('${Money.fmt(monto)}',
                                     style: const TextStyle(color: AppTheme.success,
                                         fontSize: 14, fontWeight: FontWeight.w700)),
                               ]),

@@ -17,6 +17,7 @@ import 'services/cache_service.dart';
 import 'produccion_detalle.dart';
 import 'venta_detalle.dart';
 import 'productos_screen.dart';
+import 'utils/money.dart';
 
 /// Pantalla con tabs Producción / Ventas y FAB contextual.
 class CobrosHome extends StatefulWidget {
@@ -227,7 +228,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                   return DropdownMenuItem<int>(
                     value: pid,
                     child: Text(
-                      '${p['nombre']} · \$${costo.toStringAsFixed(2)}',
+                      '${p['nombre']} · ${Money.fmt(costo)}',
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: AppTheme.textPrimary,
                           fontSize: 13),
@@ -257,7 +258,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                   fontWeight: FontWeight.w700,
                   fontSize: 18),
               decoration: const InputDecoration(
-                prefixText: '\$ ',
+                prefixText: 'B/. ',
                 prefixStyle: TextStyle(
                     color: AppTheme.colorFijo,
                     fontWeight: FontWeight.w700,
@@ -458,7 +459,7 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                 color: AppTheme.colorFijo,
                 title: nombre,
                 subtitle: p['descripcion']?.toString() ?? '',
-                trailing: '\$${total.toStringAsFixed(2)}',
+                trailing: '${Money.fmt(total)}',
                 trailingLabel: 'Costo total',
               ),
             );
@@ -540,12 +541,12 @@ class _CobrosHomeState extends State<CobrosHome> with SingleTickerProviderStateM
                   Row(children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       const Text('Cobrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                      Text('\$${cobrado.toStringAsFixed(2)}',
+                      Text('${Money.fmt(cobrado)}',
                           style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.w800, fontSize: 16)),
                     ])),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                       const Text('Total esperado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                      Text('\$${esperado.toStringAsFixed(2)}',
+                      Text('${Money.fmt(esperado)}',
                           style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 14)),
                     ])),
                   ]),

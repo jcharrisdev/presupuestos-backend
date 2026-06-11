@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
+import 'utils/money.dart';
 
 class CierreAnioScreen extends StatefulWidget {
   final String firebaseUid;
@@ -342,7 +343,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
         Text(label, style: TextStyle(
             color: AppTheme.textSecondary, fontSize: bold ? 14 : 12,
             fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
-        Text('\$${valor.toStringAsFixed(2)}', style: TextStyle(
+        Text('${Money.fmt(valor)}', style: TextStyle(
             color: color, fontSize: bold ? 16 : 13,
             fontWeight: bold ? FontWeight.bold : FontWeight.w600)),
       ],
@@ -385,12 +386,12 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
           const SizedBox(height: 6),
           Row(
             children: [
-              _chip('Presup. actual \$${presup.toStringAsFixed(0)}/mes', AppTheme.textMuted),
+              _chip('Presup. actual ${Money.fmt0(presup)}/mes', AppTheme.textMuted),
               const SizedBox(width: 6),
-              _chip('Promedio real \$${avg.toStringAsFixed(0)}/mes', color),
+              _chip('Promedio real ${Money.fmt0(avg)}/mes', color),
               if (noPresupMes > 0) ...[
                 const SizedBox(width: 6),
-                _chip('No presup. \$${noPresupMes.toStringAsFixed(0)}', AppTheme.warning),
+                _chip('No presup. ${Money.fmt0(noPresupMes)}', AppTheme.warning),
               ],
             ],
           ),

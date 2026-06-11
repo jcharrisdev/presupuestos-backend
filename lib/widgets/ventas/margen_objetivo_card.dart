@@ -7,6 +7,7 @@
 /// Ej: $12 invertido con 50% markup → necesita vender $18.
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/money.dart';
 
 class MargenObjetivoCard extends StatelessWidget {
   final double invertido;
@@ -105,7 +106,7 @@ class MargenObjetivoCard extends StatelessWidget {
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             )),
             const SizedBox(width: 8),
-            Text('\$${ventasNecesarias.toStringAsFixed(2)}',
+            Text('${Money.fmt(ventasNecesarias)}',
                 style: const TextStyle(
                     color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 16)),
           ]),
@@ -114,7 +115,7 @@ class MargenObjetivoCard extends StatelessWidget {
             const SizedBox(height: 10),
             // Progreso hacia el objetivo
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Ventas proyectadas: \$${esperado.toStringAsFixed(2)}',
+              Text('Ventas proyectadas: ${Money.fmt(esperado)}',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               Text(
                 '${(pctAvance * 100).toStringAsFixed(0)}% del objetivo',
@@ -160,8 +161,8 @@ class MargenObjetivoCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(child: Text(
                   brecha >= 0
-                      ? 'Superarás el objetivo en \$${brecha.abs().toStringAsFixed(2)}'
-                      : 'Faltan \$${brecha.abs().toStringAsFixed(2)} en ventas para el objetivo',
+                      ? 'Superarás el objetivo en ${Money.fmt(brecha.abs())}'
+                      : 'Faltan ${Money.fmt(brecha.abs())} en ventas para el objetivo',
                   style: TextStyle(
                     color: brecha >= 0 ? AppTheme.success : AppTheme.danger,
                     fontSize: 12, fontWeight: FontWeight.w600,

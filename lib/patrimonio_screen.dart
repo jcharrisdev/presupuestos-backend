@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'deudas/deudas_screen.dart';
+import 'utils/money.dart';
 
 class PatrimonioScreen extends StatefulWidget {
   final String firebaseUid;
@@ -68,7 +69,7 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
                   child: Column(children: [
                     const Text('Tu patrimonio neto', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                     const SizedBox(height: 8),
-                    Text('\$${patNeto.toStringAsFixed(2)}',
+                    Text('${Money.fmt(patNeto)}',
                         style: TextStyle(color: color, fontSize: 36, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 4),
                     Text(patNeto >= 0 ? '¡Tus activos superan tus deudas!' : 'Tus deudas superan tus activos.',
@@ -181,7 +182,7 @@ class _MiniKpi extends StatelessWidget {
   const _MiniKpi(this.label, this.valor, this.color);
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text('\$${valor.toStringAsFixed(2)}',
+    Text('${Money.fmt(valor)}',
         style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
     Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
   ]);
@@ -246,7 +247,7 @@ class _ActivoTile extends StatelessWidget {
               ),
             ),
         ])),
-        Text('\$${valor.toStringAsFixed(2)}',
+        Text('${Money.fmt(valor)}',
             style: const TextStyle(color: AppTheme.success, fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(width: 8),
         PopupMenuButton<String>(
@@ -293,7 +294,7 @@ class _PasivoTile extends StatelessWidget {
               ]),
             ],
           ])),
-          Text('\$${saldo.toStringAsFixed(2)}',
+          Text('${Money.fmt(saldo)}',
               style: const TextStyle(color: AppTheme.danger, fontSize: 14, fontWeight: FontWeight.w700)),
         ]),
       ),
@@ -383,7 +384,7 @@ class _ActivoFormState extends State<_ActivoForm> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
               style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(labelText: 'Valor en dólares', prefixText: '\$ ')),
+              decoration: const InputDecoration(labelText: 'Valor en dólares', prefixText: 'B/. ')),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _tipo,

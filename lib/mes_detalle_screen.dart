@@ -304,7 +304,7 @@ class _TabResumen extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               hayReal
-                  ? 'de \$${ingresoRef.toStringAsFixed(2)} · ya gastaste \$${yaGastado.toStringAsFixed(2)}'
+                  ? 'de ${Money.fmt(ingresoRef)} · ya gastaste ${Money.fmt(yaGastado)}'
                   : 'basado en tu planificación — registra gastos para ver el real',
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               textAlign: TextAlign.center,
@@ -400,7 +400,7 @@ class _TabResumen extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(child: Text(
                       '$hormigaCount pequeña${hormigaCount == 1 ? '' : 's'} compra${hormigaCount == 1 ? '' : 's'} '
-                      '— \$${hormigaTotal.toStringAsFixed(2)} en total este mes',
+                      '— ${Money.fmt(hormigaTotal)} en total este mes',
                       style: const TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
                     )),
                     if (ingresoRef > 0)
@@ -507,14 +507,14 @@ class _FilaComparativa extends StatelessWidget {
         Expanded(flex: 3, child: Text(nombre,
             style: TextStyle(color: AppTheme.textSecondary, fontSize: bold ? 14 : 13,
                 fontWeight: bold ? FontWeight.w700 : FontWeight.normal))),
-        Expanded(flex: 2, child: Text('\$${estimado.toStringAsFixed(2)}',
+        Expanded(flex: 2, child: Text('${Money.fmt(estimado)}',
             style: const TextStyle(color: AppTheme.textMuted, fontSize: 12))),
-        Expanded(flex: 2, child: Text('\$${real.toStringAsFixed(2)}',
+        Expanded(flex: 2, child: Text('${Money.fmt(real)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: bold ? 15 : 13))),
         if (estimado > 0) SizedBox(
           width: 56,
           child: Text(
-            '${diff >= 0 ? '+' : ''}\$${diff.toStringAsFixed(0)}',
+            '${diff >= 0 ? '+' : ''}${Money.fmt0(diff)}',
             textAlign: TextAlign.right,
             style: TextStyle(fontSize: 11, color: diff > 0 ? AppTheme.danger : AppTheme.success),
           ),
@@ -546,7 +546,7 @@ class _BarraUso extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 6),
-      Text('${(pct * 100).toStringAsFixed(1)}% del ingreso usado · \$${total.toStringAsFixed(2)} de \$${ingreso.toStringAsFixed(2)}',
+      Text('${(pct * 100).toStringAsFixed(1)}% del ingreso usado · ${Money.fmt(total)} de ${Money.fmt(ingreso)}',
           style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
     ]);
   }
@@ -641,7 +641,7 @@ class _TabGastosState extends State<_TabGastos> {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               labelText: '¿Cuánto pagaste?',
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               suffixIcon: TextButton(
                 onPressed: () => setS(() =>
                     montoCtrl.text = (falta > 0.01 ? falta : planeado).toStringAsFixed(2)),
@@ -861,7 +861,7 @@ class _TabGastosState extends State<_TabGastos> {
             Row(children: [
               Expanded(child: Text(catLabel,
                   style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700))),
-              Text('${delCat.length} ${delCat.length == 1 ? 'gasto' : 'gastos'} · \$${total.toStringAsFixed(2)}',
+              Text('${delCat.length} ${delCat.length == 1 ? 'gasto' : 'gastos'} · ${Money.fmt(total)}',
                   style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             ]),
             const SizedBox(height: 12),
@@ -889,7 +889,7 @@ class _TabGastosState extends State<_TabGastos> {
                         const SizedBox(height: 2),
                         Text(fechaCorta, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                       ])),
-                      Text('\$${_num(r['monto']).toStringAsFixed(2)}',
+                      Text('${Money.fmt(_num(r['monto']))}',
                           style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
                     ]),
                   );
@@ -1530,7 +1530,7 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
             decoration: const InputDecoration(
-              labelText: 'Monto (\$)', prefixText: '\$ ', isDense: true,
+              labelText: 'Monto (\$)', prefixText: 'B/. ', isDense: true,
               contentPadding: EdgeInsets.symmetric(vertical: 8),
             ),
             onChanged: (_) => setState(() {}),
@@ -1595,7 +1595,7 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
       subtitle: Text('$frec',
           style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('\$${monto.toStringAsFixed(2)}',
+        Text('${Money.fmt(monto)}',
             style: const TextStyle(color: AppTheme.textSecondary,
                 fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(width: 8),
@@ -1653,10 +1653,10 @@ class _SobreRow extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               excede
-                  ? '\$${total.toStringAsFixed(2)} · +\$${(total - presup).toStringAsFixed(2)} excedido'
+                  ? '${Money.fmt(total)} · +${Money.fmt((total - presup))} excedido'
                   : presup > 0
-                      ? '\$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}'
-                      : '\$${total.toStringAsFixed(2)}',
+                      ? '${Money.fmt(total)} de ${Money.fmt(presup)}'
+                      : '${Money.fmt(total)}',
               style: TextStyle(color: barColor, fontSize: 11),
             ),
           ]),
@@ -1765,7 +1765,7 @@ class _PlanTile extends StatelessWidget {
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${monto.toStringAsFixed(2)}',
+          Text('${Money.fmt(monto)}',
               style: TextStyle(
                 color: completo ? AppTheme.textSecondary : color,
                 fontWeight: FontWeight.w700, fontSize: 13,
@@ -1843,7 +1843,7 @@ class EditarGastoFijoSheet {
             controller: montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(labelText: 'Monto mensual (\$)', prefixText: '\$ '),
+            decoration: const InputDecoration(labelText: 'Monto mensual (\$)', prefixText: 'B/. '),
             onChanged: (_) => setS(() {}),
           ),
           // N2 — preview del impacto en el disponible mensual
@@ -1964,7 +1964,7 @@ class _RegistroTile extends StatelessWidget {
         ],
       ]),
       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text('\$${monto.toStringAsFixed(2)}',
+        Text('${Money.fmt(monto)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
         const SizedBox(height: 2),
         Icon(pagado ? Icons.check_circle : Icons.radio_button_unchecked,
@@ -2143,7 +2143,7 @@ class _RegistroTile extends StatelessWidget {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(
-                    labelText: 'Monto', prefixText: '\$ '),
+                    labelText: 'Monto', prefixText: 'B/. '),
               ),
               const SizedBox(height: 16),
 
@@ -2396,7 +2396,7 @@ class _CompromisoTile extends StatelessWidget {
           if (subtitulo.isNotEmpty)
             Text(subtitulo, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
         ])),
-        Text('\$${monto.toStringAsFixed(2)}',
+        Text('${Money.fmt(monto)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
       ]),
     );
@@ -2658,8 +2658,8 @@ class _QuincenaCardState extends State<_QuincenaCard> {
               const SizedBox(width: 6),
               Text(
                 widget.remanenteAnterior! >= 0
-                    ? 'Remanente Q1: +\$${widget.remanenteAnterior!.toStringAsFixed(2)}'
-                    : 'Déficit Q1: \$${widget.remanenteAnterior!.toStringAsFixed(2)}',
+                    ? 'Remanente Q1: +${Money.fmt(widget.remanenteAnterior!)}'
+                    : 'Déficit Q1: ${Money.fmt(widget.remanenteAnterior!)}',
                 style: TextStyle(
                   color: widget.remanenteAnterior! >= 0 ? AppTheme.success : AppTheme.danger,
                   fontSize: 12, fontWeight: FontWeight.w600,
@@ -2702,7 +2702,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
             ]),
             const Spacer(),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('\$${disponible.toStringAsFixed(2)}',
+              Text('${Money.fmt(disponible)}',
                   style: TextStyle(color: dispColor, fontSize: 22, fontWeight: FontWeight.w800)),
               Text(cerrada ? 'resultado final' : 'disponible',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
@@ -2727,9 +2727,9 @@ class _QuincenaCardState extends State<_QuincenaCard> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Ingreso: \$${ingQ.toStringAsFixed(2)}',
+            Text('Ingreso: ${Money.fmt(ingQ)}',
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-            Text('Gastado: \$${gastado.toStringAsFixed(2)}',
+            Text('Gastado: ${Money.fmt(gastado)}',
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
           ]),
         ),
@@ -2771,7 +2771,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                       style: TextStyle(color: AppTheme.textMuted, fontSize: 10))
                   : null,
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('\$${_d(c['monto']).toStringAsFixed(2)}',
+                Text('${Money.fmt(_d(c['monto']))}',
                     style: TextStyle(
                       color: pagado ? AppTheme.textMuted : AppTheme.textSecondary,
                       fontSize: 13, fontWeight: FontWeight.w600,
@@ -2828,7 +2828,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
               ]),
               subtitle: Text(r['categoria'] as String? ?? '',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-              trailing: Text('\$${_d(r['monto']).toStringAsFixed(2)}',
+              trailing: Text('${Money.fmt(_d(r['monto']))}',
                   style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
             );
           }),
@@ -2960,12 +2960,12 @@ class _RecomendacionCard extends StatelessWidget {
             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
         const SizedBox(height: 8),
         Row(children: [
-          _statMin('Actual', '\$${presupActual.toStringAsFixed(2)}', AppTheme.textMuted),
+          _statMin('Actual', '${Money.fmt(presupActual)}', AppTheme.textMuted),
           const SizedBox(width: 16),
-          _statMin('Sugerido', '\$${presupSug.toStringAsFixed(2)}', color),
+          _statMin('Sugerido', '${Money.fmt(presupSug)}', color),
           if (ahorro != null) ...[
             const SizedBox(width: 16),
-            _statMin('Ahorro/mes', '\$${ahorro.toStringAsFixed(2)}', AppTheme.success),
+            _statMin('Ahorro/mes', '${Money.fmt(ahorro)}', AppTheme.success),
           ],
         ]),
       ]),
@@ -3028,15 +3028,15 @@ class _CategoriaCard extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: Text('Presup: \$${presup.toStringAsFixed(2)}',
+          Expanded(child: Text('Presup: ${Money.fmt(presup)}',
               style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
-          Expanded(child: Text('Real: \$${total.toStringAsFixed(2)}',
+          Expanded(child: Text('Real: ${Money.fmt(total)}',
               style: TextStyle(color: excedido ? AppTheme.danger : AppTheme.success,
                   fontSize: 11, fontWeight: FontWeight.w600))),
         ]),
         if (noPres > 0) Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Text('No presupuestado: \$${noPres.toStringAsFixed(2)}',
+          child: Text('No presupuestado: ${Money.fmt(noPres)}',
               style: const TextStyle(color: AppTheme.danger, fontSize: 11)),
         ),
         const SizedBox(height: 8),
@@ -3091,8 +3091,8 @@ class _IngresoRealCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             tieneReal
-                ? '\$${ingReal.toStringAsFixed(2)}'
-                : 'Sin registrar — estimado: \$${ingEst.toStringAsFixed(2)}',
+                ? '${Money.fmt(ingReal)}'
+                : 'Sin registrar — estimado: ${Money.fmt(ingEst)}',
             style: TextStyle(
               color: tieneReal ? AppTheme.success : AppTheme.textMuted,
               fontSize: tieneReal ? 15 : 12,
@@ -3127,7 +3127,7 @@ class _IngresoRealCard extends StatelessWidget {
               style: TextStyle(color: AppTheme.textPrimary,
                   fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text('Estimado: \$${ingEst.toStringAsFixed(2)}',
+          Text('Estimado: ${Money.fmt(ingEst)}',
               style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           const SizedBox(height: 16),
           TextField(
@@ -3137,7 +3137,7 @@ class _IngresoRealCard extends StatelessWidget {
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18),
             decoration: const InputDecoration(
               labelText: 'Monto cobrado',
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
             ),
           ),
           const SizedBox(height: 20),

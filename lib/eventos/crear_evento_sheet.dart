@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/eventos_service.dart';
 import '../widgets/financiero/mes_rango_selector.dart';
+import '../utils/money.dart';
 
 class CrearEventoSheet extends StatefulWidget {
   final String firebaseUid;
@@ -209,7 +210,7 @@ class _CrearEventoSheetState extends State<CrearEventoSheet> {
                       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         const Text('Cuota mensual',
                             style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                        Text('\$${cuota.toStringAsFixed(2)}/mes',
+                        Text('${Money.fmt(cuota)}/mes',
                             style: const TextStyle(
                                 color: AppTheme.primary, fontSize: 16, fontWeight: FontWeight.bold)),
                       ]),

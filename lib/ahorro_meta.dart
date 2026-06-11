@@ -21,6 +21,7 @@ import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/savings_service.dart';
 import 'progreso_ahorro.dart';
+import 'utils/money.dart';
 
 /// Pantalla de creación de metas de ahorro con cálculo de cuota en tiempo real.
 class AhorroMetaScreen extends StatefulWidget {
@@ -138,7 +139,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
         _montoCtrl.clear();
         setState(() => _presupuestoId = null);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Meta creada · \$${cuota.toStringAsFixed(2)} por período · $periodos períodos')),
+          SnackBar(content: Text('Meta creada · ${Money.fmt(cuota)} por período · $periodos períodos')),
         );
       } else throw Exception();
     } catch (_) {
@@ -236,7 +237,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                           child: LinearProgressIndicator(value: pct, minHeight: 6, color: color, backgroundColor: AppTheme.surfaceAlt),
                         ),
                         const SizedBox(height: 6),
-                        Text('\$${actual.toStringAsFixed(2)} de \$${meta.toStringAsFixed(2)}',
+                        Text('${Money.fmt(actual)} de ${Money.fmt(meta)}',
                             style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                       ]),
                     );
@@ -282,7 +283,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: const InputDecoration(
-                    prefixText: '\$ ',
+                    prefixText: 'B/. ',
                     prefixStyle: TextStyle(color: AppTheme.colorAhorro, fontSize: 20, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -337,7 +338,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                         const Text('Cuota por período', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         Text(
-                          '\$${_cuotaPorPeriodo.toStringAsFixed(2)} / $_tipoPeriodoLabel',
+                          '${Money.fmt(_cuotaPorPeriodo)} / $_tipoPeriodoLabel',
                           style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16),
                         ),
                       ]),
@@ -361,7 +362,7 @@ class _AhorroMetaScreenState extends State<AhorroMetaScreen> {
                       const SizedBox(height: 6),
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                         const Text('Total a ahorrar', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                        Text('\$${monto.toStringAsFixed(2)}',
+                        Text('${Money.fmt(monto)}',
                             style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
                       ]),
                     ]),

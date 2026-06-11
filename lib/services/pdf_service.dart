@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../utils/money.dart';
 
 class PdfService {
   static final _h1 = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800);
@@ -48,10 +49,10 @@ class PdfService {
         pw.Table(
           columnWidths: {0: const pw.FlexColumnWidth(2), 1: const pw.FlexColumnWidth(1)},
           children: [
-            _tr('Invertido', '\$${invertido.toStringAsFixed(2)}'),
-            _tr('Total Cobrado', '\$${cobrado.toStringAsFixed(2)}', color: PdfColors.green700),
-            _tr('Total Esperado', '\$${esperado.toStringAsFixed(2)}'),
-            _tr('Ganancia', '\$${ganancia.toStringAsFixed(2)}', color: ganancia >= 0 ? PdfColors.green700 : PdfColors.red700),
+            _tr('Invertido', '${Money.fmt(invertido)}'),
+            _tr('Total Cobrado', '${Money.fmt(cobrado)}', color: PdfColors.green700),
+            _tr('Total Esperado', '${Money.fmt(esperado)}'),
+            _tr('Ganancia', '${Money.fmt(ganancia)}', color: ganancia >= 0 ? PdfColors.green700 : PdfColors.red700),
             _tr('Margen', '${margen.toStringAsFixed(1)}%'),
           ],
         ),
@@ -72,7 +73,7 @@ class PdfService {
             final fecha = c['fecha_cobrado']?.toString() ?? c['fecha_cobro']?.toString() ?? '-';
             return [
               c['nombre_cliente']?.toString() ?? '',
-              '\$${monto.toStringAsFixed(2)}',
+              '${Money.fmt(monto)}',
               estado,
               fecha.length >= 10 ? fecha.substring(0, 10) : fecha,
             ];
@@ -123,9 +124,9 @@ class PdfService {
         pw.Table(
           columnWidths: {0: const pw.FlexColumnWidth(2), 1: const pw.FlexColumnWidth(1)},
           children: [
-            _tr('Presupuesto total', '\$${montoTotal.toStringAsFixed(2)}'),
-            _tr('Total pagado', '\$${totalPagado.toStringAsFixed(2)}', color: PdfColors.green700),
-            _tr('Disponible', '\$${disponible.toStringAsFixed(2)}', color: disponible >= 0 ? PdfColors.green700 : PdfColors.red700),
+            _tr('Presupuesto total', '${Money.fmt(montoTotal)}'),
+            _tr('Total pagado', '${Money.fmt(totalPagado)}', color: PdfColors.green700),
+            _tr('Disponible', '${Money.fmt(disponible)}', color: disponible >= 0 ? PdfColors.green700 : PdfColors.red700),
           ],
         ),
         pw.SizedBox(height: 20),
@@ -170,8 +171,8 @@ class PdfService {
           final fecha = m['fecha_pagado']?.toString() ?? '-';
           return [
             m['descripcion']?.toString() ?? '',
-            '\$${monto.toStringAsFixed(2)}',
-            pagado ? '\$${real.toStringAsFixed(2)}' : 'pendiente',
+            '${Money.fmt(monto)}',
+            pagado ? '${Money.fmt(real)}' : 'pendiente',
             fecha.length >= 10 ? fecha.substring(0, 10) : fecha,
           ];
         }).toList(),
@@ -197,8 +198,8 @@ class PdfService {
       padding: const pw.EdgeInsets.symmetric(vertical: 3),
       child: pw.Row(children: [
         pw.Expanded(flex: 3, child: pw.Text(label, style: bold ? _h2 : _body)),
-        pw.Expanded(child: pw.Text('\$${est.toStringAsFixed(2)}', style: bold ? _h2 : _body, textAlign: pw.TextAlign.right)),
-        pw.Expanded(child: pw.Text('\$${real.toStringAsFixed(2)}',
+        pw.Expanded(child: pw.Text('${Money.fmt(est)}', style: bold ? _h2 : _body, textAlign: pw.TextAlign.right)),
+        pw.Expanded(child: pw.Text('${Money.fmt(real)}',
             style: (bold ? _h2 : _body).copyWith(color: real > est ? PdfColors.red700 : PdfColors.green700),
             textAlign: pw.TextAlign.right)),
       ]),
@@ -245,14 +246,14 @@ class PdfService {
             padding: const pw.EdgeInsets.symmetric(vertical: 2),
             child: pw.Row(children: [
               pw.Expanded(child: pw.Text(g['nombre']?.toString() ?? '—', style: _body)),
-              pw.Text('\$${_d(g['monto_mensual']).toStringAsFixed(2)}', style: _body),
+              pw.Text('${Money.fmt(_d(g['monto_mensual']))}', style: _body),
             ]),
           )),
           ...deudas.map((d) => pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 2),
             child: pw.Row(children: [
               pw.Expanded(child: pw.Text('${d['nombre']} (deuda)', style: _body)),
-              pw.Text('\$${_d(d['cuota']).toStringAsFixed(2)}', style: _body),
+              pw.Text('${Money.fmt(_d(d['cuota']))}', style: _body),
             ]),
           )),
           pw.SizedBox(height: 20),
@@ -273,7 +274,7 @@ class PdfService {
             child: pw.Row(children: [
               pw.Expanded(flex: 3, child: pw.Text(g['nombre']?.toString() ?? '—', style: _body)),
               pw.Expanded(child: pw.Text(g['categoria']?.toString() ?? '', style: _bodySmall)),
-              pw.Expanded(child: pw.Text('\$${_d(g['monto']).toStringAsFixed(2)}', style: _body, textAlign: pw.TextAlign.right)),
+              pw.Expanded(child: pw.Text('${Money.fmt(_d(g['monto']))}', style: _body, textAlign: pw.TextAlign.right)),
             ]),
           )),
         ],

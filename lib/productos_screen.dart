@@ -21,6 +21,7 @@ import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'receta_screen.dart';
 import 'widgets/widgets.dart';
+import 'utils/money.dart';
 
 class ProductosScreen extends StatefulWidget {
   final String firebaseUid;
@@ -179,7 +180,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
               style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(
                 labelText: 'Precio de venta',
-                prefixText: '\$ ',
+                prefixText: 'B/. ',
                 prefixStyle: TextStyle(color: AppTheme.primary),
               ),
             )),
@@ -254,7 +255,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
             decoration: const InputDecoration(
               labelText: 'Precio de venta',
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w700),
             ),
           ),
@@ -410,7 +411,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
           Text('Historial de precios — $nombre',
             style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
           const SizedBox(height: 4),
-          Text('Precio actual: \$${precioActual.toStringAsFixed(2)}',
+          Text('Precio actual: ${Money.fmt(precioActual)}',
             style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 16),
           FutureBuilder(
@@ -445,7 +446,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                           Text(fecha.length >= 16 ? fecha.substring(0, 16) : fecha,
                             style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                           const SizedBox(height: 3),
-                          Text('\$${antes.toStringAsFixed(2)} → \$${nuevo.toStringAsFixed(2)}',
+                          Text('${Money.fmt(antes)} → ${Money.fmt(nuevo)}',
                             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
                         ])),
                         Container(
@@ -608,7 +609,7 @@ class _ProductoCard extends StatelessWidget {
                         style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
                       ),
                     ])),
-                    Text('\$${precio.toStringAsFixed(2)}', style: const TextStyle(
+                    Text('${Money.fmt(precio)}', style: const TextStyle(
                       color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(width: 10),
                     // Botón Receta: navega a RecetaScreen para esta variante

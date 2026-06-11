@@ -9,6 +9,7 @@ import '../../perfil_financiero_screen.dart';
 import 'mes_rango_selector.dart';
 import 'categoria_selector.dart';
 import 'split_section.dart';
+import '../../utils/money.dart';
 
 class AgregarGastoSheet extends StatefulWidget {
   final String firebaseUid;
@@ -214,7 +215,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
                               )),
                           if (ultimo != null)
                             Text(
-                              '\$${double.tryParse(ultimo.toString())?.toStringAsFixed(2) ?? ultimo} · ${rec ?? cat}',
+                              '${Money.fmt(double.tryParse(ultimo.toString()) ?? 0)} · ${rec ?? cat}',
                               style: TextStyle(
                                 color: sel ? AppTheme.primary.withValues(alpha: 0.7) : AppTheme.textMuted,
                                 fontSize: 10,
@@ -281,7 +282,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               controller: _monto,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(labelText: 'Monto (\$)', prefixText: '\$ '),
+              decoration: const InputDecoration(labelText: 'Monto (\$)', prefixText: 'B/. '),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Requerido';
                 if (double.tryParse(v) == null) return 'Número inválido';
@@ -619,7 +620,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         title: const Text('Gasto fuera de tu plan',
             style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
         content: Text(
-          'Registraste \$${monto.toStringAsFixed(2)} en "$catLabel" que no estaba presupuestado.\n\n'
+          'Registraste ${Money.fmt(monto)} en "$catLabel" que no estaba presupuestado.\n\n'
           '¿Quieres agregar esta categoría a tu presupuesto para controlarla cada mes?',
           style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
         ),
@@ -692,8 +693,8 @@ class _CatBalanceHint extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(child: Text(
             excede
-                ? 'Excedido \$${(-quedan).toStringAsFixed(2)} · gastado \$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}'
-                : 'Te quedan \$${quedan.toStringAsFixed(2)} · gastado \$${total.toStringAsFixed(2)} de \$${presup.toStringAsFixed(2)}',
+                ? 'Excedido ${Money.fmt((-quedan))} · gastado ${Money.fmt(total)} de ${Money.fmt(presup)}'
+                : 'Te quedan ${Money.fmt(quedan)} · gastado ${Money.fmt(total)} de ${Money.fmt(presup)}',
             style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
           )),
         ]),

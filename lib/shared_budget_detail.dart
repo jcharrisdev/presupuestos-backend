@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'services/shared_budget_service.dart';
 import 'theme/app_theme.dart';
+import 'utils/money.dart';
 
 class SharedBudgetDetailScreen extends StatefulWidget {
   final int budgetId;
@@ -219,7 +220,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Mi presupuesto total', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
-        Text('\$${_fmt.format(totalMio)}',
+        Text('${Money.fmt(totalMio)}',
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         ClipRRect(
@@ -232,10 +233,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         ),
         const SizedBox(height: 10),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Pagado \$${_fmt.format(pagado)}',
+          Text('Pagado ${Money.fmt(pagado)}',
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           Text(
-            pendiente > 0 ? 'Pendiente \$${_fmt.format(pendiente)}' : '✓ Todo pagado',
+            pendiente > 0 ? 'Pendiente ${Money.fmt(pendiente)}' : '✓ Todo pagado',
             style: TextStyle(
               color: pendiente > 0 ? AppTheme.danger : AppTheme.success,
               fontSize: 12,
@@ -295,9 +296,9 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
 
     final color = debes ? AppTheme.danger : (teDeben ? AppTheme.success : AppTheme.textSecondary);
     final label = debes
-        ? 'Debes \$${balance.toStringAsFixed(2)} a ${_shortUid(otroUid)}'
+        ? 'Debes ${Money.fmt(balance)} a ${_shortUid(otroUid)}'
         : teDeben
-            ? '${_shortUid(otroUid)} te debe \$${(-balance).toStringAsFixed(2)}'
+            ? '${_shortUid(otroUid)} te debe ${Money.fmt((-balance))}'
             : 'Sin deudas pendientes';
 
     return Container(
@@ -357,7 +358,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               prefixStyle: const TextStyle(color: AppTheme.textMuted),
               filled: true,
               fillColor: AppTheme.surfaceAlt,
@@ -512,18 +513,18 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('Total aportes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          Text('\$${_fmt.format(totalContrib)}', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
+          Text('${Money.fmt(totalContrib)}', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 4),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('Total gastado', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          Text('\$${_fmt.format(totalGastos)}', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700)),
+          Text('${Money.fmt(totalGastos)}', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700)),
         ]),
         const Divider(color: AppTheme.border, height: 20),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('Disponible', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
           Text(
-            '\$${_fmt.format(balance)}',
+            '${Money.fmt(balance)}',
             style: TextStyle(
               color: balance >= 0 ? AppTheme.success : AppTheme.danger,
               fontSize: 22, fontWeight: FontWeight.w800,
@@ -545,7 +546,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                   _rolChip(m['rol'] as String),
                   const SizedBox(width: 6),
                 ],
-                Text('\$${_fmt.format(contrib)}',
+                Text('${Money.fmt(contrib)}',
                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
               ]),
             ]),
@@ -608,7 +609,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
                       textAlign: TextAlign.right,
                       onChanged: (_) => setM(() {}),
                       decoration: InputDecoration(
-                        suffixText: isPct ? '%' : '\$',
+                        suffixText: isPct ? '%' : 'B/.',
                         suffixStyle: const TextStyle(color: AppTheme.textSecondary),
                         isDense: true,
                       ),
@@ -752,10 +753,10 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 // Mi parte — número grande
-                Text('\$${miResp.toStringAsFixed(2)}',
+                Text('${Money.fmt(miResp)}',
                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
                 // Total — número pequeño
-                Text('Total \$${monto.toStringAsFixed(2)}',
+                Text('Total ${Money.fmt(monto)}',
                     style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               ]),
               // Z3 — editar gasto (solo quien puede editar)
@@ -862,7 +863,7 @@ class _SharedBudgetDetailScreenState extends State<SharedBudgetDetailScreen> {
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(e['descripcion'] ?? '', style: const TextStyle(color: AppTheme.textSecondary)),
           const SizedBox(height: 10),
-          Text('\$${miResp.toStringAsFixed(2)}',
+          Text('${Money.fmt(miResp)}',
               style: const TextStyle(color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           const Text('¿Confirmas que realizaste este pago?',

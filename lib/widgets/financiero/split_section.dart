@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import '../../services/api_client.dart';
+import '../../utils/money.dart';
 
 enum TipoDivision { partesIguales, porPorcentaje }
 
@@ -157,7 +158,7 @@ class SplitSectionState extends State<SplitSection> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '\$${ (_total / _n).toStringAsFixed(2) } por persona · $_n personas en total (incluido tú)',
+                '${Money.fmt(_total / _n)} por persona · $_n personas en total (incluido tú)',
                 style: const TextStyle(color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ),
@@ -175,7 +176,7 @@ class SplitSectionState extends State<SplitSection> {
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 const Text('Tu parte', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                 Text(
-                  '${_pctRestante.toStringAsFixed(0)}%  ·  \$${(_total * _pctRestante / 100).toStringAsFixed(2)}',
+                  '${_pctRestante.toStringAsFixed(0)}%  ·  ${Money.fmt((_total * _pctRestante / 100))}',
                   style: TextStyle(
                     color: _pctRestante < 0 ? AppTheme.danger : AppTheme.success,
                     fontSize: 12,
@@ -215,7 +216,7 @@ class SplitSectionState extends State<SplitSection> {
                           ? 'Correo inválido' : null,
                       errorStyle: const TextStyle(fontSize: 10),
                       helperText: tipo == TipoDivision.partesIguales && _total > 0 && p.email.text.trim().isNotEmpty
-                          ? '\$${(_total / _n).toStringAsFixed(2)} por persona' : null,
+                          ? '${Money.fmt((_total / _n))} por persona' : null,
                       helperStyle: const TextStyle(color: AppTheme.success, fontSize: 10),
                       suffixIcon: p.email.text.trim().isEmpty
                           ? null
@@ -241,7 +242,7 @@ class SplitSectionState extends State<SplitSection> {
                         labelText: '%',
                         suffixText: '%',
                         helperText: p.porcentaje.text.isNotEmpty && _total > 0
-                            ? '\$${_montoParticipante(p).toStringAsFixed(2)}'
+                            ? '${Money.fmt(_montoParticipante(p))}'
                             : null,
                         helperStyle: const TextStyle(color: AppTheme.success, fontSize: 10),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

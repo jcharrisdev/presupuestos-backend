@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'utils/money.dart';
 
 class ObjetivosScreen extends StatefulWidget {
   final String firebaseUid;
@@ -214,7 +215,7 @@ class _ObjetivoCard extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('\$${actual.toStringAsFixed(2)} de \$${meta.toStringAsFixed(2)}',
+          Text('${Money.fmt(actual)} de ${Money.fmt(meta)}',
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
           Text('${(pct * 100).toStringAsFixed(0)}%',
               style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
@@ -232,7 +233,7 @@ class _ObjetivoCard extends StatelessWidget {
               Icon(Icons.calendar_month_outlined, color: color, size: 14),
               const SizedBox(width: 6),
               Text(
-                'Ahorrá \$${cuota.toStringAsFixed(2)}/mes · faltan \$${falta.toStringAsFixed(2)} en $mesesR mes${mesesR != 1 ? "es" : ""}',
+                'Ahorrá ${Money.fmt(cuota)}/mes · faltan ${Money.fmt(falta)} en $mesesR mes${mesesR != 1 ? "es" : ""}',
                 style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ]),
@@ -270,7 +271,7 @@ class _ObjetivoCard extends StatelessWidget {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           autofocus: true,
           style: const TextStyle(color: AppTheme.textPrimary),
-          decoration: const InputDecoration(labelText: 'Monto a abonar', prefixText: '\$ '),
+          decoration: const InputDecoration(labelText: 'Monto a abonar', prefixText: 'B/. '),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
@@ -392,7 +393,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
-              decoration: const InputDecoration(labelText: 'Monto meta', prefixText: '\$ ')),
+              decoration: const InputDecoration(labelText: 'Monto meta', prefixText: 'B/. ')),
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
@@ -451,7 +452,7 @@ class _ObjetivoFormState extends State<_ObjetivoForm> {
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   const Text('Cuota mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  Text('\$${cuota.toStringAsFixed(2)}/mes',
+                  Text('${Money.fmt(cuota)}/mes',
                       style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16)),
                 ]),
               ),

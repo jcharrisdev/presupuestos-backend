@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'utils/money.dart';
 
 /// Detalle de insumos de un presupuesto de producción.
 class ProduccionDetalle extends StatefulWidget {
@@ -131,7 +132,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   onChanged: (_) => setModalState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Precio del paquete',
-                    prefixText: '\$ ',
+                    prefixText: 'B/. ',
                     prefixStyle: TextStyle(color: AppTheme.primary),
                   ),
                 )),
@@ -185,7 +186,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                     Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                       const Text('Costo asignado a esta producción:',
                           style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                      Text('\$${costoAsignado.toStringAsFixed(2)}',
+                      Text('${Money.fmt(costoAsignado)}',
                           style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
                     ]),
                     if (soloUseParte && sobrante > 0) ...[
@@ -314,7 +315,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                   ]),
                   const Spacer(),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('\$${_total.toStringAsFixed(2)}',
+                    Text('${Money.fmt(_total)}',
                         style: const TextStyle(color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -1)),
                     Text('${_items.length} ítems', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   ]),
@@ -373,7 +374,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                                 const SizedBox(height: 3),
                                 if (tienePaquete)
                                   Text(
-                                    '${_fmtNum(cantUsada!)} de ${_fmtNum(cant)} usadas · paquete \$${precioPaq!.toStringAsFixed(2)}',
+                                    '${_fmtNum(cantUsada!)} de ${_fmtNum(cant)} usadas · paquete ${Money.fmt(precioPaq!)}',
                                     style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                                   )
                                 else
@@ -381,7 +382,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
                                       style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ])),
                               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                                Text('\$${costoAsig.toStringAsFixed(2)}',
+                                Text('${Money.fmt(costoAsig)}',
                                     style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
                                 Text(tienePaquete ? 'asignado' : 'subtotal',
                                     style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),

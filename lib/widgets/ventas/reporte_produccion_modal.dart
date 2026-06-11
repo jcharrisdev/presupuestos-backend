@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/money.dart';
 
 class ReporteProduccionModal {
   static void show(BuildContext context, List<dynamic> cobros) {
@@ -79,14 +80,14 @@ class ReporteProduccionModal {
                           Text(item['descripcion'].toString(),
                               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
                                   fontWeight: FontWeight.w600)),
-                          Text('\$${precio.toStringAsFixed(2)} c/u',
+                          Text('${Money.fmt(precio)} c/u',
                               style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                         ])),
                         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                           Text('$cantStr uds',
                               style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800,
                                   fontSize: 16)),
-                          Text('\$${(cant * precio).toStringAsFixed(2)}',
+                          Text('${Money.fmt((cant * precio))}',
                               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                         ]),
                       ]),

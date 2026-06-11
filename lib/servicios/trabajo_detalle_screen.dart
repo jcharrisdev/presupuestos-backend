@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../services/servicios_service.dart';
 import 'registro_pago_cliente_screen.dart';
 import 'registro_gastos_screen.dart';
+import '../utils/money.dart';
 
 class TrabajoDetalleScreen extends StatefulWidget {
   final String firebaseUid;
@@ -220,7 +221,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
             const SizedBox(height: 4),
             if (montoAcordado > 0)
               Text(
-                'Acordado: \$${montoAcordado.toStringAsFixed(2)}  ·  Ya pagado: \$${totalPagado.toStringAsFixed(2)}  ·  Pendiente: \$${pendiente.toStringAsFixed(2)}',
+                'Acordado: ${Money.fmt(montoAcordado)}  ·  Ya pagado: ${Money.fmt(totalPagado)}  ·  Pendiente: ${Money.fmt(pendiente)}',
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               ),
             const SizedBox(height: 16),
@@ -519,7 +520,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
           Text(label, style: TextStyle(
               color: AppTheme.textSecondary, fontSize: 12,
               fontWeight: bold ? FontWeight.w700 : FontWeight.normal)),
-          Text('\$${valor.toStringAsFixed(2)}', style: TextStyle(
+          Text('${Money.fmt(valor)}', style: TextStyle(
               color: color, fontSize: 13,
               fontWeight: bold ? FontWeight.w700 : FontWeight.w500)),
         ]),
@@ -576,7 +577,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
     return ListTile(
       dense: true,
       leading: const Icon(Icons.attach_money, color: AppTheme.success, size: 18),
-      title: Text('\$${monto.toStringAsFixed(2)}',
+      title: Text('${Money.fmt(monto)}',
           style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
       subtitle: Text(tipoLabel, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
       trailing: p['nota'] != null
@@ -654,7 +655,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               overflow: TextOverflow.ellipsis),
         ),
-        Text('\$${monto.toStringAsFixed(2)}',
+        Text('${Money.fmt(monto)}',
             style: const TextStyle(color: AppTheme.success, fontSize: 11, fontWeight: FontWeight.w600)),
         const SizedBox(width: 4),
         GestureDetector(
@@ -676,7 +677,7 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
       subtitle: e['categoria'] != null
           ? Text(e['categoria'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11))
           : null,
-      trailing: Text('\$${monto.toStringAsFixed(2)}',
+      trailing: Text('${Money.fmt(monto)}',
           style: const TextStyle(color: AppTheme.danger, fontSize: 13, fontWeight: FontWeight.w600)),
     );
   }
@@ -694,17 +695,17 @@ class _TrabajoDetalleScreenState extends State<TrabajoDetalleScreen> {
     switch (tipo) {
       case 'fijo':
         final v = _calcMontoColaborador(m, montoTotal);
-        return 'Pago fijo: \$${v.toStringAsFixed(2)}';
+        return 'Pago fijo: ${Money.fmt(v)}';
       case 'porcentual':
         final v = montoTotal * porcentaje / 100;
-        return 'Porcentual: ${porcentaje.toStringAsFixed(1)}% (\$${v.toStringAsFixed(2)})';
+        return 'Porcentual: ${porcentaje.toStringAsFixed(1)}% (${Money.fmt(v)})';
       case 'por_horas':
         return horas > 0
-            ? 'Por horas: ${horas.toStringAsFixed(0)}h × \$${tarifa.toStringAsFixed(2)}'
-            : 'Por horas: \$${tarifa.toStringAsFixed(2)}/h';
+            ? 'Por horas: ${horas.toStringAsFixed(0)}h × ${Money.fmt(tarifa)}'
+            : 'Por horas: ${Money.fmt(tarifa)}/h';
       case 'por_tarea':
         final v = _calcMontoColaborador(m, montoTotal);
-        return 'Por tarea: \$${v.toStringAsFixed(2)}';
+        return 'Por tarea: ${Money.fmt(v)}';
       case 'ganancias':
         return '${porcentaje.toStringAsFixed(1)}% de ganancias';
       default:

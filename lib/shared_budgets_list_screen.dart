@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'shared_budget_create.dart';
 import 'shared_budget_detail.dart';
 import 'shared_budget_invitations.dart';
+import 'utils/money.dart';
 
 class SharedBudgetsListScreen extends StatefulWidget {
   final String firebaseUid;
@@ -53,8 +54,8 @@ class _SharedBudgetsListScreenState extends State<SharedBudgetsListScreen> {
 
   String _balanceLabel(dynamic b) {
     final balance = double.tryParse(b['balance_neto']?.toString() ?? '0') ?? 0.0;
-    if (balance > 0.01) return 'Debes \$${balance.toStringAsFixed(2)}';
-    if (balance < -0.01) return 'Te deben \$${(-balance).toStringAsFixed(2)}';
+    if (balance > 0.01) return 'Debes ${Money.fmt(balance)}';
+    if (balance < -0.01) return 'Te deben ${Money.fmt((-balance))}';
     return 'Sin deudas';
   }
 

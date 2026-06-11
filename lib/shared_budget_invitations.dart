@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'services/shared_budget_service.dart';
 import 'theme/app_theme.dart';
+import 'utils/money.dart';
 
 class SharedBudgetInvitationsScreen extends StatefulWidget {
   final String firebaseUid;
@@ -69,7 +70,7 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(labelText: 'Ingreso mensual', prefixText: '\$'),
+            decoration: const InputDecoration(labelText: 'Ingreso mensual', prefixText: 'B/. '),
           ),
         ]),
         actions: [
@@ -100,7 +101,7 @@ class _SharedBudgetInvitationsScreenState extends State<SharedBudgetInvitationsS
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(labelText: 'Contribución mensual', prefixText: '\$'),
+            decoration: const InputDecoration(labelText: 'Contribución mensual', prefixText: 'B/. '),
           ),
         ]),
         actions: [

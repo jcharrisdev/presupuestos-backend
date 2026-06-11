@@ -6,6 +6,7 @@
 /// Compatibilidad: cobros sin items[] funcionan igual que antes.
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/money.dart';
 
 class ClienteTile extends StatelessWidget {
   final Map<String, dynamic> cobro;
@@ -90,7 +91,7 @@ class ClienteTile extends StatelessWidget {
             ),
             if (cobrado && montoCobrado != null) ...[
               const SizedBox(width: 6),
-              Text('\$${montoCobrado.toStringAsFixed(2)} cobrado',
+              Text('${Money.fmt(montoCobrado)} cobrado',
                   style: const TextStyle(color: AppTheme.success, fontSize: 11, fontWeight: FontWeight.w600)),
             ],
           ]),
@@ -98,7 +99,7 @@ class ClienteTile extends StatelessWidget {
 
         // Monto y acciones
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${monto.toStringAsFixed(2)}', style: TextStyle(
+          Text('${Money.fmt(monto)}', style: TextStyle(
             color: cobrado ? AppTheme.textSecondary : AppTheme.textPrimary,
             fontWeight: FontWeight.w700, fontSize: 15,
           )),
@@ -145,7 +146,7 @@ class ClienteTile extends StatelessWidget {
                   '${cant % 1 == 0 ? cant.toInt() : cant} × ${item['descripcion'] ?? ''}',
                   style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                 )),
-                Text('\$${sub.toStringAsFixed(2)}',
+                Text('${Money.fmt(sub)}',
                     style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               ]),
             );

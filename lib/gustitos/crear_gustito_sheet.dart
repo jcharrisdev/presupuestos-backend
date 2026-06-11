@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/gustitos_service.dart';
 import '../widgets/financiero/categoria_selector.dart';
+import '../utils/money.dart';
 
 const _emociones = ['antojo', 'premio', 'social', 'impulso', 'estrés', 'otro'];
 
@@ -86,7 +87,7 @@ class CrearGustitoSheet {
                       const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: AppTheme.textPrimary),
                   decoration:
-                      const InputDecoration(prefixText: '\$ ', hintText: '0.00'),
+                      const InputDecoration(prefixText: 'B/. ', hintText: '0.00'),
                 ),
                 const SizedBox(height: 12),
 

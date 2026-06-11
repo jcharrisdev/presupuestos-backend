@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/deudas_service.dart';
 import '../services/registros_service.dart';
+import '../utils/money.dart';
 
 class AbonoDeudaSheet {
   static void show(
@@ -32,7 +33,7 @@ class AbonoDeudaSheet {
           Text('Registrar abono — ${deuda['nombre']}',
               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          Text('Saldo pendiente: \$${montoPendiente.toStringAsFixed(2)}',
+          Text('Saldo pendiente: ${Money.fmt(montoPendiente)}',
               style: const TextStyle(color: AppTheme.danger, fontSize: 13)),
           const SizedBox(height: 16),
 
@@ -40,7 +41,7 @@ class AbonoDeudaSheet {
             controller: montoCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
-            decoration: const InputDecoration(prefixText: '\$ ', hintText: '0.00'),
+            decoration: const InputDecoration(prefixText: 'B/. ', hintText: '0.00'),
             autofocus: true,
           ),
           const SizedBox(height: 12),

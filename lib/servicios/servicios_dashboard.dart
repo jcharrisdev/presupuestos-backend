@@ -5,6 +5,7 @@ import '../invoice_scanner/invoice_scanner_screen.dart';
 import 'crear_trabajo_screen.dart';
 import 'trabajo_detalle_screen.dart';
 import 'financiero_dashboard_screen.dart';
+import '../utils/money.dart';
 
 class ServiciosDashboard extends StatefulWidget {
   final String firebaseUid;
@@ -258,7 +259,7 @@ class _ServiciosDashboardState extends State<ServiciosDashboard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '\$${totalRecibido.toStringAsFixed(2)} / \$${montoTotal.toStringAsFixed(2)}',
+                    '${Money.fmt(totalRecibido)} / ${Money.fmt(montoTotal)}',
                     style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                   Text(

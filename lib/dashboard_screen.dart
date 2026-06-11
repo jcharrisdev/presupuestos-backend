@@ -338,7 +338,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const Icon(Icons.pending_actions, color: AppTheme.warning, size: 18),
                 const SizedBox(width: 10),
                 Expanded(child: Text(
-                  '${pendientes.length} ${pendientes.length == 1 ? 'compromiso' : 'compromisos'} por pagar · \$${totalPendiente.toStringAsFixed(2)}',
+                  '${pendientes.length} ${pendientes.length == 1 ? 'compromiso' : 'compromisos'} por pagar · ${Money.fmt(totalPendiente)}',
                   style: const TextStyle(color: AppTheme.warning,
                       fontSize: 13, fontWeight: FontWeight.w600),
                 )),
@@ -397,10 +397,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 5),
                     Text(
                       excede
-                          ? '+\$${(total - presup).toStringAsFixed(2)} excedido'
+                          ? '+${Money.fmt((total - presup))} excedido'
                           : presup > 0
-                              ? '\$${(presup - total).toStringAsFixed(2)} restante'
-                              : '\$${total.toStringAsFixed(2)}',
+                              ? '${Money.fmt((presup - total))} restante'
+                              : '${Money.fmt(total)}',
                       style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
                     ),
                   ]),
@@ -431,7 +431,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const Text('🐜', style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 10),
                 Expanded(child: Text(
-                  '${_d(r['hormiga_count']).toInt()} gastos hormiga · \$${_d(r['hormiga_total']).toStringAsFixed(2)} acumulado',
+                  '${_d(r['hormiga_count']).toInt()} gastos hormiga · ${Money.fmt(_d(r['hormiga_total']))} acumulado',
                   style: const TextStyle(color: AppTheme.textSecondary,
                       fontSize: 13, fontWeight: FontWeight.w500),
                 )),
@@ -533,7 +533,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ]),
                     subtitle: Text(fecha,
                         style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                    trailing: Text('\$${monto.toStringAsFixed(2)}',
+                    trailing: Text('${Money.fmt(monto)}',
                         style: TextStyle(color: esSemana ? AppTheme.warning : AppTheme.info,
                             fontWeight: FontWeight.w700, fontSize: 13)),
                   ),
@@ -580,7 +580,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Expanded(child: Text(nombre,
                       style: const TextStyle(color: AppTheme.textPrimary,
                           fontSize: 13, fontWeight: FontWeight.w600))),
-                  Text('\$${actual.toStringAsFixed(0)} / \$${meta.toStringAsFixed(0)}',
+                  Text('${Money.fmt0(actual)} / ${Money.fmt0(meta)}',
                       style: const TextStyle(color: AppTheme.colorAhorro,
                           fontSize: 12, fontWeight: FontWeight.w600)),
                 ]),

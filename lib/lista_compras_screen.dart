@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'utils/money.dart';
 
 class ListaComprasScreen extends StatefulWidget {
   final int ventaId;
@@ -188,7 +189,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                     pendientesCount > 0 ? AppTheme.warning : AppTheme.success),
                 const SizedBox(width: 8),
                 if (costoTotal != null)
-                  _resumenStat('\$${(double.tryParse(costoTotal.toString()) ?? 0).toStringAsFixed(2)}',
+                  _resumenStat('${Money.fmt((double.tryParse(costoTotal.toString()) ?? 0))}',
                       'costo\nestimado', AppTheme.colorFijo)
                 else
                   _resumenStat('—', 'sin\nprecios', AppTheme.textMuted),
@@ -258,7 +259,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       ],
                       if (precio != null) ...[
                         const SizedBox(height: 3),
-                        Text('\$${precio.toStringAsFixed(2)} / ${insumo['unidad'] ?? ''}',
+                        Text('${Money.fmt(precio)} / ${insumo['unidad'] ?? ''}',
                             style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                       ],
                     ])),
@@ -269,7 +270,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                             fontWeight: FontWeight.w800, fontSize: 15,
                           )),
                       if (costoEst != null)
-                        Text('\$${costoEst.toStringAsFixed(2)}',
+                        Text('${Money.fmt(costoEst)}',
                             style: TextStyle(
                               color: comprado ? AppTheme.textMuted : AppTheme.colorFijo,
                               fontSize: 11, fontWeight: FontWeight.w600,

@@ -9,6 +9,7 @@ import 'services/user_profile_service.dart';
 import 'services/estado_anual_service.dart';
 import 'services/deudas_service.dart';
 import 'services/gastos_variables_service.dart';
+import 'utils/money.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final String firebaseUid;
@@ -1380,7 +1381,7 @@ class _Paso4Variables extends StatelessWidget {
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('Total variables estimado',
                 style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-            Text('\$${fmt.format(totalVariables)}/mes',
+            Text('${Money.fmt(totalVariables)}/mes',
                 style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 15)),
           ]),
         ),

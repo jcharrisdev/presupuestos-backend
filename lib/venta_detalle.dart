@@ -28,6 +28,7 @@ import 'widgets/ventas/cliente_tile.dart';
 import 'widgets/ventas/margen_objetivo_card.dart';
 import 'widgets/ventas/costos_produccion_card.dart';
 import 'widgets/ventas/reporte_produccion_modal.dart';
+import 'utils/money.dart';
 
 /// Detalle de venta con rentabilidad y lista de cobros a clientes.
 class VentaDetalle extends StatefulWidget {
@@ -217,7 +218,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
                 decoration: const InputDecoration(
-                  prefixText: '\$ ', hintText: '0.00',
+                  prefixText: 'B/. ', hintText: '0.00',
                   prefixStyle: TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -265,7 +266,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                               ].join(' · '),
                               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                             ),
-                            Text('\$${precio.toStringAsFixed(2)} / ${v['unidad'] ?? 'unidad'}',
+                            Text('${Money.fmt(precio)} / ${v['unidad'] ?? 'unidad'}',
                                 style: const TextStyle(color: AppTheme.primary, fontSize: 12)),
                           ])),
                           // Controles +/-
@@ -327,7 +328,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                     decoration: BoxDecoration(color: AppTheme.colorAhorro.withOpacity(0.08), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.colorAhorro.withOpacity(0.25))),
                     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                       const Text('Total del pedido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                      Text('\$${calcTotal().toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text('${Money.fmt(calcTotal())}', style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w800, fontSize: 16)),
                     ]),
                   ),
               ],
@@ -482,7 +483,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800),
             decoration: const InputDecoration(
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               prefixStyle: TextStyle(color: AppTheme.success, fontSize: 26, fontWeight: FontWeight.w800),
             ),
           ),
@@ -766,7 +767,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                         const Text('Inversión:', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         const SizedBox(width: 6),
                         inversionEsManual
-                            ? Text('\$${invertido.toStringAsFixed(2)}',
+                            ? Text('${Money.fmt(invertido)}',
                                 style: const TextStyle(color: AppTheme.colorFijo,
                                     fontWeight: FontWeight.w800, fontSize: 15))
                             : const Text('Sin registrar · toca para agregar',
@@ -784,7 +785,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 Row(children: [
                   _statBox(
                     'Ganancia',
-                    cobrado > 0 ? '\$${ganancia.abs().toStringAsFixed(2)}' : '\$0.00',
+                    cobrado > 0 ? '${Money.fmt(ganancia.abs())}' : '\$0.00',
                     cobrado > 0
                         ? (ganancia >= 0 ? AppTheme.success : AppTheme.danger)
                         : AppTheme.textMuted,
@@ -836,7 +837,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 if (pendienteAmt > 0) ...[
                   const SizedBox(height: 8),
                   Row(children: [
-                    _statBox('Por cobrar', '\$${pendienteAmt.toStringAsFixed(2)}', AppTheme.warning),
+                    _statBox('Por cobrar', '${Money.fmt(pendienteAmt)}', AppTheme.warning),
                     const SizedBox(width: 8),
                     _statBox('Pendientes', '$pendientes cobro${pendientes != 1 ? "s" : ""}',
                         AppTheme.warning),
@@ -900,16 +901,16 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                     if (diferenciaCosto != null) ...[
                       _statBox(
                         diferenciaCosto >= 0 ? 'Sobre presupuesto' : 'Bajo presupuesto',
-                        '\$${diferenciaCosto.abs().toStringAsFixed(2)}',
+                        '${Money.fmt(diferenciaCosto.abs())}',
                         diferenciaCosto > 0 ? AppTheme.danger : AppTheme.success,
                       ),
                       const SizedBox(width: 8),
                     ],
-                    _statBox('Estimado\n(recetas)', '\$${costoEstimado.toStringAsFixed(2)}',
+                    _statBox('Estimado\n(recetas)', '${Money.fmt(costoEstimado)}',
                         AppTheme.colorAhorro),
                     if (invertido > 0) ...[
                       const SizedBox(width: 8),
-                      _statBox('Real\n(presupuesto)', '\$${invertido.toStringAsFixed(2)}',
+                      _statBox('Real\n(presupuesto)', '${Money.fmt(invertido)}',
                           AppTheme.colorFijo),
                     ],
                   ]),
@@ -1007,7 +1008,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
             ],
             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800),
             decoration: const InputDecoration(
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               prefixStyle: TextStyle(color: AppTheme.colorFijo, fontSize: 26, fontWeight: FontWeight.w800),
               hintText: '0.00',
               helperText: 'Acepta punto o coma como decimal (ej: 45.50 o 45,50)',
@@ -1213,7 +1214,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             )),
             const SizedBox(width: 8),
-            Text('\$${ventasNecesarias.toStringAsFixed(2)}',
+            Text('${Money.fmt(ventasNecesarias)}',
                 style: const TextStyle(
                     color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: 16)),
           ]),
@@ -1222,7 +1223,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
             const SizedBox(height: 10),
             // Progreso hacia el objetivo
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Ventas proyectadas: \$${esperado.toStringAsFixed(2)}',
+              Text('Ventas proyectadas: ${Money.fmt(esperado)}',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
               Text(
                 '${(pctAvance * 100).toStringAsFixed(0)}% del objetivo',
@@ -1268,8 +1269,8 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
                 const SizedBox(width: 8),
                 Expanded(child: Text(
                   brecha >= 0
-                      ? 'Superarás el objetivo en \$${brecha.abs().toStringAsFixed(2)}'
-                      : 'Faltan \$${brecha.abs().toStringAsFixed(2)} en ventas para el objetivo',
+                      ? 'Superarás el objetivo en ${Money.fmt(brecha.abs())}'
+                      : 'Faltan ${Money.fmt(brecha.abs())} en ventas para el objetivo',
                   style: TextStyle(
                     color: brecha >= 0 ? AppTheme.success : AppTheme.danger,
                     fontSize: 12, fontWeight: FontWeight.w600,
@@ -1299,7 +1300,7 @@ class _VentaDetalleState extends State<VentaDetalle> with RouteAware {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-        Text('\$${valor.toStringAsFixed(2)}',
+        Text('${Money.fmt(valor)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
       ]),
       const SizedBox(height: 6),

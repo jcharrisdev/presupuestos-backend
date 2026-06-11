@@ -4,6 +4,7 @@ import '../services/eventos_service.dart';
 import '../widgets/empty_state.dart';
 import 'crear_evento_sheet.dart';
 import 'evento_detalle_screen.dart';
+import '../utils/money.dart';
 
 class EventosScreen extends StatefulWidget {
   final String firebaseUid;
@@ -131,10 +132,10 @@ class _EventosScreenState extends State<EventosScreen> {
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8)),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(child: _statCol('Presupuestado', '\$${total.toStringAsFixed(2)}', AppTheme.textPrimary)),
-              Expanded(child: _statCol('Gastado', '\$${gastado.toStringAsFixed(2)}', AppTheme.warning)),
+              Expanded(child: _statCol('Presupuestado', '${Money.fmt(total)}', AppTheme.textPrimary)),
+              Expanded(child: _statCol('Gastado', '${Money.fmt(gastado)}', AppTheme.warning)),
               Expanded(child: _statCol('Disponible',
-                  '\$${(total - gastado).toStringAsFixed(2)}',
+                  '${Money.fmt((total - gastado))}',
                   total - gastado >= 0 ? AppTheme.success : AppTheme.danger)),
             ]),
             const SizedBox(height: 12),
@@ -229,9 +230,9 @@ class _EventoCard extends StatelessWidget {
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('\$${monto.toStringAsFixed(2)}',
+              Text('${Money.fmt(monto)}',
                   style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-              Text('\$${cuota.toStringAsFixed(2)}/mes',
+              Text('${Money.fmt(cuota)}/mes',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
           ]),
@@ -247,7 +248,7 @@ class _EventoCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Gastado: \$${gastado.toStringAsFixed(2)}',
+            Text('Gastado: ${Money.fmt(gastado)}',
                 style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
             Text('${pct.toStringAsFixed(0)}%',
                 style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),

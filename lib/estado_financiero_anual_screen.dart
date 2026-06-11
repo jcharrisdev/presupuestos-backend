@@ -11,6 +11,7 @@ import 'cierre_anio_screen.dart';
 import 'alertas_screen.dart';
 import 'eventos/eventos_screen.dart';
 import 'widgets/ayuda_sheet.dart';
+import 'utils/money.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -561,7 +562,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
             const SizedBox(height: 4),
             Text('Fijos+deudas: ${m['pct_fijos']}%  ·  Ahorro: ${m['tasa_ahorro_pct']}%',
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-            Text('Te sobran \$${m['remanente']}/mes  ·  \$${m['remanente_quincenal']}/quincena',
+            Text('Te sobran ${Money.fmt(num.tryParse(m['remanente'].toString()))}/mes  ·  ${Money.fmt(num.tryParse(m['remanente_quincenal'].toString()))}/quincena',
                 style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
           ])),
         ]),
@@ -827,7 +828,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Tooltip(
-                        message: '\$${v.toStringAsFixed(0)}',
+                        message: '${Money.fmt0(v)}',
                         child: Container(
                           height: h,
                           decoration: BoxDecoration(
@@ -894,8 +895,8 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
             const SizedBox(width: 8),
             Text(
               mejoro
-                  ? 'Mejoraste \$${diff.abs().toStringAsFixed(2)} vs ${anterior['label']}'
-                  : 'Bajaste \$${diff.abs().toStringAsFixed(2)} vs ${anterior['label']}',
+                  ? 'Mejoraste ${Money.fmt(diff.abs())} vs ${anterior['label']}'
+                  : 'Bajaste ${Money.fmt(diff.abs())} vs ${anterior['label']}',
               style: TextStyle(
                 color: mejoro ? AppTheme.success : AppTheme.danger,
                 fontSize: 12, fontWeight: FontWeight.w600),
@@ -1082,9 +1083,9 @@ class _Fila extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         Expanded(child: Text(nombre, style: style)),
-        Expanded(child: Text('\$${estimado.toStringAsFixed(2)}', style: style.copyWith(color: AppTheme.textSecondary))),
+        Expanded(child: Text('${Money.fmt(estimado)}', style: style.copyWith(color: AppTheme.textSecondary))),
         Expanded(child: real != null
-            ? Text('\$${real!.toStringAsFixed(2)}',
+            ? Text('${Money.fmt(real!)}',
                 style: style.copyWith(color: color, fontWeight: FontWeight.w700))
             : Text('—', style: style.copyWith(color: AppTheme.textMuted))),
       ]),
@@ -1147,13 +1148,13 @@ class _MesCard extends StatelessWidget {
                 )),
                 const SizedBox(height: 4),
                 if ((esCerrado || (esActual && tieneReal)) && remReal != null)
-                  Text('\$${remReal.toStringAsFixed(0)}',
+                  Text('${Money.fmt0(remReal)}',
                       style: TextStyle(
                           fontSize: 11,
                           color: remReal >= 0 ? AppTheme.success : AppTheme.danger,
                           fontWeight: FontWeight.w600))
                 else if (remEst != null)
-                  Text('\$${remEst.toStringAsFixed(0)}',
+                  Text('${Money.fmt0(remEst)}',
                       style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))
                 else
                   const Text('—', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
@@ -1264,7 +1265,7 @@ class _CompCol extends StatelessWidget {
         fontSize: 12, fontWeight: active ? FontWeight.w700 : FontWeight.normal,
       )),
       const SizedBox(height: 4),
-      Text('\$${remanente.toStringAsFixed(2)}',
+      Text('${Money.fmt(remanente)}',
           style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800)),
       Text('te sobró', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
     ]);

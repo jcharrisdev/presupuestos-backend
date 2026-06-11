@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/servicios_service.dart';
+import '../utils/money.dart';
 
 class FinancieroDashboardScreen extends StatefulWidget {
   final String firebaseUid;
@@ -175,7 +176,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
               Expanded(child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 8),
-            Text('\$${valor.toStringAsFixed(2)}',
+            Text('${Money.fmt(valor)}',
                 style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
           ],
         ),
@@ -189,7 +190,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
             Icon(icon, color: color, size: 20),
             const SizedBox(width: 12),
             Expanded(child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
-            Text('\$${valor.toStringAsFixed(2)}',
+            Text('${Money.fmt(valor)}',
                 style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
           ],
         ),
@@ -215,7 +216,7 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
                     style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                 const Spacer(),
                 Text(
-                  '\$${_utilidadNeta.toStringAsFixed(2)}',
+                  '${Money.fmt(_utilidadNeta)}',
                   style: TextStyle(
                     color: _utilidadNeta >= 0 ? AppTheme.success : AppTheme.danger,
                     fontSize: 20,
@@ -271,9 +272,9 @@ class _FinancieroDashboardScreenState extends State<FinancieroDashboardScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('\$${recibido.toStringAsFixed(2)}',
+              Text('${Money.fmt(recibido)}',
                   style: const TextStyle(color: AppTheme.success, fontSize: 13, fontWeight: FontWeight.w600)),
-              Text('Utilidad: \$${utilidad.toStringAsFixed(2)}',
+              Text('Utilidad: ${Money.fmt(utilidad)}',
                   style: TextStyle(
                     color: utilidad >= 0 ? AppTheme.success : AppTheme.danger,
                     fontSize: 11,

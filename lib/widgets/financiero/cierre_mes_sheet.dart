@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../services/estado_anual_service.dart';
 import '../../services/registros_service.dart';
+import '../../utils/money.dart';
 
 /// Wizard de cierre mensual.
 /// Recibe los datos ya cargados del mes (data de getMes) y las alertas.
@@ -177,7 +178,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                 children: [
                   const Text('Remanente estimado',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                  Text('\$${remEst.toStringAsFixed(2)}',
+                  Text('${Money.fmt(remEst)}',
                       style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
                 ],
               ),
@@ -186,7 +187,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                 children: [
                   const Text('Remanente real',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                  Text('\$${remReal.toStringAsFixed(2)}',
+                  Text('${Money.fmt(remReal)}',
                       style: TextStyle(
                           color: sano ? AppTheme.success : AppTheme.danger,
                           fontSize: 18,
@@ -219,7 +220,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
     final top = cats.take(2).map((c) {
       final cat = (c['categoria'] as String? ?? '');
       final nombre = cat.isNotEmpty ? '${cat[0].toUpperCase()}${cat.substring(1)}' : cat;
-      return '$nombre +\$${_d(c['desviacion']).toStringAsFixed(0)}';
+      return '$nombre +${Money.fmt0(_d(c['desviacion']))}';
     }).join(', ');
     return [
       const SizedBox(height: 12),
@@ -235,7 +236,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
             const Icon(Icons.lightbulb_outline, color: AppTheme.warning, size: 15),
             const SizedBox(width: 6),
             Text(diferencia > 0.5
-                ? 'Te quedó \$${diferencia.toStringAsFixed(0)} menos de lo planeado'
+                ? 'Te quedó ${Money.fmt0(diferencia)} menos de lo planeado'
                 : 'Dónde te pasaste del plan',
                 style: const TextStyle(color: AppTheme.warning, fontSize: 12, fontWeight: FontWeight.w700)),
           ]),
@@ -302,7 +303,7 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
               ],
             ),
           ),
-          Text('\$${_d(r['monto']).toStringAsFixed(2)}',
+          Text('${Money.fmt(_d(r['monto']))}',
               style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
           GestureDetector(
@@ -527,13 +528,13 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
                       ),
                       SizedBox(
                         width: 80,
-                        child: Text(est > 0 ? '\$${est.toStringAsFixed(2)}' : '—',
+                        child: Text(est > 0 ? '${Money.fmt(est)}' : '—',
                             textAlign: TextAlign.right,
                             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                       ),
                       SizedBox(
                         width: 80,
-                        child: Text('\$${real.toStringAsFixed(2)}',
+                        child: Text('${Money.fmt(real)}',
                             textAlign: TextAlign.right,
                             style: TextStyle(
                                 color: realColor, fontSize: 12, fontWeight: FontWeight.w600)),

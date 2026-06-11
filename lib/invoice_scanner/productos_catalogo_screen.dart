@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/productos_catalogo_service.dart';
+import '../utils/money.dart';
 
 class ProductosCatalogoScreen extends StatefulWidget {
   final String firebaseUid;
@@ -147,7 +148,7 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
           ])),
           const SizedBox(width: 12),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('\$${_fmt.format(ultimoPrecio)}',
+            Text('${Money.fmt(ultimoPrecio)}',
                 style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 3),
             _tendenciaChip(tendencia, pctCambio),
@@ -270,8 +271,8 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
         border: Border.all(color: AppTheme.border),
       ),
       child: Row(children: [
-        Expanded(child: _statCol('Mínimo', '\$${_fmt.format(minPrecio)}', AppTheme.success)),
-        Expanded(child: _statCol('Máximo', '\$${_fmt.format(maxPrecio)}', AppTheme.danger)),
+        Expanded(child: _statCol('Mínimo', '${Money.fmt(minPrecio)}', AppTheme.success)),
+        Expanded(child: _statCol('Máximo', '${Money.fmt(maxPrecio)}', AppTheme.danger)),
         Expanded(child: _statCol('Compras', '${historial.length}', AppTheme.primary)),
         Expanded(child: _statCol(
           'Variación',
@@ -323,7 +324,7 @@ class _ProductoHistorialScreenState extends State<ProductoHistorialScreen> {
             Text(tendIcon, style: TextStyle(color: tendColor, fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(width: 4),
           ],
-          Text('\$${_fmt.format(precio)}',
+          Text('${Money.fmt(precio)}',
               style: TextStyle(
                 color: tendColor ?? AppTheme.textPrimary,
                 fontSize: 16,

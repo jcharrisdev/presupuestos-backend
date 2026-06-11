@@ -21,6 +21,7 @@ import 'theme/app_theme.dart';
 import 'services/savings_service.dart';
 import 'services/api_client.dart';
 import 'widgets/widgets.dart';
+import 'utils/money.dart';
 
 /// Lista de metas de ahorro con progreso.
 class ProgresoAhorroScreen extends StatefulWidget {
@@ -169,7 +170,7 @@ class _AhorroCardState extends State<_AhorroCard> {
                 controller: montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(labelText: 'Monto', prefixText: '\$'),
+                decoration: const InputDecoration(labelText: 'Monto', prefixText: 'B/. '),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -238,7 +239,7 @@ class _AhorroCardState extends State<_AhorroCard> {
                           Text(a['fecha']?.toString().substring(0,10) ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                           if (a['nota'] != null) Text(a['nota'].toString(), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                         ])),
-                        Text('\$${double.tryParse(a['monto'].toString())?.toStringAsFixed(2) ?? '0'}',
+                        Text('${Money.fmt(double.tryParse(a['monto'].toString()) ?? 0)}',
                           style: const TextStyle(color: AppTheme.colorAhorro, fontWeight: FontWeight.w700)),
                         const SizedBox(width: 8),
                         GestureDetector(
@@ -325,15 +326,15 @@ class _AhorroCardState extends State<_AhorroCard> {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Ahorrado', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 2),
-            Text('\$${totalReal.toStringAsFixed(2)}',
+            Text('${Money.fmt(totalReal)}',
                 style: const TextStyle(color: AppTheme.colorAhorro, fontSize: 18, fontWeight: FontWeight.w800)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             const Text('Meta', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 2),
-            Text('\$${meta.toStringAsFixed(2)}',
+            Text('${Money.fmt(meta)}',
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 18, fontWeight: FontWeight.w700)),
-            if (aportado > 0) Text('+ \$${aportado.toStringAsFixed(2)} manual',
+            if (aportado > 0) Text('+ ${Money.fmt(aportado)} manual',
                 style: const TextStyle(color: AppTheme.colorAhorro, fontSize: 10)),
           ]),
         ]),
@@ -355,7 +356,7 @@ class _AhorroCardState extends State<_AhorroCard> {
               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           // Mostrar "Faltan $X" solo si queda algo por ahorrar
           if (restante > 0)
-            Text('Faltan \$${restante.toStringAsFixed(2)}',
+            Text('Faltan ${Money.fmt(restante)}',
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         ]),
       ]),

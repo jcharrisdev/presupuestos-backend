@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/money.dart';
 
 class CostosProduccionCard extends StatelessWidget {
   final List<dynamic> presupuestos;
@@ -39,7 +40,7 @@ class CostosProduccionCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(child: Text(pp['nombre']?.toString() ?? '',
                   style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
-              Text('\$${ppTotal.toStringAsFixed(2)}',
+              Text('${Money.fmt(ppTotal)}',
                   style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w700, fontSize: 13)),
             ]),
           );
@@ -54,7 +55,7 @@ class CostosProduccionCard extends StatelessWidget {
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               const Text('Total invertido', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-              Text('\$${invertido.toStringAsFixed(2)}',
+              Text('${Money.fmt(invertido)}',
                   style: const TextStyle(color: AppTheme.colorFijo, fontWeight: FontWeight.w800, fontSize: 14)),
             ]),
           ),

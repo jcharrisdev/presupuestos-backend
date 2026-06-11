@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../services/deudas_service.dart';
+import '../utils/money.dart';
 
 class CrearDeudaSheet {
   static void show(
@@ -315,7 +316,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         style: const TextStyle(color: AppTheme.textPrimary),
                         decoration: const InputDecoration(
-                            labelText: 'Cuota mensual fija (\$)', prefixText: '\$ '),
+                            labelText: 'Cuota mensual fija (\$)', prefixText: 'B/. '),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -349,7 +350,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
-                  prefixText: '\$ ', labelText: 'Monto total original'),
+                  prefixText: 'B/. ', labelText: 'Monto total original'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -358,7 +359,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
-                  prefixText: '\$ ', labelText: 'Saldo pendiente actual'),
+                  prefixText: 'B/. ', labelText: 'Saldo pendiente actual'),
             ),
             const SizedBox(height: 12),
 
@@ -432,7 +433,7 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(color: AppTheme.textPrimary),
                     decoration: InputDecoration(
-                      prefixText: '\$ ',
+                      prefixText: 'B/. ',
                       labelText: 'Pago mínimo',
                       hintText: _cuotaCalculada > 0
                           ? _cuotaCalculada.toStringAsFixed(2)

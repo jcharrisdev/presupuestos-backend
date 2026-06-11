@@ -8,6 +8,7 @@
 /// Canal de Android: `salarying_pagos` con importancia ALTA,
 /// de modo que aparezca con sonido y en la barra de estado.
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../utils/money.dart';
 
 /// Gestión centralizada de notificaciones locales.
 ///
@@ -84,8 +85,8 @@ class NotificationService {
     await init(); // Garantizar inicialización en caso de llamada directa
 
     final body = diasRestantes == 0
-        ? 'Vence HOY · \$${monto.toStringAsFixed(2)}'
-        : 'Vence en $diasRestantes ${diasRestantes == 1 ? "día" : "días"} · \$${monto.toStringAsFixed(2)}';
+        ? 'Vence HOY · ${Money.fmt(monto)}'
+        : 'Vence en $diasRestantes ${diasRestantes == 1 ? "día" : "días"} · ${Money.fmt(monto)}';
 
     await _plugin.show(
       id, 'Pago próximo: $titulo', body,
@@ -114,7 +115,7 @@ class NotificationService {
     await init();
 
     final body = proximos.length == 1
-        ? '${proximos[0]['titulo']} · \$${proximos[0]['monto_esperado']}'
+        ? '${proximos[0]['titulo']} · B/. ${proximos[0]['monto_esperado']}'
         : '${proximos.length} pagos próximos en los siguientes 3 días';
 
     await _plugin.show(

@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
+import 'utils/money.dart';
 
 class RecetaScreen extends StatefulWidget {
   final int varianteId;
@@ -215,7 +216,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
               labelText: 'Precio por unidad (opcional)',
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               helperText: 'Permite calcular el costo estimado de producción',
             ),
           ),
@@ -302,7 +303,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
               labelText: 'Precio por unidad (opcional)',
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
               helperText: 'Dejar vacío para quitar el precio',
             ),
           ),
@@ -597,7 +598,7 @@ class _RecetaScreenState extends State<RecetaScreen> {
                             style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14,
                                 fontWeight: FontWeight.w600)),
                         if (precio != null)
-                          Text('\$${precio.toStringAsFixed(2)} / ${ins['unidad'] ?? ''}',
+                          Text('${Money.fmt(precio)} / ${ins['unidad'] ?? ''}',
                               style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                       ])),
                       Text('$cantStr ${ins['unidad'] ?? ''}',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/eventos_service.dart';
 import 'crear_evento_sheet.dart';
+import '../utils/money.dart';
 
 class EventoDetalleScreen extends StatefulWidget {
   final String firebaseUid;
@@ -303,10 +304,10 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
 
             // Stats
             Row(children: [
-              Expanded(child: _statCol('Presupuesto', '\$${monto.toStringAsFixed(2)}', AppTheme.textPrimary)),
-              Expanded(child: _statCol('Gastado', '\$${gastado.toStringAsFixed(2)}', color)),
+              Expanded(child: _statCol('Presupuesto', '${Money.fmt(monto)}', AppTheme.textPrimary)),
+              Expanded(child: _statCol('Gastado', '${Money.fmt(gastado)}', color)),
               Expanded(child: _statCol('Disponible',
-                  '\$${disponible.toStringAsFixed(2)}',
+                  '${Money.fmt(disponible)}',
                   disponible >= 0 ? AppTheme.success : AppTheme.danger)),
             ]),
             const SizedBox(height: 14),
@@ -325,7 +326,7 @@ class _EventoDetalleScreenState extends State<EventoDetalleScreen> {
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('${pct.toStringAsFixed(1)}% usado',
                   style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-              Text('\$${cuota.toStringAsFixed(2)}/mes por $numMeses mes${numMeses > 1 ? 'es' : ''}',
+              Text('${Money.fmt(cuota)}/mes por $numMeses mes${numMeses > 1 ? 'es' : ''}',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
 
@@ -432,7 +433,7 @@ class _GastoTile extends StatelessWidget {
               ),
           ]),
         ),
-        Text('\$${monto.toStringAsFixed(2)}',
+        Text('${Money.fmt(monto)}',
             style: const TextStyle(color: AppTheme.warning, fontSize: 14, fontWeight: FontWeight.bold)),
         const SizedBox(width: 8),
         GestureDetector(

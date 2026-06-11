@@ -6,6 +6,7 @@ import '../widgets/empty_state.dart';
 import 'crear_deuda_sheet.dart';
 import 'abono_deuda_sheet.dart';
 import 'historial_abonos_sheet.dart';
+import '../utils/money.dart';
 
 class DeudasScreen extends StatefulWidget {
   final String firebaseUid;
@@ -378,7 +379,7 @@ class _TabSituacion extends StatelessWidget {
                   const Text('Deuda total pendiente',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   const SizedBox(height: 4),
-                  Text('\$${totalPendiente.toStringAsFixed(2)}',
+                  Text('${Money.fmt(totalPendiente)}',
                       style: const TextStyle(
                           color: AppTheme.danger,
                           fontSize: 22,
@@ -390,7 +391,7 @@ class _TabSituacion extends StatelessWidget {
                   const Text('Pago mínimo mensual',
                       style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
-                  Text('\$${totalPagoMinimo.toStringAsFixed(2)}',
+                  Text('${Money.fmt(totalPagoMinimo)}',
                       style: const TextStyle(
                           color: AppTheme.warning,
                           fontSize: 16,
@@ -436,11 +437,11 @@ class _TabSituacion extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Original: \$${orig.toStringAsFixed(2)}',
+                  Text('Original: ${Money.fmt(orig)}',
                       style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-                  Text('Pagado: \$${pagado.toStringAsFixed(2)}',
+                  Text('Pagado: ${Money.fmt(pagado)}',
                       style: const TextStyle(color: AppTheme.success, fontSize: 11)),
-                  Text('Falta: \$${totalPendiente.toStringAsFixed(2)}',
+                  Text('Falta: ${Money.fmt(totalPendiente)}',
                       style: const TextStyle(color: AppTheme.danger, fontSize: 11)),
                 ]),
               ]),
@@ -595,16 +596,16 @@ class _TabEstrategias extends StatelessWidget {
           ),
           child: Column(children: [
             _InfoRow('Deuda total',
-                '\$${_d(proyeccion!['total_pendiente']).toStringAsFixed(2)}',
+                '${Money.fmt(_d(proyeccion!['total_pendiente']))}',
                 AppTheme.danger),
             _InfoRow('Pagas mensualmente (mínimos)',
-                '\$${_d(proyeccion!['total_pago_minimo']).toStringAsFixed(2)}',
+                '${Money.fmt(_d(proyeccion!['total_pago_minimo']))}',
                 AppTheme.textPrimary),
             _InfoRow('Si sigues así, terminas en',
                 (trayectoria?['fecha_fin'] ?? av['fecha_fin']) as String? ?? '—',
                 AppTheme.textSecondary),
             _InfoRow('Total de intereses a pagar',
-                '\$${_d(trayectoria?['total_intereses'] ?? av['total_intereses']).toStringAsFixed(2)}',
+                '${Money.fmt(_d(trayectoria?['total_intereses'] ?? av['total_intereses']))}',
                 AppTheme.warning),
           ]),
         ),
@@ -681,7 +682,7 @@ class _TabEstrategias extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Avalanche te ahorra \$${ahorroAv.toStringAsFixed(2)} en intereses '
+                  'Avalanche te ahorra ${Money.fmt(ahorroAv)} en intereses '
                   'comparado con Snowball.',
                   style: const TextStyle(
                       color: AppTheme.success, fontSize: 12, height: 1.4),
@@ -791,7 +792,7 @@ class _EstrategiaCard extends StatelessWidget {
         const Divider(color: AppTheme.border, height: 16),
         _MiniRow('Terminas en', fechaFin),
         _MiniRow('Meses', '$meses'),
-        _MiniRow('Intereses', '\$${intereses.toStringAsFixed(2)}'),
+        _MiniRow('Intereses', '${Money.fmt(intereses)}'),
       ]),
     );
   }
@@ -876,7 +877,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               const Text('Abono extra mensual',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              Text('\$${_local.toStringAsFixed(0)}/mes',
+              Text('${Money.fmt0(_local)}/mes',
                   style: const TextStyle(
                       color: AppTheme.primary,
                       fontSize: 18,
@@ -899,9 +900,9 @@ class _TabSimuladorState extends State<_TabSimulador> {
               },
             ),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('\$0',
+              const Text('B/. 0',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-              const Text('\$500',
+              const Text('B/. 500',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ]),
           ]),
@@ -962,7 +963,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
                   const Icon(Icons.bolt, color: AppTheme.danger, size: 18),
                   const SizedBox(width: 8),
                   Expanded(child: Text(
-                    '\$${_local.toStringAsFixed(0)}/mes extra → "${deudaObjetivo['nombre']}"',
+                    '${Money.fmt0(_local)}/mes extra → "${deudaObjetivo['nombre']}"',
                     style: const TextStyle(color: AppTheme.textPrimary,
                         fontSize: 14, fontWeight: FontWeight.w700),
                   )),
@@ -995,7 +996,7 @@ class _TabSimuladorState extends State<_TabSimulador> {
             Expanded(
               child: _ResultCard(
                 label: 'Intereses ahorrados',
-                value: '\$${interesesAhorrados.toStringAsFixed(2)}',
+                value: '${Money.fmt(interesesAhorrados)}',
                 color: interesesAhorrados > 0
                     ? AppTheme.success
                     : AppTheme.textMuted,
@@ -1250,7 +1251,7 @@ class _TabPlan extends StatelessWidget {
               const Text('Total en intereses',
                   style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
-              Text('\$${totalIntereses.toStringAsFixed(2)}',
+              Text('${Money.fmt(totalIntereses)}',
                   style: const TextStyle(
                       color: AppTheme.warning,
                       fontSize: 13,
@@ -1360,7 +1361,7 @@ class _TabPlan extends StatelessWidget {
                                 color: AppTheme.success, fontSize: 11,
                                 fontWeight: FontWeight.w600)),
                       if (interesesPagados > 0)
-                        Text('Intereses: \$${interesesPagados.toStringAsFixed(2)}',
+                        Text('Intereses: ${Money.fmt(interesesPagados)}',
                             style: const TextStyle(
                                 color: AppTheme.warning, fontSize: 11)),
                     ]),
@@ -1419,7 +1420,7 @@ class _ProximaAccion extends StatelessWidget {
         const SizedBox(height: 10),
         _paso(Icons.check_box_outline_blank, AppTheme.textSecondary,
             totalPagoMinimo > 0
-                ? 'Paga el mínimo en todas tus deudas (\$${totalPagoMinimo.toStringAsFixed(2)}/mes en total)'
+                ? 'Paga el mínimo en todas tus deudas (${Money.fmt(totalPagoMinimo)}/mes en total)'
                 : 'Paga el mínimo en todas tus deudas'),
         const SizedBox(height: 6),
         _paso(Icons.bolt, AppTheme.danger,
@@ -1574,7 +1575,7 @@ class _DeudaTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('\$${montoPendiente.toStringAsFixed(2)}',
+              Text('${Money.fmt(montoPendiente)}',
                   style: TextStyle(
                       color: activa ? AppTheme.danger : AppTheme.textMuted,
                       fontSize: 16,
@@ -1599,10 +1600,10 @@ class _DeudaTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Pendiente: \$${montoPendiente.toStringAsFixed(2)}',
+            Text('Pendiente: ${Money.fmt(montoPendiente)}',
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             if (pagoMinimo > 0)
-              Text('Cuota: \$${pagoMinimo.toStringAsFixed(2)}/mes',
+              Text('Cuota: ${Money.fmt(pagoMinimo)}/mes',
                   style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
             if (fechaPago != null)
               Text('Pago: $fechaPago',

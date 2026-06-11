@@ -27,6 +27,7 @@ import 'package:intl/intl.dart';
 import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/notification_service.dart';
+import 'utils/money.dart';
 
 /// Pantalla de calendario de pagos y cobros con tabs Calendario / Lista.
 class CalendarioScreen extends StatefulWidget {
@@ -494,7 +495,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       child: Column(children: [
         Text(label, style: TextStyle(color: color, fontSize: 9, letterSpacing: 0.5, fontWeight: FontWeight.w600)),
         const SizedBox(height: 3),
-        Text('\$${val.toStringAsFixed(0)}', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+        Text('${Money.fmt0(val)}', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
       ]),
     ),
   );
@@ -579,7 +580,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                           Text(
-                            '${cobro ? '+' : '-'}\$${monto.toStringAsFixed(2)}',
+                            '${cobro ? '+' : '-'}${Money.fmt(monto)}',
                             style: TextStyle(color: cobro ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w700, fontSize: 14),
                           ),
                           const SizedBox(height: 4),
@@ -608,7 +609,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
               const Text('Balance total del mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const Spacer(),
               Text(
-                '${balance >= 0 ? '+' : ''}\$${balance.toStringAsFixed(2)}',
+                '${balance >= 0 ? '+' : ''}${Money.fmt(balance)}',
                 style: TextStyle(color: balance >= 0 ? AppTheme.success : AppTheme.danger, fontWeight: FontWeight.w800, fontSize: 16),
               ),
             ]),
@@ -734,7 +735,7 @@ class _EventoCard extends StatelessWidget {
 
         // Monto y botones de acción
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${monto.toStringAsFixed(2)}', style: TextStyle(
+          Text('${Money.fmt(monto)}', style: TextStyle(
             color: hecho ? AppTheme.textSecondary : AppTheme.textPrimary,
             fontWeight: FontWeight.w700, fontSize: 15,
             decoration: hecho ? TextDecoration.lineThrough : null,

@@ -8,6 +8,7 @@ import 'deudas/deudas_screen.dart';
 import 'widgets/financiero/mes_rango_selector.dart';
 import 'widgets/financiero/categoria_selector.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
+import 'utils/money.dart';
 
 /// Pantalla central del perfil financiero global del usuario.
 /// Fuente de verdad de: ingreso, gastos fijos, deudas y gastos variables.
@@ -147,17 +148,17 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       ),
       child: Column(children: [
         Row(children: [
-          Expanded(child: _ResumenItem('Ingreso neto', '\$${_ingreso.toStringAsFixed(2)}/mes', AppTheme.success)),
+          Expanded(child: _ResumenItem('Ingreso neto', '${Money.fmt(_ingreso)}/mes', AppTheme.success)),
           Container(width: 1, height: 36, color: AppTheme.border),
-          Expanded(child: _ResumenItem('Gastos', '\$${_totalMensual.toStringAsFixed(2)}/mes', AppTheme.danger)),
+          Expanded(child: _ResumenItem('Gastos', '${Money.fmt(_totalMensual)}/mes', AppTheme.danger)),
           if (_totalAhorrosMensual > 0) ...[
             Container(width: 1, height: 36, color: AppTheme.border),
-            Expanded(child: _ResumenItem('Ahorros', '\$${_totalAhorrosMensual.toStringAsFixed(2)}/mes', AppTheme.colorAhorro)),
+            Expanded(child: _ResumenItem('Ahorros', '${Money.fmt(_totalAhorrosMensual)}/mes', AppTheme.colorAhorro)),
           ],
           Container(width: 1, height: 36, color: AppTheme.border),
           Expanded(child: _ResumenItem(
             'Disponible',
-            '\$${_disponible.abs().toStringAsFixed(2)}/mes',
+            '${Money.fmt(_disponible.abs())}/mes',
             _esSostenible ? AppTheme.success : AppTheme.danger,
             prefix: _esSostenible ? '' : '-',
           )),
@@ -173,7 +174,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (!_esSostenible && _income != null)
           _AlertaBanner(
-            'Tus gastos superan tu ingreso en \$${_disponible.abs().toStringAsFixed(2)}/mes. '
+            'Tus gastos superan tu ingreso en ${Money.fmt(_disponible.abs())}/mes. '
             'Revisa tus compromisos o ajusta tu plan.',
           ),
         if (_income == null)
@@ -187,15 +188,15 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
         else ...[
           _InfoCard(rows: [
             _InfoRow('Tipo de ingreso', _labelTipoIngreso(_income!['tipo_ingreso'])),
-            _InfoRow('Bruto mensual', '\$${_d(_income!["ingreso_bruto_mensual"]).toStringAsFixed(2)}'),
+            _InfoRow('Bruto mensual', '${Money.fmt(_d(_income!["ingreso_bruto_mensual"]))}'),
             if (_d(_income!['desc_seguro']) > 0)
-              _InfoRow('  − CSS (9.75%)', '-\$${_d(_income!["desc_seguro"]).toStringAsFixed(2)}', color: AppTheme.textMuted),
+              _InfoRow('  − CSS (9.75%)', '-${Money.fmt(_d(_income!["desc_seguro"]))}', color: AppTheme.textMuted),
             if (_d(_income!['desc_pension']) > 0)
-              _InfoRow('  − Educativo (1.25%)', '-\$${_d(_income!["desc_pension"]).toStringAsFixed(2)}', color: AppTheme.textMuted),
+              _InfoRow('  − Educativo (1.25%)', '-${Money.fmt(_d(_income!["desc_pension"]))}', color: AppTheme.textMuted),
             if (_d(_income!['desc_impuesto']) > 0)
-              _InfoRow('  − ISR', '-\$${_d(_income!["desc_impuesto"]).toStringAsFixed(2)}', color: AppTheme.textMuted),
+              _InfoRow('  − ISR', '-${Money.fmt(_d(_income!["desc_impuesto"]))}', color: AppTheme.textMuted),
             if (_d(_income!['desc_otros']) > 0)
-              _InfoRow('  − Otros descuentos', '-\$${_d(_income!["desc_otros"]).toStringAsFixed(2)}', color: AppTheme.textMuted),
+              _InfoRow('  − Otros descuentos', '-${Money.fmt(_d(_income!["desc_otros"]))}', color: AppTheme.textMuted),
           ]),
           const SizedBox(height: 8),
           Container(
@@ -210,11 +211,11 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               const Text('Neto mensual que recibes',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 4),
-              Text('\$${_ingreso.toStringAsFixed(2)}',
+              Text('${Money.fmt(_ingreso)}',
                   style: const TextStyle(color: AppTheme.success, fontSize: 28, fontWeight: FontWeight.bold)),
               Text(
                 _income!['frecuencia_cobro'] == 'quincenal'
-                    ? 'Quincenal: \$${(_ingreso / 2).toStringAsFixed(2)}'
+                    ? 'Quincenal: ${Money.fmt((_ingreso / 2))}'
                     : 'Mensual',
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
             ]),
@@ -255,7 +256,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
         child: Row(children: [
           Expanded(child: Text(
             hayGastos
-                ? '${_gastos.length} gastos · \$${_totalMensual.toStringAsFixed(2)}/mes'
+                ? '${_gastos.length} gastos · ${Money.fmt(_totalMensual)}/mes'
                 : 'Sin gastos registrados',
             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           )),
@@ -280,7 +281,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               children: [
                 if (_gastosFijos.isNotEmpty) ...[
                   _SeccionHeader('GASTOS FIJOS', _gastosFijos.length,
-                      '\$${_gastosFijos.fold(0.0, (s, g) => s + _d(g['monto_mensual'])).toStringAsFixed(2)}/mes',
+                      '${Money.fmt(_gastosFijos.fold<double>(0.0, (s, g) => s + _d(g['monto_mensual'])))}/mes',
                       const Color(0xFF1890FF)),
                   const SizedBox(height: 6),
                   ..._gastosFijos.map((g) => Padding(
@@ -297,7 +298,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                   // N1 — las deudas se gestionan SOLO en "Mis Deudas" (fuente única).
                   // Aquí solo se muestra cuánto pesan en los compromisos + link.
                   _SeccionHeader('DEUDAS', _deudas.length,
-                      '\$${_deudas.fold(0.0, (s, g) => s + _d(g['monto_mensual'])).toStringAsFixed(2)}/mes',
+                      '${Money.fmt(_deudas.fold<double>(0.0, (s, g) => s + _d(g['monto_mensual'])))}/mes',
                       AppTheme.danger),
                   const SizedBox(height: 6),
                   GestureDetector(
@@ -335,7 +336,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                 ],
                 if (_variables.isNotEmpty) ...[
                   _SeccionHeader('GASTOS VARIABLES', _variables.length,
-                      '~\$${_variables.fold(0.0, (s, g) => s + _d(g['monto_mensual'])).toStringAsFixed(2)}/mes',
+                      '~${Money.fmt(_variables.fold<double>(0.0, (s, g) => s + _d(g['monto_mensual'])))}/mes',
                       AppTheme.warning),
                   const SizedBox(height: 6),
                   ..._variables.map((g) => Padding(
@@ -350,7 +351,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                 ],
                 if (_ahorros.isNotEmpty) ...[
                   _SeccionHeader('METAS DE AHORRO ACTIVAS', _ahorros.length,
-                      '\$${_totalAhorrosMensual.toStringAsFixed(2)}/mes',
+                      '${Money.fmt(_totalAhorrosMensual)}/mes',
                       AppTheme.colorAhorro),
                   const SizedBox(height: 6),
                   ..._ahorros.map((a) => _AhorroTile(ahorro: a as Map<String, dynamic>)),
@@ -465,7 +466,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
             Row(children: [
               const Icon(Icons.account_balance_wallet, color: AppTheme.warning, size: 16),
               const SizedBox(width: 6),
-              Text('Total estimado: \$${_totalVariablesMensual.toStringAsFixed(2)}/mes',
+              Text('Total estimado: ${Money.fmt(_totalVariablesMensual)}/mes',
                   style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700)),
             ]),
           ]),
@@ -548,7 +549,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               TextField(
                 controller: montoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Monto estimado (\$)', prefixText: '\$ '),
+                decoration: const InputDecoration(labelText: 'Monto estimado (\$)', prefixText: 'B/. '),
                 style: const TextStyle(color: AppTheme.textPrimary),
               ),
               const SizedBox(height: 16),
@@ -787,7 +788,7 @@ class _GastoTile extends StatelessWidget {
             ]),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('\$${monto.toStringAsFixed(2)}',
+            Text('${Money.fmt(monto)}',
                 style: const TextStyle(
                     color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
             Text(frecuencia == 'variable' ? '~estimado/mes' : '/mes',
@@ -901,12 +902,12 @@ class _AhorroTile extends StatelessWidget {
             _Chip('Ahorro', color: AppTheme.colorAhorro),
             if (periodosRestantes != null)
               _Chip('$periodosRestantes períodos restantes', color: AppTheme.textSecondary),
-            _Chip('\$${cuotaPeriodo.toStringAsFixed(2)}/${tipoPeriodo == 'quincenal' ? 'quincena' : 'mes'}',
+            _Chip('${Money.fmt(cuotaPeriodo)}/${tipoPeriodo == 'quincenal' ? 'quincena' : 'mes'}',
                 color: AppTheme.textMuted),
           ]),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${cuotaMensual.toStringAsFixed(2)}',
+          Text('${Money.fmt(cuotaMensual)}',
               style: const TextStyle(
                   color: AppTheme.colorAhorro, fontWeight: FontWeight.bold, fontSize: 15)),
           const Text('/mes', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
@@ -1130,10 +1131,10 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
                 child: Column(children: [
                   const Text('Neto mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   const SizedBox(height: 4),
-                  Text('\$${_netoCalculado.toStringAsFixed(2)}',
+                  Text('${Money.fmt(_netoCalculado)}',
                       style: const TextStyle(color: AppTheme.success, fontSize: 24, fontWeight: FontWeight.bold)),
                   if (_frecuencia == 'quincenal')
-                    Text('Quincenal: \$${(_netoCalculado / 2).toStringAsFixed(2)}',
+                    Text('Quincenal: ${Money.fmt((_netoCalculado / 2))}',
                         style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                 ]),
               ),
@@ -1157,8 +1158,8 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
               const SizedBox(height: 6),
               Text(
                 _porQuincena
-                    ? '× 2 = \$${(_parseD(_netoCtrl.text) * 2).toStringAsFixed(2)} al mes · esto es lo que se guarda'
-                    : '≈ \$${(_parseD(_netoCtrl.text) / 2).toStringAsFixed(2)} por quincena · ingresa el total del mes',
+                    ? '× 2 = ${Money.fmt((_parseD(_netoCtrl.text) * 2))} al mes · esto es lo que se guarda'
+                    : '≈ ${Money.fmt((_parseD(_netoCtrl.text) / 2))} por quincena · ingresa el total del mes',
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ],
           ],
@@ -1210,7 +1211,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-        prefixText: '\$ ',
+        prefixText: 'B/. ',
         prefixStyle: const TextStyle(color: AppTheme.textSecondary),
       ),
     );
@@ -1382,7 +1383,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               labelText: _frecuencia == 'variable' ? 'Estimado mensual' : 'Monto mensual',
-              prefixText: '\$ ',
+              prefixText: 'B/. ',
             ),
           ),
           const SizedBox(height: 16),
@@ -1580,7 +1581,7 @@ class _VariableBaseTile extends StatelessWidget {
           Text(gasto['categoria'] as String? ?? '', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${monto.toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+          Text('${Money.fmt(monto)}', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700, fontSize: 14)),
           Text('/$frecLabel', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ]),
         const SizedBox(width: 8),
