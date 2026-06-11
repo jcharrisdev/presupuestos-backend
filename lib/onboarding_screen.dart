@@ -125,10 +125,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ── Navegación ───────────────────────────────────────────────────────
 
   void _irSiguiente() {
-    if (_paso < 3) {
+    // 5 páginas (0..4). Permitir avanzar hasta el Resumen (idx 4); antes el guard
+    // `< 3` bloqueaba la transición Variables(3) → Resumen(4).
+    if (_paso < 4) {
       _pageCtrl.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
       setState(() => _paso++);
     }
+  }
+
+  // H1 — Configuración rápida: salta deudas y variables, va directo al Resumen.
+  void _saltarAResumen() {
+    setState(() {
+      _variablesActivas.clear(); // express: sin presupuesto variable (se ajusta luego)
+      _paso = 4;
+    });
+    _pageCtrl.animateToPage(4,
+        duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
   }
 
   void _irAtras() {
@@ -347,6 +359,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onAgregarGasto:   _agregarGastoFijo,
                   onImportarBulk:   _importarCsvBulk,
                   onContinuar:      _irSiguiente,
+                  onConfiguracionRapida: _saltarAResumen,
                 ),
                 _Paso3Deudas(
                   deudas:          _deudas,
@@ -582,10 +595,12 @@ class _Paso2Gastos extends StatefulWidget {
   final Future<void> Function(String nombre, double monto, {String tipoBackend, String clasificacion}) onAgregarGasto;
   final Future<void> Function(List<Map<String, dynamic>> gastos) onImportarBulk;
   final VoidCallback onContinuar;
+  final VoidCallback onConfiguracionRapida; // H1 — saltar a resumen (sin deudas/variables)
   const _Paso2Gastos({
     required this.gastosFijos, required this.sugerencias, required this.totalFijos,
     required this.fmt, required this.guardando,
     required this.onAgregarGasto, required this.onImportarBulk, required this.onContinuar,
+    required this.onConfiguracionRapida,
   });
   @override
   State<_Paso2Gastos> createState() => _Paso2GastosState();
@@ -1028,6 +1043,22 @@ class _Paso2GastosState extends State<_Paso2Gastos> {
             style: TextStyle(color: AppTheme.textMuted, fontSize: 11, height: 1.35),
           )),
         ]),
+        // H1 — opción explícita de "Configuración rápida": salta deudas y variables
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: widget.guardando ? null : widget.onConfiguracionRapida,
+            icon: const Icon(Icons.bolt, size: 16),
+            label: const Text('Configuración rápida — ir a mi resumen'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.primary),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
       ]),
     );
   }
