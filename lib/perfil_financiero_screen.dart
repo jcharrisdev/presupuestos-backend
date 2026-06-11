@@ -938,6 +938,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
   String _frecuencia = 'quincenal';
   bool _autoCalc = false;
   bool _guardando = false;
+  bool _porQuincena = false; // Q1 — el monto escrito es por quincena (la app ×2)
 
   final _brutoCtrl = TextEditingController();
   final _seguroCtrl = TextEditingController(text: '0');
@@ -994,7 +995,11 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
   }
 
   Future<void> _guardar() async {
-    final neto = _tipo == 'salario' ? _netoCalculado : _parseD(_netoCtrl.text);
+    final entered = _parseD(_netoCtrl.text);
+    // Q1 — si el usuario escribió el monto por quincena, se guarda ×2 (mensual)
+    final neto = _tipo == 'salario'
+        ? _netoCalculado
+        : (_porQuincena && _frecuencia == 'quincenal' ? entered * 2 : entered);
     if (neto <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('El ingreso neto debe ser mayor a 0')));
@@ -1133,12 +1138,28 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
                 ]),
               ),
           ] else ...[
-            _buildCampo('¿Cuánto recibes al mes? (neto)', _netoCtrl),
-            // Q1 — pista quincenal para que el que cobra quincenal valide su monto
+            // Q1 — si cobras quincenal, puedes escribir el monto por quincena y la app lo ×2
+            if (_frecuencia == 'quincenal') ...[
+              _label('¿El monto que escribes es...?'),
+              Row(children: [
+                Expanded(child: _modoMontoChip('Total del mes', false)),
+                const SizedBox(width: 8),
+                Expanded(child: _modoMontoChip('Por quincena', true)),
+              ]),
+              const SizedBox(height: 12),
+            ],
+            _buildCampo(
+              (_porQuincena && _frecuencia == 'quincenal')
+                  ? '¿Cuánto recibes por quincena? (neto)'
+                  : '¿Cuánto recibes al mes? (neto)',
+              _netoCtrl),
             if (_frecuencia == 'quincenal' && _parseD(_netoCtrl.text) > 0) ...[
               const SizedBox(height: 6),
-              Text('≈ \$${(_parseD(_netoCtrl.text) / 2).toStringAsFixed(2)} por quincena · ingresa el total del mes',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Text(
+                _porQuincena
+                    ? '× 2 = \$${(_parseD(_netoCtrl.text) * 2).toStringAsFixed(2)} al mes · esto es lo que se guarda'
+                    : '≈ \$${(_parseD(_netoCtrl.text) / 2).toStringAsFixed(2)} por quincena · ingresa el total del mes',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ],
           ],
           const SizedBox(height: 24),
@@ -1157,6 +1178,26 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
   Widget _label(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(t, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+  );
+
+  // Q1 — chip para elegir si el monto escrito es mensual o por quincena
+  Widget _modoMontoChip(String label, bool valor) => GestureDetector(
+    onTap: () => setState(() => _porQuincena = valor),
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      decoration: BoxDecoration(
+        color: _porQuincena == valor ? AppTheme.primary.withValues(alpha: 0.12) : AppTheme.surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _porQuincena == valor ? AppTheme.primary : AppTheme.border),
+      ),
+      child: Text(label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _porQuincena == valor ? AppTheme.primary : AppTheme.textSecondary,
+            fontSize: 12,
+            fontWeight: _porQuincena == valor ? FontWeight.w700 : FontWeight.normal,
+          )),
+    ),
   );
 
   Widget _buildCampo(String label, TextEditingController ctrl, {bool readOnly = false}) =>

@@ -29,6 +29,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _brutoCtrl    = TextEditingController();
   final _netoCtrl     = TextEditingController();
   String _frecuencia  = 'mensual';
+  bool _ingresoPorQuincena = false; // Q1 — el monto informal escrito es por quincena
   bool _guardandoIncome = false;
 
   // ── Paso 2: Gastos fijos ─────────────────────────────────────────────
@@ -101,7 +102,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   double get _ingresoNeto {
     if (_tipoIngreso == 'salario') return _netoEstimado;
-    return double.tryParse(_netoCtrl.text.replaceAll(',', '')) ?? 0;
+    final v = double.tryParse(_netoCtrl.text.replaceAll(',', '')) ?? 0;
+    // Q1 — si escribió el monto por quincena, el mensual es ×2
+    return (_ingresoPorQuincena && _frecuencia == 'quincenal') ? v * 2 : v;
   }
 
   double get _totalFijos     => _gastosFijos.fold(0.0, (s, g) => s + (g['monto'] as double));
@@ -325,11 +328,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   netoCtrl:       _netoCtrl,
                   frecuencia:     _frecuencia,
                   netoEstimado:   _netoEstimado,
+                  porQuincena:    _ingresoPorQuincena,
                   fmt:            _fmt,
                   guardando:      _guardandoIncome,
                   onTipoChanged:       (v) => setState(() => _tipoIngreso = v),
                   onCssChanged:        (v) => setState(() => _aplicarCss = v),
                   onFrecuenciaChanged: (v) => setState(() => _frecuencia = v),
+                  onPorQuincenaChanged: (v) => setState(() => _ingresoPorQuincena = v),
                   onContinuar: _guardarIncome,
                 ),
                 _Paso2Gastos(
@@ -398,19 +403,23 @@ class _Paso1Income extends StatefulWidget {
   final TextEditingController netoCtrl;
   final String frecuencia;
   final double netoEstimado;
+  final bool porQuincena;
   final NumberFormat fmt;
   final bool guardando;
   final ValueChanged<String> onTipoChanged;
   final ValueChanged<bool>   onCssChanged;
   final ValueChanged<String> onFrecuenciaChanged;
+  final ValueChanged<bool>   onPorQuincenaChanged;
   final VoidCallback onContinuar;
   const _Paso1Income({
     required this.tipoIngreso, required this.aplicarCss,
     required this.brutoCtrl, required this.netoCtrl,
     required this.frecuencia, required this.netoEstimado,
+    required this.porQuincena,
     required this.fmt, required this.guardando,
     required this.onTipoChanged, required this.onCssChanged,
     required this.onFrecuenciaChanged,
+    required this.onPorQuincenaChanged,
     required this.onContinuar,
   });
   @override
@@ -507,9 +516,22 @@ class _Paso1IncomeState extends State<_Paso1Income> {
             ),
           ],
         ] else ...[
-          _Label('¿Cuánto recibes promedio al mes? (B/.)'),
+          // Q1 — si cobra quincenal, puede escribir el monto por quincena (la app ×2)
+          if (widget.frecuencia == 'quincenal') ...[
+            _Label('¿El monto que escribes es...?'),
+            Row(children: [
+              Expanded(child: _ModoMontoChip('Total del mes', false, widget.porQuincena, widget.onPorQuincenaChanged)),
+              const SizedBox(width: 10),
+              Expanded(child: _ModoMontoChip('Por quincena', true, widget.porQuincena, widget.onPorQuincenaChanged)),
+            ]),
+            const SizedBox(height: 12),
+          ],
+          _Label(widget.porQuincena && widget.frecuencia == 'quincenal'
+              ? '¿Cuánto recibes por quincena? (B/.)'
+              : '¿Cuánto recibes promedio al mes? (B/.)'),
           const SizedBox(height: 6),
-          _Input(widget.netoCtrl, 'Ej: 900.00', onChanged: (_) => setState(() {})),
+          _Input(widget.netoCtrl, widget.porQuincena ? 'Ej: 450.00' : 'Ej: 900.00',
+              onChanged: (_) => setState(() {})),
         ],
         const SizedBox(height: 20),
 
@@ -524,7 +546,7 @@ class _Paso1IncomeState extends State<_Paso1Income> {
         const SizedBox(height: 4),
         Text(
           widget.frecuencia == 'quincenal'
-              ? 'Recibirás dos pagos al mes: B/. ${widget.fmt.format(widget.netoEstimado > 0 ? widget.netoEstimado / 2 : (double.tryParse(widget.netoCtrl.text) ?? 0) / 2)} c/u'
+              ? 'Recibirás dos pagos al mes: B/. ${widget.fmt.format(widget.netoEstimado > 0 ? widget.netoEstimado / 2 : widget.porQuincena ? (double.tryParse(widget.netoCtrl.text) ?? 0) : (double.tryParse(widget.netoCtrl.text) ?? 0) / 2)} c/u'
               : 'Un pago al mes.',
           style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
         ),
@@ -1783,6 +1805,35 @@ class _Label extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(text,
       style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600));
+}
+
+// Q1 — chip para elegir si el monto informal escrito es mensual o por quincena
+class _ModoMontoChip extends StatelessWidget {
+  final String label;
+  final bool valor;
+  final bool porQuincena;
+  final ValueChanged<bool> onTap;
+  const _ModoMontoChip(this.label, this.valor, this.porQuincena, this.onTap);
+  bool get _sel => porQuincena == valor;
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () => onTap(valor),
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: _sel ? AppTheme.primary.withValues(alpha: 0.12) : AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _sel ? AppTheme.primary : AppTheme.border),
+      ),
+      child: Text(label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _sel ? AppTheme.primary : AppTheme.textSecondary,
+            fontSize: 13,
+            fontWeight: _sel ? FontWeight.w700 : FontWeight.normal,
+          )),
+    ),
+  );
 }
 
 class _Input extends StatelessWidget {
