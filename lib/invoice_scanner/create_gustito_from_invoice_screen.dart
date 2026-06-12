@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/gustitos_service.dart';
-import 'invoice_history_screen.dart';
+import '../mes_detalle_screen.dart';
 
 class CreateGustitoFromInvoiceScreen extends StatefulWidget {
   final Map<String, dynamic> invoice;
@@ -67,12 +67,21 @@ class _CreateGustitoFromInvoiceScreenState extends State<CreateGustitoFromInvoic
         'scanned_invoice_id': widget.invoice['id'],
       });
       if (!mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Gustito registrado'), backgroundColor: AppTheme.success,
+        content: Text('Gustito registrado — visible en la quincena de la fecha'),
+        backgroundColor: AppTheme.success,
       ));
+      const meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => InvoiceHistoryScreen(firebaseUid: widget.firebaseUid)),
+        MaterialPageRoute(builder: (_) => MesDetalleScreen(
+          firebaseUid: widget.firebaseUid,
+          anio: _fecha.year,
+          mes: _fecha.month,
+          label: meses[_fecha.month],
+          initialTabIndex: 2,
+        )),
         (r) => r.isFirst,
       );
     } catch (e) {

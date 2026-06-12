@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 import '../services/invoice_scanner_service.dart';
 import '../widgets/financiero/categoria_selector.dart';
 import '../widgets/financiero/split_section.dart';
-import 'invoice_history_screen.dart';
+import '../mes_detalle_screen.dart';
 
 class CreateExpenseFromInvoiceScreen extends StatefulWidget {
   final Map<String, dynamic> invoice;
@@ -85,13 +85,22 @@ class _CreateExpenseFromInvoiceScreenState extends State<CreateExpenseFromInvoic
         );
       }
       if (!mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Gasto registrado desde factura'),
+        content: Text('Gasto registrado — visible en la quincena de la fecha'),
         backgroundColor: AppTheme.success,
       ));
+      // Navegar al mes de la fecha de la factura, abriendo directo el Tab Quincenas (idx 2)
+      const meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => InvoiceHistoryScreen(firebaseUid: widget.firebaseUid)),
+        MaterialPageRoute(builder: (_) => MesDetalleScreen(
+          firebaseUid: widget.firebaseUid,
+          anio: _fecha.year,
+          mes: _fecha.month,
+          label: meses[_fecha.month],
+          initialTabIndex: 2,
+        )),
         (r) => r.isFirst,
       );
     } catch (e) {

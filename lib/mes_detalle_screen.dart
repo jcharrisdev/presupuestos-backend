@@ -33,6 +33,7 @@ class MesDetalleScreen extends StatefulWidget {
   final int anio;
   final int mes;
   final String label;
+  final int initialTabIndex; // 0=Resumen 1=Gastos 2=Quincenas 3=Análisis
 
   const MesDetalleScreen({
     Key? key,
@@ -40,6 +41,7 @@ class MesDetalleScreen extends StatefulWidget {
     required this.anio,
     required this.mes,
     required this.label,
+    this.initialTabIndex = 0,
   }) : super(key: key);
 
   @override
@@ -56,7 +58,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 4, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 3));
     _cargar();
   }
 
@@ -2823,11 +2825,18 @@ class _QuincenaCardState extends State<_QuincenaCard> {
             child: Text('${registros.length} gastos registrados',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
           ),
-          ...registros.take(5).map((r) {
-            final esMensual = r['es_mensual'] == true || r['es_mensual'] == 1;
+          ...registros.map((r) {
+            final esMensual  = r['es_mensual'] == true || r['es_mensual'] == 1;
+            final esFactura  = r['scanned_invoice_id'] != null;
+            final esGustito  = r['origen_gustito_id'] != null;
             return ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              leading: esFactura
+                  ? Icon(Icons.qr_code_scanner, size: 15, color: AppTheme.primary)
+                  : esGustito
+                      ? Icon(Icons.bolt, size: 15, color: AppTheme.colorAhorro)
+                      : null,
               title: Row(children: [
                 Expanded(child: Text(r['nombre'] as String? ?? '—',
                     style: TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
@@ -2843,18 +2852,14 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                         style: TextStyle(color: AppTheme.info, fontSize: 9, fontWeight: FontWeight.w700)),
                   ),
               ]),
-              subtitle: Text(r['categoria'] as String? ?? '',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-              trailing: Text('${Money.fmt(_d(r['monto']))}',
+              subtitle: Text(
+                r['categoria'] as String? ?? '',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+              ),
+              trailing: Text(Money.fmt(_d(r['monto'])),
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
             );
           }),
-          if (registros.length > 5)
-            Padding(
-              padding: const EdgeInsets.only(left: 16, bottom: 8),
-              child: Text('+${registros.length - 5} más',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-            ),
         ] else if (compromisos.isEmpty)
           Padding(
             padding: EdgeInsets.fromLTRB(16, 4, 16, 14),
