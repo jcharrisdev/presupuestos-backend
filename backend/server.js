@@ -9623,6 +9623,11 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     const totalVar   = registros.filter(r => r.tipo === 'variable').reduce((s, r) => s + Number(r.monto), 0);
     const totalNoPres= registros.filter(r => r.tipo === 'no_presupuestado').reduce((s, r) => s + Number(r.monto), 0);
     const totalGasto = totalFijos + totalVar + totalNoPres;
+    // Para fijos "medio" (día_pago + día_pago_2), el JOIN es quincena-específico:
+    // Q1 busca registros con fecha día ≤ 15, Q2 con fecha día > 15.
+    // Esto evita que marcar pagado en Q1 muestre también Q2 como pagada (bug B2/Q1).
+    // Fijos normales (sin día_pago_2): cualquier registro del mes (sin filtro de día).
+    const filtroQ = esQ1 ? 'DAY(rg.fecha) <= 15' : 'DAY(rg.fecha) > 15';
     const [compFijos] = await db.execute(
       `SELECT ugf.id, ugf.descripcion AS nombre, ugf.monto_mensual AS monto, ugf.categoria,
               ugf.dia_pago, ugf.dia_pago_2,
@@ -9630,6 +9635,7 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
        FROM user_gastos_fijos ugf
        LEFT JOIN registros_gasto rg
          ON rg.origen_fijo_id = ugf.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
+         AND (ugf.dia_pago_2 IS NULL OR ${filtroQ})
        WHERE ugf.firebase_uid = ? AND ugf.activo = 1`,
       [firebase_uid, anio, mes, firebase_uid]);
     const [compVariables] = await db.execute(

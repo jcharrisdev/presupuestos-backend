@@ -2578,8 +2578,25 @@ class _QuincenaCardState extends State<_QuincenaCard> {
     setState(() => _operando = true);
     try {
       if (!pagado) {
-        final hoy   = DateTime.now();
-        final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+        final hoy = DateTime.now();
+        // Forzar la fecha a la quincena correcta para que el backend distinga Q1/Q2.
+        // Si el usuario marca Q1 pero hoy es Q2 (o viceversa), la fecha quedaría en
+        // la quincena equivocada y el JOIN del backend marcaría la quincena incorrecta.
+        final esMedio = c['medio'] == true;
+        final esQ1Card = ((widget.data['quincena'] as num?)?.toInt() ?? 1) == 1;
+        DateTime fecha;
+        if (esMedio) {
+          if (esQ1Card) {
+            // Para Q1: usar día 1 si hoy está en Q2, o hoy si está en Q1
+            fecha = hoy.day <= 15 ? hoy : DateTime(widget.anio, widget.mes, 1);
+          } else {
+            // Para Q2: usar día 16 si hoy está en Q1, o hoy si está en Q2
+            fecha = hoy.day > 15 ? hoy : DateTime(widget.anio, widget.mes, 16);
+          }
+        } else {
+          fecha = hoy;
+        }
+        final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
         final tipo  = c['tipo'] as String? ?? 'fijo';
         await RegistrosService.crear(
           uid: widget.uid,
@@ -2589,7 +2606,7 @@ class _QuincenaCardState extends State<_QuincenaCard> {
           categoria: tipo == 'deuda' ? 'deudas' : categoriaCanonicaCompromiso(c),
           nombre: c['nombre'] as String? ?? '',
           monto: _d(c['monto']),
-          fecha: fecha,
+          fecha: fechaStr,
           origenFijoId:    tipo == 'fijo'     ? id : null,
           origenVariableId: tipo == 'variable' ? id : null,
           origenDeudaId:   tipo == 'deuda'    ? id : null,
