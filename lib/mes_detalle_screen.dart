@@ -2889,71 +2889,128 @@ class _QuincenaCardState extends State<_QuincenaCard> {
             ]),
           ),
           ...compromisos.map((c) {
-            final tipo          = c['tipo'] as String? ?? 'fijo';
-            final esVariable    = tipo == 'variable';
-            final montoPres     = _d(c['monto']);
-            final montoPagado   = _d(c['monto_pagado'] ?? (c['registro_id'] != null ? montoPres : 0));
-            final completo      = montoPagado >= montoPres - 0.01;
-            final parcial       = !completo && montoPagado > 0.01;
-            final falta         = (montoPres - montoPagado).clamp(0.0, double.infinity);
-            final iconColor     = tipo == 'fijo'  ? AppTheme.colorFijo
-                                : tipo == 'deuda' ? AppTheme.danger
-                                : AppTheme.warning;
-            final leadingIcon   = tipo == 'fijo'  ? Icons.lock_outline
-                                : tipo == 'deuda' ? Icons.credit_card_outlined
-                                : Icons.repeat_outlined;
-            // Todos los tipos abren el mini-sheet de pago parcial
-            final onTapAction   = _operando ? null : () => _abrirPagoParcial(c);
-            return ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-              leading: Icon(leadingIcon, size: 15,
-                  color: completo ? AppTheme.success : parcial ? AppTheme.warning : iconColor),
-              title: Text(c['nombre'] as String? ?? '—',
-                  style: TextStyle(
-                    color: completo ? AppTheme.textMuted : AppTheme.textSecondary,
-                    fontSize: 13,
-                    decoration: completo ? TextDecoration.lineThrough : null,
-                  )),
-              subtitle: parcial && esVariable
-                  ? Text('Pagado ${Money.fmt(montoPagado)} de ${Money.fmt(montoPres)} · falta ${Money.fmt(falta)}',
-                      style: TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w600))
-                  : c['medio'] == true
-                      ? Text('½ de tu cuota · pagas 2 veces al mes',
-                          style: TextStyle(color: AppTheme.textMuted, fontSize: 10))
-                      : null,
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(Money.fmt(montoPres),
-                    style: TextStyle(
-                      color: completo ? AppTheme.textMuted : parcial ? AppTheme.warning : AppTheme.textSecondary,
-                      fontSize: 13, fontWeight: FontWeight.w600,
-                    )),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onTapAction,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: 22, height: 22,
-                    decoration: BoxDecoration(
-                      color: completo ? AppTheme.success
-                           : parcial  ? AppTheme.warning.withValues(alpha: 0.2)
-                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(
-                        color: completo ? AppTheme.success
-                             : parcial  ? AppTheme.warning
-                             : AppTheme.border,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: completo
-                        ? const Icon(Icons.check, size: 14, color: Colors.black)
-                        : parcial
-                            ? const Icon(Icons.add, size: 14, color: AppTheme.warning)
-                            : null,
+            final tipo        = c['tipo'] as String? ?? 'fijo';
+            final montoPres   = _d(c['monto']);
+            final montoPagado = _d(c['monto_pagado'] ?? (c['registro_id'] != null ? montoPres : 0));
+            final completo    = montoPagado >= montoPres - 0.01;
+            final parcial     = !completo && montoPagado > 0.01;
+            final falta       = (montoPres - montoPagado).clamp(0.0, double.infinity);
+            final barra       = montoPres > 0 ? (montoPagado / montoPres).clamp(0.0, 1.0) : 0.0;
+            final iconColor   = tipo == 'fijo'  ? AppTheme.colorFijo
+                              : tipo == 'deuda' ? AppTheme.danger
+                              : AppTheme.warning;
+            final barColor    = completo ? AppTheme.success : parcial ? AppTheme.warning : AppTheme.surfaceAlt;
+            final leadingIcon = tipo == 'fijo'  ? Icons.lock_outline
+                              : tipo == 'deuda' ? Icons.credit_card_outlined
+                              : Icons.repeat_outlined;
+
+            return GestureDetector(
+              onTap: _operando ? null : () => _abrirPagoParcial(c),
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  color: completo
+                      ? AppTheme.success.withValues(alpha: 0.05)
+                      : parcial
+                          ? AppTheme.warning.withValues(alpha: 0.05)
+                          : AppTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: completo ? AppTheme.success.withValues(alpha: 0.35)
+                         : parcial  ? AppTheme.warning.withValues(alpha: 0.4)
+                         : AppTheme.border,
+                    width: 1,
                   ),
                 ),
-              ]),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // ── Fila superior: ícono + nombre + monto + check ──────
+                  Row(children: [
+                    Icon(leadingIcon, size: 14,
+                        color: completo ? AppTheme.success : parcial ? AppTheme.warning : iconColor),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(
+                      c['nombre'] as String? ?? '—',
+                      style: TextStyle(
+                        color: completo ? AppTheme.textMuted : AppTheme.textPrimary,
+                        fontSize: 13, fontWeight: FontWeight.w600,
+                        decoration: completo ? TextDecoration.lineThrough : null,
+                      ),
+                    )),
+                    Text(
+                      Money.fmt(montoPres),
+                      style: TextStyle(
+                        color: completo ? AppTheme.textMuted
+                             : parcial  ? AppTheme.warning
+                             : AppTheme.textSecondary,
+                        fontSize: 13, fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Círculo de estado
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 22, height: 22,
+                      decoration: BoxDecoration(
+                        color: completo ? AppTheme.success
+                             : parcial  ? AppTheme.warning.withValues(alpha: 0.2)
+                             : Colors.transparent,
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: completo ? AppTheme.success
+                               : parcial  ? AppTheme.warning
+                               : AppTheme.border,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: completo
+                          ? const Icon(Icons.check, size: 14, color: Colors.black)
+                          : parcial
+                              ? const Icon(Icons.add, size: 14, color: AppTheme.warning)
+                              : null,
+                    ),
+                  ]),
+                  const SizedBox(height: 7),
+                  // ── Barra de progreso ───────────────────────────────────
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: barra,
+                      minHeight: 5,
+                      color: barColor,
+                      backgroundColor: AppTheme.border.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  // ── Fila inferior: pagado · falta ───────────────────────
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(
+                      completo
+                          ? 'Pagado completo ✓'
+                          : montoPagado > 0.01
+                              ? 'Pagado ${Money.fmt(montoPagado)}'
+                              : 'Sin pagos aún',
+                      style: TextStyle(
+                        color: completo ? AppTheme.success
+                             : parcial  ? AppTheme.warning
+                             : AppTheme.textMuted,
+                        fontSize: 10, fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (!completo)
+                      Text(
+                        'Falta ${Money.fmt(falta)}',
+                        style: TextStyle(
+                          color: parcial ? AppTheme.warning : AppTheme.textMuted,
+                          fontSize: 10, fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (c['medio'] == true && !parcial && !completo)
+                      Text('½ de tu cuota',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  ]),
+                ]),
+              ),
             );
           }),
         ],
