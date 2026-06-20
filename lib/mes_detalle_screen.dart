@@ -2629,6 +2629,185 @@ class _QuincenaCardState extends State<_QuincenaCard> {
     }
   }
 
+  // Mini-sheet de pago parcial para gastos variables en Tab Quincenas.
+  // Permite registrar múltiples pagos (ej. $20 + $20 + $40 = $80) contra el mismo
+  // presupuesto variable de la quincena.
+  Future<void> _abrirPagoVariable(Map<String, dynamic> c) async {
+    final id         = c['id'] as int?;
+    if (id == null) return;
+    final montoPres  = _d(c['monto']);
+    final montoPagado = _d(c['monto_pagado'] ?? 0);
+    final falta      = (montoPres - montoPagado).clamp(0.0, double.infinity);
+    final registroIds = (c['registro_ids'] as List? ?? [])
+        .map((e) => (e as num).toInt()).toList();
+
+    final montoCtrl = TextEditingController(
+        text: falta > 0.01 ? falta.toStringAsFixed(2) : montoPres.toStringAsFixed(2));
+    final esQ1Card = ((widget.data['quincena'] as num?)?.toInt() ?? 1) == 1;
+    bool guardando  = false;
+
+    String fmtFecha(DateTime d) =>
+        '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
+    String apiFecha(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+
+    final hoy = DateTime.now();
+    DateTime fecha = (esQ1Card && hoy.day > 15)
+        ? DateTime(widget.anio, widget.mes, 1)
+        : (!esQ1Card && hoy.day <= 15)
+            ? DateTime(widget.anio, widget.mes, 16)
+            : hoy;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetCtx) => StatefulBuilder(builder: (ctx, setS) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text('Registrar pago — ${c['nombre']}',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          // Resumen presupuestado / pagado / falta
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: AppTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [
+              Expanded(child: _ResumenPago('Presupuestado', montoPres, AppTheme.textSecondary)),
+              Expanded(child: _ResumenPago('Pagado', montoPagado, AppTheme.success)),
+              Expanded(child: _ResumenPago('Falta', falta > 0 ? falta : 0, AppTheme.warning)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: montoCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
+              labelText: '¿Cuánto pagaste?',
+              prefixText: 'B/. ',
+              suffixIcon: TextButton(
+                onPressed: () => setS(() =>
+                    montoCtrl.text = (falta > 0.01 ? falta : montoPres).toStringAsFixed(2)),
+                child: const Text('Pagar todo', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Selector de fecha (forzada a la quincena correcta)
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: ctx,
+                initialDate: fecha,
+                firstDate: DateTime(widget.anio - 1),
+                lastDate: DateTime(widget.anio + 1, 12, 31),
+              );
+              if (picked != null) setS(() => fecha = picked);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(children: [
+                Icon(Icons.calendar_today, color: AppTheme.textMuted, size: 16),
+                const SizedBox(width: 10),
+                Text('Fecha: ${fmtFecha(fecha)}',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                const Spacer(),
+                Icon(Icons.edit, color: AppTheme.textMuted, size: 14),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: guardando ? null : () async {
+              final monto = double.tryParse(montoCtrl.text);
+              if (monto == null || monto <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Monto inválido')));
+                return;
+              }
+              setS(() => guardando = true);
+              try {
+                await RegistrosService.crear(
+                  uid: widget.uid,
+                  anio: widget.anio,
+                  mes: widget.mes,
+                  tipo: 'variable',
+                  categoria: categoriaCanonicaCompromiso(c),
+                  nombre: c['nombre'] as String? ?? '',
+                  monto: monto,
+                  fecha: apiFecha(fecha),
+                  origenVariableId: id,
+                  pagado: 1,
+                );
+                if (!sheetCtx.mounted) return;
+                Navigator.pop(sheetCtx);
+                widget.onRefresh();
+              } catch (e) {
+                setS(() => guardando = false);
+                if (!ctx.mounted) return;
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+              }
+            },
+            child: guardando
+                ? const SizedBox(height: 18, width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : const Text('Registrar pago'),
+          )),
+          // Pagos ya registrados (con opción de eliminar)
+          if (registroIds.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Pagos de esta quincena',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.5)),
+            const SizedBox(height: 6),
+            ...registroIds.map((rid) {
+              // Buscar el registro en la lista de registros del mes para mostrar monto/fecha
+              final regs = (widget.data['registros'] as List? ?? []).cast<Map<String, dynamic>>();
+              final reg = regs.firstWhere(
+                  (r) => (r['id'] as num?)?.toInt() == rid,
+                  orElse: () => {'id': rid, 'monto': 0, 'fecha': ''});
+              final rMonto = _d(reg['monto']);
+              final rFecha = (reg['fecha']?.toString() ?? '').split('T').first;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  Icon(Icons.check_circle, color: AppTheme.success, size: 14),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    '${Money.fmt(rMonto)} · $rFecha',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                  )),
+                  GestureDetector(
+                    onTap: () async {
+                      try {
+                        await RegistrosService.eliminar(widget.uid, rid);
+                        if (!sheetCtx.mounted) return;
+                        Navigator.pop(sheetCtx);
+                        widget.onRefresh();
+                      } catch (_) {}
+                    },
+                    child: Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
+                  ),
+                ]),
+              );
+            }),
+          ],
+        ]),
+      )),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final data       = widget.data;
@@ -2766,52 +2945,71 @@ class _QuincenaCardState extends State<_QuincenaCard> {
             ]),
           ),
           ...compromisos.map((c) {
-            final pagado = c['registro_id'] != null;
-            final tipo   = c['tipo'] as String? ?? 'fijo';
-            final iconColor = tipo == 'fijo'     ? AppTheme.colorFijo
-                            : tipo == 'deuda'    ? AppTheme.danger
-                            : AppTheme.warning;
-            final leadingIcon = tipo == 'fijo'  ? Icons.lock_outline
-                              : tipo == 'deuda' ? Icons.credit_card_outlined
-                              : Icons.repeat_outlined;
+            final tipo          = c['tipo'] as String? ?? 'fijo';
+            final esVariable    = tipo == 'variable';
+            final montoPres     = _d(c['monto']);
+            final montoPagado   = _d(c['monto_pagado'] ?? (c['registro_id'] != null ? montoPres : 0));
+            final completo      = montoPagado >= montoPres - 0.01;
+            final parcial       = !completo && montoPagado > 0.01;
+            final falta         = (montoPres - montoPagado).clamp(0.0, double.infinity);
+            final iconColor     = tipo == 'fijo'  ? AppTheme.colorFijo
+                                : tipo == 'deuda' ? AppTheme.danger
+                                : AppTheme.warning;
+            final leadingIcon   = tipo == 'fijo'  ? Icons.lock_outline
+                                : tipo == 'deuda' ? Icons.credit_card_outlined
+                                : Icons.repeat_outlined;
+            final onTapAction   = _operando
+                ? null
+                : esVariable
+                    ? () => _abrirPagoVariable(c)
+                    : () => _toggleCompromiso(c);
             return ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-              leading: Icon(leadingIcon, size: 15, color: pagado ? AppTheme.success : iconColor),
+              leading: Icon(leadingIcon, size: 15,
+                  color: completo ? AppTheme.success : parcial ? AppTheme.warning : iconColor),
               title: Text(c['nombre'] as String? ?? '—',
                   style: TextStyle(
-                    color: pagado ? AppTheme.textMuted : AppTheme.textSecondary,
+                    color: completo ? AppTheme.textMuted : AppTheme.textSecondary,
                     fontSize: 13,
-                    decoration: pagado ? TextDecoration.lineThrough : null,
+                    decoration: completo ? TextDecoration.lineThrough : null,
                   )),
-              // B2 — aclarar que es media cuota cuando el fijo se paga 2 veces al mes
-              subtitle: c['medio'] == true
-                  ? Text('½ de tu cuota · pagas 2 veces al mes',
-                      style: TextStyle(color: AppTheme.textMuted, fontSize: 10))
-                  : null,
+              subtitle: parcial && esVariable
+                  ? Text('Pagado ${Money.fmt(montoPagado)} de ${Money.fmt(montoPres)} · falta ${Money.fmt(falta)}',
+                      style: TextStyle(color: AppTheme.warning, fontSize: 10, fontWeight: FontWeight.w600))
+                  : c['medio'] == true
+                      ? Text('½ de tu cuota · pagas 2 veces al mes',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 10))
+                      : null,
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('${Money.fmt(_d(c['monto']))}',
+                Text(Money.fmt(montoPres),
                     style: TextStyle(
-                      color: pagado ? AppTheme.textMuted : AppTheme.textSecondary,
+                      color: completo ? AppTheme.textMuted : parcial ? AppTheme.warning : AppTheme.textSecondary,
                       fontSize: 13, fontWeight: FontWeight.w600,
                     )),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: _operando ? null : () => _toggleCompromiso(c),
+                  onTap: onTapAction,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     width: 22, height: 22,
                     decoration: BoxDecoration(
-                      color: pagado ? AppTheme.success : Colors.transparent,
+                      color: completo ? AppTheme.success
+                           : parcial  ? AppTheme.warning.withValues(alpha: 0.2)
+                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(11),
                       border: Border.all(
-                        color: pagado ? AppTheme.success : AppTheme.border,
+                        color: completo ? AppTheme.success
+                             : parcial  ? AppTheme.warning
+                             : AppTheme.border,
                         width: 1.5,
                       ),
                     ),
-                    child: pagado
+                    child: completo
                         ? const Icon(Icons.check, size: 14, color: Colors.black)
-                        : null,
+                        : parcial
+                            ? const Icon(Icons.add, size: 14, color: AppTheme.warning)
+                            : null,
                   ),
                 ),
               ]),

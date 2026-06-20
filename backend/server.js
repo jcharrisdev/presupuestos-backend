@@ -9638,13 +9638,19 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
          AND (ugf.dia_pago_2 IS NULL OR ${filtroQ})
        WHERE ugf.firebase_uid = ? AND ugf.activo = 1`,
       [firebase_uid, anio, mes, firebase_uid]);
+    // Para variables: agregar los pagos de la quincena (pueden ser varios pagos parciales)
+    // y devolver la suma pagada + IDs individuales para permitir eliminar pagos.
+    const filtroQVar = esQ1 ? 'DAY(rg.fecha) <= 15' : 'DAY(rg.fecha) > 15';
     const [compVariables] = await db.execute(
       `SELECT gvb.id, gvb.nombre, gvb.monto_estimado AS monto, gvb.categoria,
-              rg.id AS registro_id
+              COALESCE(SUM(rg.monto), 0) AS monto_pagado,
+              GROUP_CONCAT(rg.id ORDER BY rg.id SEPARATOR ',') AS registro_ids_str
        FROM gastos_variables_base gvb
        LEFT JOIN registros_gasto rg
          ON rg.origen_variable_id = gvb.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
-       WHERE gvb.firebase_uid = ? AND gvb.activo = 1`,
+         AND ${filtroQVar}
+       WHERE gvb.firebase_uid = ? AND gvb.activo = 1
+       GROUP BY gvb.id, gvb.nombre, gvb.monto_estimado, gvb.categoria`,
       [firebase_uid, anio, mes, firebase_uid]);
     const [compDeudas] = await db.execute(
       `SELECT d.id, d.nombre, IF(d.es_letra=1, d.cuota_fija, d.pago_minimo) AS monto,
@@ -9669,7 +9675,19 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
         .map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat(_montoFijoQuincena(c.monto, c.dia_pago, c.dia_pago_2).toFixed(2)), tipo: 'fijo', categoria: c.categoria || 'otros', registro_id: c.registro_id || null, medio: (c.dia_pago != null && c.dia_pago_2 != null) }))
         // Un fijo de un solo día no pertenece a la otra quincena: no lo mostramos ahí.
         .filter(c => c.monto > 0),
-      ...compVariables.map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat((Number(c.monto) / 2).toFixed(2)), tipo: 'variable', categoria: c.categoria || 'otros', registro_id: c.registro_id || null })),
+      ...compVariables.map(c => {
+        const montoQ = parseFloat((Number(c.monto) / 2).toFixed(2));
+        const montoPagado = parseFloat(Number(c.monto_pagado || 0).toFixed(2));
+        const ids = c.registro_ids_str ? c.registro_ids_str.split(',').map(Number) : [];
+        return {
+          id: c.id, nombre: c.nombre,
+          monto: montoQ,
+          monto_pagado: montoPagado,
+          registro_ids: ids,
+          registro_id: ids.length > 0 ? ids[ids.length - 1] : null, // compat: último pago
+          tipo: 'variable', categoria: c.categoria || 'otro',
+        };
+      }),
       ...compDeudas.map(d => ({ id: d.id, nombre: d.nombre, monto: parseFloat((Number(d.monto) / 2).toFixed(2)), tipo: 'deuda', categoria: 'deudas', registro_id: d.registro_id || null })),
     ];
     res.json({
