@@ -2570,71 +2570,12 @@ class _QuincenaCardState extends State<_QuincenaCard> {
 
   double _d(dynamic v) => v == null ? 0.0 : double.tryParse(v.toString()) ?? 0.0;
 
-  Future<void> _toggleCompromiso(Map<String, dynamic> c) async {
-    if (_operando) return;
-    final id         = c['id'] as int?;
-    final registroId = c['id'] != null ? (c['registro_id'] as int?) : null;
-    final pagado     = registroId != null;
-    if (id == null) return;
-
-    setState(() => _operando = true);
-    try {
-      if (!pagado) {
-        final hoy = DateTime.now();
-        // Forzar la fecha a la quincena correcta para que el backend distinga Q1/Q2.
-        // Si el usuario marca Q1 pero hoy es Q2 (o viceversa), la fecha quedaría en
-        // la quincena equivocada y el JOIN del backend marcaría la quincena incorrecta.
-        final esMedio = c['medio'] == true;
-        final esQ1Card = ((widget.data['quincena'] as num?)?.toInt() ?? 1) == 1;
-        DateTime fecha;
-        if (esMedio) {
-          if (esQ1Card) {
-            // Para Q1: usar día 1 si hoy está en Q2, o hoy si está en Q1
-            fecha = hoy.day <= 15 ? hoy : DateTime(widget.anio, widget.mes, 1);
-          } else {
-            // Para Q2: usar día 16 si hoy está en Q1, o hoy si está en Q2
-            fecha = hoy.day > 15 ? hoy : DateTime(widget.anio, widget.mes, 16);
-          }
-        } else {
-          fecha = hoy;
-        }
-        final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
-        final tipo  = c['tipo'] as String? ?? 'fijo';
-        await RegistrosService.crear(
-          uid: widget.uid,
-          anio: widget.anio,
-          mes: widget.mes,
-          tipo: tipo == 'deuda' ? 'fijo' : tipo,
-          categoria: tipo == 'deuda' ? 'deudas' : categoriaCanonicaCompromiso(c),
-          nombre: c['nombre'] as String? ?? '',
-          monto: _d(c['monto']),
-          fecha: fechaStr,
-          origenFijoId:    tipo == 'fijo'     ? id : null,
-          origenVariableId: tipo == 'variable' ? id : null,
-          origenDeudaId:   tipo == 'deuda'    ? id : null,
-          pagado: 1,
-        );
-      } else {
-        await RegistrosService.eliminar(widget.uid, registroId);
-      }
-      widget.onRefresh();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _operando = false);
-    }
-  }
-
-  // Mini-sheet de pago parcial para gastos variables en Tab Quincenas.
-  // Permite registrar múltiples pagos (ej. $20 + $20 + $40 = $80) contra el mismo
-  // presupuesto variable de la quincena.
-  Future<void> _abrirPagoVariable(Map<String, dynamic> c) async {
+  // Mini-sheet de pago parcial para todos los compromisos del Tab Quincenas.
+  // Permite registrar múltiples pagos (ej. $20+$20+$40 = $80) contra fijos, variables o deudas.
+  Future<void> _abrirPagoParcial(Map<String, dynamic> c) async {
     final id         = c['id'] as int?;
     if (id == null) return;
+    final tipo       = c['tipo'] as String? ?? 'fijo';
     final montoPres  = _d(c['monto']);
     final montoPagado = _d(c['monto_pagado'] ?? 0);
     final falta      = (montoPres - montoPagado).clamp(0.0, double.infinity);
@@ -2738,16 +2679,19 @@ class _QuincenaCardState extends State<_QuincenaCard> {
               }
               setS(() => guardando = true);
               try {
+                final tipoReg = tipo == 'deuda' ? 'fijo' : tipo;
                 await RegistrosService.crear(
                   uid: widget.uid,
                   anio: widget.anio,
                   mes: widget.mes,
-                  tipo: 'variable',
-                  categoria: categoriaCanonicaCompromiso(c),
+                  tipo: tipoReg,
+                  categoria: tipo == 'deuda' ? 'deudas' : categoriaCanonicaCompromiso(c),
                   nombre: c['nombre'] as String? ?? '',
                   monto: monto,
                   fecha: apiFecha(fecha),
-                  origenVariableId: id,
+                  origenFijoId:     tipo == 'fijo'     ? id : null,
+                  origenVariableId: tipo == 'variable' ? id : null,
+                  origenDeudaId:    tipo == 'deuda'    ? id : null,
                   pagado: 1,
                 );
                 if (!sheetCtx.mounted) return;
@@ -2958,11 +2902,8 @@ class _QuincenaCardState extends State<_QuincenaCard> {
             final leadingIcon   = tipo == 'fijo'  ? Icons.lock_outline
                                 : tipo == 'deuda' ? Icons.credit_card_outlined
                                 : Icons.repeat_outlined;
-            final onTapAction   = _operando
-                ? null
-                : esVariable
-                    ? () => _abrirPagoVariable(c)
-                    : () => _toggleCompromiso(c);
+            // Todos los tipos abren el mini-sheet de pago parcial
+            final onTapAction   = _operando ? null : () => _abrirPagoParcial(c);
             return ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),

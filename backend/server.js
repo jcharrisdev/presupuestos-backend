@@ -9627,20 +9627,23 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     // Q1 busca registros con fecha día ≤ 15, Q2 con fecha día > 15.
     // Esto evita que marcar pagado en Q1 muestre también Q2 como pagada (bug B2/Q1).
     // Fijos normales (sin día_pago_2): cualquier registro del mes (sin filtro de día).
+    // Todos los compromisos usan el mismo filtro de quincena para sus pagos registrados.
+    // Fijos "medio" (dia_pago + dia_pago_2): siempre filtrado. Fijos normales: también
+    // filtrado para que los pagos parciales de cada quincena se contabilicen correctamente.
     const filtroQ = esQ1 ? 'DAY(rg.fecha) <= 15' : 'DAY(rg.fecha) > 15';
     const [compFijos] = await db.execute(
       `SELECT ugf.id, ugf.descripcion AS nombre, ugf.monto_mensual AS monto, ugf.categoria,
               ugf.dia_pago, ugf.dia_pago_2,
-              rg.id AS registro_id
+              COALESCE(SUM(rg.monto), 0) AS monto_pagado,
+              GROUP_CONCAT(rg.id ORDER BY rg.id SEPARATOR ',') AS registro_ids_str
        FROM user_gastos_fijos ugf
        LEFT JOIN registros_gasto rg
          ON rg.origen_fijo_id = ugf.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
-         AND (ugf.dia_pago_2 IS NULL OR ${filtroQ})
-       WHERE ugf.firebase_uid = ? AND ugf.activo = 1`,
+         AND ${filtroQ}
+       WHERE ugf.firebase_uid = ? AND ugf.activo = 1
+       GROUP BY ugf.id, ugf.descripcion, ugf.monto_mensual, ugf.categoria, ugf.dia_pago, ugf.dia_pago_2`,
       [firebase_uid, anio, mes, firebase_uid]);
-    // Para variables: agregar los pagos de la quincena (pueden ser varios pagos parciales)
-    // y devolver la suma pagada + IDs individuales para permitir eliminar pagos.
-    const filtroQVar = esQ1 ? 'DAY(rg.fecha) <= 15' : 'DAY(rg.fecha) > 15';
+    const filtroQVar = filtroQ;
     const [compVariables] = await db.execute(
       `SELECT gvb.id, gvb.nombre, gvb.monto_estimado AS monto, gvb.categoria,
               COALESCE(SUM(rg.monto), 0) AS monto_pagado,
@@ -9654,11 +9657,14 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
       [firebase_uid, anio, mes, firebase_uid]);
     const [compDeudas] = await db.execute(
       `SELECT d.id, d.nombre, IF(d.es_letra=1, d.cuota_fija, d.pago_minimo) AS monto,
-              rg.id AS registro_id
+              COALESCE(SUM(rg.monto), 0) AS monto_pagado,
+              GROUP_CONCAT(rg.id ORDER BY rg.id SEPARATOR ',') AS registro_ids_str
        FROM deudas d
        LEFT JOIN registros_gasto rg
          ON rg.origen_deuda_id = d.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
-       WHERE d.firebase_uid = ? AND d.activa = 1`,
+         AND ${filtroQ}
+       WHERE d.firebase_uid = ? AND d.activa = 1
+       GROUP BY d.id, d.nombre, d.cuota_fija, d.pago_minimo, d.es_letra`,
       [firebase_uid, anio, mes, firebase_uid]);
     // B2 — monto del fijo en esta quincena según sus días de pago:
     //   dos días de pago (uno por quincena) → mitad en cada una
@@ -9672,8 +9678,20 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     };
     const todosCompromisos = [
       ...compFijos
-        .map(c => ({ id: c.id, nombre: c.nombre, monto: parseFloat(_montoFijoQuincena(c.monto, c.dia_pago, c.dia_pago_2).toFixed(2)), tipo: 'fijo', categoria: c.categoria || 'otros', registro_id: c.registro_id || null, medio: (c.dia_pago != null && c.dia_pago_2 != null) }))
-        // Un fijo de un solo día no pertenece a la otra quincena: no lo mostramos ahí.
+        .map(c => {
+          const montoQ = parseFloat(_montoFijoQuincena(c.monto, c.dia_pago, c.dia_pago_2).toFixed(2));
+          const montoPagado = parseFloat(Number(c.monto_pagado || 0).toFixed(2));
+          const ids = c.registro_ids_str ? c.registro_ids_str.split(',').map(Number) : [];
+          return {
+            id: c.id, nombre: c.nombre, monto: montoQ,
+            monto_pagado: montoPagado,
+            registro_ids: ids,
+            registro_id: ids.length > 0 ? ids[ids.length - 1] : null,
+            tipo: 'fijo', categoria: c.categoria || 'otro',
+            medio: (c.dia_pago != null && c.dia_pago_2 != null),
+          };
+        })
+        // Un fijo de un solo día no pertenece a la otra quincena.
         .filter(c => c.monto > 0),
       ...compVariables.map(c => {
         const montoQ = parseFloat((Number(c.monto) / 2).toFixed(2));
@@ -9688,7 +9706,18 @@ app.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
           tipo: 'variable', categoria: c.categoria || 'otro',
         };
       }),
-      ...compDeudas.map(d => ({ id: d.id, nombre: d.nombre, monto: parseFloat((Number(d.monto) / 2).toFixed(2)), tipo: 'deuda', categoria: 'deudas', registro_id: d.registro_id || null })),
+      ...compDeudas.map(d => {
+        const montoQ = parseFloat((Number(d.monto) / 2).toFixed(2));
+        const montoPagado = parseFloat(Number(d.monto_pagado || 0).toFixed(2));
+        const ids = d.registro_ids_str ? d.registro_ids_str.split(',').map(Number) : [];
+        return {
+          id: d.id, nombre: d.nombre, monto: montoQ,
+          monto_pagado: montoPagado,
+          registro_ids: ids,
+          registro_id: ids.length > 0 ? ids[ids.length - 1] : null,
+          tipo: 'deuda', categoria: 'deudas',
+        };
+      }),
     ];
     res.json({
       quincena: Number(num),
@@ -10797,34 +10826,9 @@ app.post('/registros', async (req, res) => {
 
     const esHormiga = (tipo === 'no_presupuestado' && Number(monto) <= 25) ? 1 : 0;
 
-    // G1 — dedupe de pagos de deuda: una deuda tiene UN solo registro por mes.
-    // Evita el duplicado cuando el usuario marca la deuda como pagada en Tab Gastos
-    // Y además registra un abono desde la pantalla de Deudas (ambos escriben un
-    // registros_gasto con origen_deuda_id). Si ya hay uno este mes, se actualiza
-    // en lugar de insertar otro. NO aplica a origen_fijo_id (los fijos permiten
-    // varios pagos parciales por B1). El saldo de la deuda lo lleva /deudas/:id/abono.
-    if (origen_deuda_id) {
-      const [[dupDeuda]] = await db.execute(
-        `SELECT id FROM registros_gasto
-           WHERE firebase_uid = ? AND anio = ? AND mes = ? AND origen_deuda_id = ?
-           LIMIT 1`,
-        [firebase_uid, anio, mes, origen_deuda_id]
-      );
-      if (dupDeuda) {
-        await db.execute(
-          `UPDATE registros_gasto
-             SET nombre = ?, monto = ?, fecha = ?, pagado = ?, categoria = ?
-           WHERE id = ?`,
-          [nombre, monto, fecha, pagado ? 1 : 0, categoria, dupDeuda.id]
-        );
-        await _actualizarTotalesMes(mesRow.id, firebase_uid);
-        const [[merged]] = await db.execute(`SELECT * FROM registros_gasto WHERE id = ?`, [dupDeuda.id]);
-        res.status(201).json(merged);
-        _logInfo('/registros', `Pago de deuda actualizado sin duplicar: "${nombre}" $${Number(monto).toFixed(2)} en ${anio}/${mes}`, firebase_uid);
-        _generarAlertasMes(firebase_uid, Number(anio), Number(mes)).catch(() => {});
-        return;
-      }
-    }
+    // Pagos parciales habilitados para todos los tipos: múltiples registros por mes
+    // son válidos (ej. pagar $30 + $30 de una cuota de $60, o gasolina por tandas).
+    // El Tab Quincenas agrega por origen_*_id con filtro de quincena.
 
     const [r] = await db.execute(
       `INSERT INTO registros_gasto
