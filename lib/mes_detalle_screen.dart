@@ -17,6 +17,7 @@ import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 import 'ia/ia_chat_screen.dart';
 import 'ia/ia_diagnostico_sheet.dart';
+import 'services/ia_service.dart';
 
 /// Categoría canónica para un compromiso (gasto fijo/deuda) al marcarlo pagado.
 /// Prefiere `categoria`; si no, usa `tipo` cuando es una categoría canónica
@@ -375,7 +376,7 @@ class _TabResumen extends StatelessWidget {
         // Alertas del mes
         if (alertas.isNotEmpty) ...[
           const SizedBox(height: 12),
-          ...alertas.map((a) => _AlertaMesCard(alerta: a)),
+          ...alertas.map((a) => _AlertaMesCard(alerta: a, uid: uid)),
         ],
 
         const SizedBox(height: 12),
@@ -3401,12 +3402,37 @@ class _IngresoRealCard extends StatelessWidget {
 }
 
 // ── Card de alerta del mes ────────────────────────────────────────────────────
-class _AlertaMesCard extends StatelessWidget {
+class _AlertaMesCard extends StatefulWidget {
   final Map<String, dynamic> alerta;
-  const _AlertaMesCard({required this.alerta});
+  final String uid;
+  const _AlertaMesCard({required this.alerta, required this.uid});
+
+  @override
+  State<_AlertaMesCard> createState() => _AlertaMesCardState();
+}
+
+class _AlertaMesCardState extends State<_AlertaMesCard> {
+  String? _explicacion;
+  bool _loadingExp = false;
+
+  Future<void> _explicar() async {
+    final id = widget.alerta['id'];
+    if (id == null) return;
+    setState(() { _loadingExp = true; });
+    try {
+      final r = await IaService.explicarAlerta(widget.uid, id as int);
+      if (mounted) setState(() {
+        _explicacion = r['explicacion'] as String?;
+        _loadingExp = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingExp = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final alerta = widget.alerta;
     final nivel = alerta['nivel'] as String? ?? 'info';
     final color = nivel == 'danger' ? AppTheme.danger
         : nivel == 'warning' ? AppTheme.warning
@@ -3422,24 +3448,51 @@ class _AlertaMesCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(alerta['titulo'] as String? ?? '',
-              style: TextStyle(color: color,
-                  fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 2),
-          Text(alerta['mensaje'] as String? ?? '',
-              style: TextStyle(color: AppTheme.textSecondary,
-                  fontSize: 11, height: 1.4)),
-          if ((alerta['accion_sugerida'] as String?)?.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
-            Text('→ ${alerta['accion_sugerida']}',
-                style: TextStyle(color: color, fontSize: 11,
-                    fontStyle: FontStyle.italic)),
-          ],
-        ])),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(alerta['titulo'] as String? ?? '',
+                style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text(alerta['mensaje'] as String? ?? '',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, height: 1.4)),
+            if ((alerta['accion_sugerida'] as String?)?.isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text('→ ${alerta['accion_sugerida']}',
+                  style: TextStyle(color: color, fontSize: 11, fontStyle: FontStyle.italic)),
+            ],
+          ])),
+          if (alerta['id'] != null)
+            _loadingExp
+                ? SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: color))
+                : GestureDetector(
+                    onTap: _explicacion == null ? _explicar : () => setState(() => _explicacion = null),
+                    child: Icon(
+                      _explicacion == null ? Icons.auto_awesome : Icons.close,
+                      color: color, size: 15,
+                    ),
+                  ),
+        ]),
+        if (_explicacion != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: color.withValues(alpha: 0.2)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.auto_awesome, color: AppTheme.primary, size: 13),
+              const SizedBox(width: 6),
+              Expanded(child: Text(_explicacion!,
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 12, height: 1.5))),
+            ]),
+          ),
+        ],
       ]),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/app_theme.dart';
 import '../services/ia_service.dart';
 import '../services/api_client.dart';
@@ -44,7 +45,7 @@ class _IaReporteSheetState extends State<IaReporteSheet> {
         throw Exception('No tienes ningún presupuesto activo todavía.');
       }
       final presupuestoId = lista.first['id'] as int;
-      final rr = await IaService.reporte(widget.firebaseUid, presupuestoId);
+      final rr = await IaService.reporte(widget.firebaseUid, presupuestoId: presupuestoId);
       if (mounted) setState(() { _reporte = rr['reporte'] as String?; _loading = false; });
     } catch (e) {
       if (mounted) setState(() {
@@ -157,9 +158,16 @@ class _IaReporteSheetState extends State<IaReporteSheet> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
           ),
-          child: Text(
-            _reporte ?? '',
-            style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, height: 1.65),
+          child: MarkdownBody(
+            data: _reporte ?? '',
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(color: AppTheme.textPrimary, fontSize: 14, height: 1.65),
+              strong: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
+              h2: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 15),
+              h3: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+              listBullet: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+            ),
+            shrinkWrap: true,
           ),
         ),
         const SizedBox(height: 16),

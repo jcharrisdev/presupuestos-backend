@@ -12,6 +12,7 @@ import 'alertas_screen.dart';
 import 'eventos/eventos_screen.dart';
 import 'widgets/ayuda_sheet.dart';
 import 'utils/money.dart';
+import 'services/ia_service.dart';
 
 class EstadoFinancieroAnualScreen extends StatefulWidget {
   final String firebaseUid;
@@ -46,6 +47,8 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   bool _hintQuincenalCerrado = false;
   bool? _tieneRegistrosMes;        // U5 — ¿ya registró su primer gasto del mes?
   bool _checklistCerrado = false;  // U5 — checklist de setup descartado (sesión)
+  String? _nudge;
+  bool _loadingNudge = false;
 
   static const _mesesLabel = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -114,6 +117,18 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
     } catch (_) {}
     _cargarComparativa();
     _cargarConsejeroIA();
+    _cargarNudge();
+  }
+
+  Future<void> _cargarNudge() async {
+    if (mounted) setState(() => _loadingNudge = true);
+    try {
+      final mes = DateTime.now().month;
+      final txt = await IaService.nudge(widget.firebaseUid, anio: _anio, mes: mes);
+      if (mounted) setState(() { _nudge = txt.isEmpty ? null : txt; _loadingNudge = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingNudge = false);
+    }
   }
 
   Future<void> _cargarComparativa() async {
@@ -368,7 +383,18 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
         const SizedBox(height: 12),
         _CardAnual(ea: ea, anio: _anio, vista: _vista,
             onTap: () => setState(() => _mesesExpanded = !_mesesExpanded)),
-        // ── Claude IA ─────────────────────────────────────────────────────
+        // ── Nudge IA (insight de 1-2 frases, carga rápida) ──────────────
+        if (_loadingNudge)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: LinearProgressIndicator(
+              color: AppTheme.primary, backgroundColor: AppTheme.surfaceAlt, minHeight: 2),
+          )
+        else if (_nudge != null) ...[
+          _safe(() => _buildNudge(_nudge!)),
+          const SizedBox(height: 12),
+        ],
+        // ── Claude IA (análisis detallado) ────────────────────────────────
         if (_loadingIA) ...[
           _safe(() => _buildIASkeleton()),
           const SizedBox(height: 12),
@@ -675,6 +701,25 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
 
   Widget _safe(Widget Function() builder) {
     try { return builder(); } catch (_) { return const SizedBox.shrink(); }
+  }
+
+  Widget _buildNudge(String texto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 15),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(texto,
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.5)),
+        ),
+      ]),
+    );
   }
 
   Widget _buildIASkeleton() => Container(

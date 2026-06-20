@@ -45,12 +45,51 @@ class IaService {
   }
 
   static Future<Map<String, dynamic>> reporte(
-    String uid,
-    int presupuestoId,
-  ) async {
+    String uid, {
+    int? presupuestoId,
+    int? anio,
+    int? mes,
+  }) async {
     final r = await ApiClient.post('/ai/reporte', {
       'firebase_uid': uid,
-      'presupuesto_id': presupuestoId,
+      if (presupuestoId != null) 'presupuesto_id': presupuestoId,
+      if (anio != null) 'anio': anio,
+      if (mes  != null) 'mes': mes,
+    });
+    if (r.statusCode != 200) throw Exception('Error ${r.statusCode}');
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  static Future<String> nudge(String uid, {int? anio, int? mes}) async {
+    final r = await ApiClient.post('/ai/nudge', {
+      'firebase_uid': uid,
+      if (anio != null) 'anio': anio,
+      if (mes  != null) 'mes': mes,
+    });
+    if (r.statusCode != 200) throw Exception('Error ${r.statusCode}');
+    final data = jsonDecode(r.body) as Map<String, dynamic>;
+    return data['nudge'] as String? ?? '';
+  }
+
+  static Future<Map<String, dynamic>> explicarAlerta(
+    String uid,
+    int alertaId,
+  ) async {
+    final r = await ApiClient.post('/ai/explicar-alerta', {
+      'firebase_uid': uid,
+      'alerta_id': alertaId,
+    });
+    if (r.statusCode != 200) throw Exception('Error ${r.statusCode}');
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> simularDecision(
+    String uid,
+    String pregunta,
+  ) async {
+    final r = await ApiClient.post('/ai/simular-decision', {
+      'firebase_uid': uid,
+      'pregunta': pregunta,
     });
     if (r.statusCode != 200) throw Exception('Error ${r.statusCode}');
     return jsonDecode(r.body) as Map<String, dynamic>;

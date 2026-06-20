@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/app_theme.dart';
 import '../services/ia_service.dart';
 
@@ -149,9 +150,15 @@ class _IaDiagnosticoSheetState extends State<IaDiagnosticoSheet> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
           ),
-          child: Text(
-            _diagnostico ?? '',
-            style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, height: 1.65),
+          child: MarkdownBody(
+            data: _diagnostico ?? '',
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(color: AppTheme.textPrimary, fontSize: 14, height: 1.65),
+              strong: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
+              h2: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 14),
+              listBullet: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+            ),
+            shrinkWrap: true,
           ),
         ),
         const SizedBox(height: 16),

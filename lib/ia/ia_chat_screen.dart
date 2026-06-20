@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/app_theme.dart';
 import '../services/ia_service.dart';
 import 'ia_diagnostico_sheet.dart';
@@ -263,14 +264,30 @@ class _IaChatScreenState extends State<IaChatScreen> {
                 ),
                 border: m.esUsuario ? null : Border.all(color: AppTheme.border),
               ),
-              child: Text(
-                m.texto,
-                style: TextStyle(
-                  color: m.esError ? AppTheme.danger : AppTheme.textPrimary,
-                  fontSize: 14,
-                  height: 1.6,
+              child: m.esUsuario || m.esError
+              ? Text(
+                  m.texto,
+                  style: TextStyle(
+                    color: m.esError ? AppTheme.danger : AppTheme.textPrimary,
+                    fontSize: 14, height: 1.6,
+                  ),
+                )
+              : MarkdownBody(
+                  data: m.texto,
+                  styleSheet: MarkdownStyleSheet(
+                    p: TextStyle(color: AppTheme.textPrimary, fontSize: 14, height: 1.6),
+                    strong: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
+                    h2: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 14),
+                    h3: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                    listBullet: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                    blockquoteDecoration: BoxDecoration(
+                      color: AppTheme.surfaceAlt,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border(left: BorderSide(color: AppTheme.primary, width: 3)),
+                    ),
+                  ),
+                  shrinkWrap: true,
                 ),
-              ),
             ),
           ),
           if (m.esUsuario) const SizedBox(width: 8),
