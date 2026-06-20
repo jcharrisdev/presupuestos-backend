@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../services/registros_service.dart';
 import '../../services/gastos_variables_service.dart';
 import '../../services/api_client.dart';
+import '../../services/ia_service.dart';
 import '../../perfil_financiero_screen.dart';
 import 'mes_rango_selector.dart';
 import 'categoria_selector.dart';
@@ -58,6 +60,11 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
   // O1 — modo rápido (default) vs modo detalle
   bool _modoDetalle = false;
 
+  // IA — sugerencia de categoría en tiempo real
+  Timer? _debounceIa;
+  Map<String, dynamic>? _iaSugerencia;
+  bool _iaCargando = false;
+
   static const _tipos = [
     {'value': 'fijo',             'label': 'Gasto fijo',       'icon': Icons.lock_clock,       'color': AppTheme.colorFijo},
     {'value': 'variable',         'label': 'Variable',          'icon': Icons.shopping_bag,     'color': AppTheme.warning},
@@ -78,8 +85,83 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
 
   @override
   void dispose() {
+    _debounceIa?.cancel();
     _nombre.dispose(); _monto.dispose(); _notas.dispose();
     super.dispose();
+  }
+
+  void _iniciarDebounceIa() {
+    _debounceIa?.cancel();
+    final nombre = _nombre.text.trim();
+    final monto  = double.tryParse(_monto.text) ?? 0;
+    if (nombre.length < 3 || monto <= 0) {
+      if (_iaSugerencia != null) setState(() => _iaSugerencia = null);
+      return;
+    }
+    _debounceIa = Timer(const Duration(milliseconds: 1400), () async {
+      if (!mounted) return;
+      setState(() => _iaCargando = true);
+      try {
+        final r = await IaService.categorizar(widget.firebaseUid, nombre, monto);
+        if (mounted) setState(() {
+          _iaSugerencia = r['sugerencia'] as Map<String, dynamic>?;
+          _iaCargando = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _iaCargando = false);
+      }
+    });
+  }
+
+  // Mapea la categoría en español de la IA al valor canónico de CategoriaSelector
+  String _mapCategoria(String iaCategoria) {
+    const map = {
+      'Comida': 'alimentacion',
+      'Transporte': 'transporte',
+      'Entretenimiento': 'ocio',
+      'Salud': 'salud',
+      'Servicios': 'servicios',
+      'Educacion': 'educacion',
+      'Educación': 'educacion',
+      'Ropa': 'ropa',
+      'Ahorro': 'ahorro',
+    };
+    return map[iaCategoria] ?? 'otro';
+  }
+
+  Widget _buildIaSugerencia() {
+    final s    = _iaSugerencia!;
+    final cat  = s['categoria']     as String? ?? '';
+    final clas = s['clasificacion'] as String? ?? '';
+    final esH  = s['es_hormiga'] == true;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 14),
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() {
+              _categoria     = _mapCategoria(cat);
+              _iaSugerencia  = null;
+            }),
+            child: Text(
+              'IA sugiere: $cat · $clas${esH ? ' 🐜' : ''} — toca para aplicar',
+              style: const TextStyle(color: AppTheme.primary, fontSize: 12),
+            ),
+          ),
+        ),
+        GestureDetector(
+          onTap: () => setState(() => _iaSugerencia = null),
+          child: Icon(Icons.close, color: AppTheme.textMuted, size: 16),
+        ),
+      ]),
+    );
   }
 
   Future<void> _cargarDefiniciones() async {
@@ -134,6 +216,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         _monto.text = double.tryParse(ultimoMonto.toString())?.toStringAsFixed(2) ?? '';
       }
       _categoriaCustom = null;
+      _iaSugerencia    = null;
     });
   }
 
@@ -272,7 +355,10 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               controller: _nombre,
               style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Nombre del gasto'),
-              onChanged: (_) => setState(() => _defSeleccionada = null),
+              onChanged: (_) {
+                setState(() => _defSeleccionada = null);
+                _iniciarDebounceIa();
+              },
               validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
             ),
             const SizedBox(height: 12),
@@ -283,6 +369,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Monto (\$)', prefixText: 'B/. '),
+              onChanged: (_) => _iniciarDebounceIa(),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Requerido';
                 if (double.tryParse(v) == null) return 'Número inválido';
@@ -290,6 +377,19 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
               },
             ),
             const SizedBox(height: 16),
+
+            // ── Sugerencia IA de categoría ────────────────────────────────
+            if (_iaCargando) ...[
+              LinearProgressIndicator(
+                color: AppTheme.primary,
+                backgroundColor: AppTheme.surfaceAlt,
+                minHeight: 2,
+              ),
+              const SizedBox(height: 10),
+            ] else if (_iaSugerencia != null) ...[
+              _buildIaSugerencia(),
+              const SizedBox(height: 10),
+            ],
 
             // ── Categoría con "Otro" personalizable ───────────────────────
             CategoriaSelector(

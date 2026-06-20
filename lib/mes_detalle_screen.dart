@@ -15,6 +15,8 @@ import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'widgets/financiero/categoria_selector.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
+import 'ia/ia_chat_screen.dart';
+import 'ia/ia_diagnostico_sheet.dart';
 
 /// Categoría canónica para un compromiso (gasto fijo/deuda) al marcarlo pagado.
 /// Prefiere `categoria`; si no, usa `tipo` cuando es una categoría canónica
@@ -96,6 +98,18 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
       appBar: AppBar(
         title: Text('${widget.label} ${widget.anio}'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, size: 21),
+            tooltip: 'Diagnóstico IA',
+            onPressed: () => IaDiagnosticoSheet.show(context, widget.firebaseUid),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat_outlined, size: 21),
+            tooltip: 'Asesor IA',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => IaChatScreen(firebaseUid: widget.firebaseUid),
+            )),
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline, size: 20),
             tooltip: 'Ayuda',

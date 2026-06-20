@@ -25,6 +25,8 @@ import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
 import 'eventos/eventos_screen.dart';
 import 'services/theme_pref.dart';
+import 'ia/ia_chat_screen.dart';
+import 'ia/ia_diagnostico_sheet.dart';
 
 class HomeShell extends StatefulWidget {
   final String firebaseUid;
@@ -410,6 +412,15 @@ class _MasTab extends StatelessWidget {
                       firebaseUid: firebaseUid,
                       anio: DateTime.now().year,
                     ),
+                  )),
+                ),
+                _ModuloCard(
+                  icon: Icons.auto_awesome,
+                  title: 'Asesor IA',
+                  subtitle: 'Preguntas en lenguaje natural',
+                  color: AppTheme.primary,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => IaChatScreen(firebaseUid: firebaseUid),
                   )),
                 ),
                 if (modoNegocio)
