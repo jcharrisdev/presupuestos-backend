@@ -11703,11 +11703,40 @@ Reglas no negociables:
 7. Todo número negativo o alerta va acompañado de un siguiente paso concreto. Nunca muestres un problema sin una acción posible.
 8. Usa SOLO datos devueltos por las tools. Si una tool no tiene el dato, dilo con honestidad en vez de inventar.
 9. Sé empático y directo. No juzgues los hábitos del usuario. Informa, no sermonees.
-10. Responde siempre en español, en un lenguaje claro y cercano.`;
+10. Responde siempre en español, en un lenguaje claro y cercano.
+11. NUNCA pidas al usuario un presupuesto_id, periodo_id u otro ID interno. Usa get_presupuesto_actual para resolverlo solo — pedir IDs internos a un usuario es exactamente la fricción y jerga que este asistente prohíbe.
+12. Distingue siempre entre NEGATIVA POR DISEÑO (no puedo hacer X porque requiere confirmación del usuario antes de escribir en sus finanzas — esto es una barrera de seguridad intencional, no una brecha) y BRECHA REAL (ninguna tool cubre lo pedido). En la primera, explica el diseño. En la segunda, usa reportar_brecha_capacidad.
+13. Redactar un prompt de texto para Claude Code es SIEMPRE seguro y permitido — nunca lo confundas con "ejecutar una acción". Si hay una brecha real, siempre ofrece el prompt, aunque no puedas ejecutar la funcionalidad.`;
 
 // --- Definición de tools que Claude puede llamar ---
 
 const AI_TOOLS = [
+  // ── HERRAMIENTA OBLIGATORIA — siempre se llama primero ──────────────────
+  {
+    name: 'get_presupuesto_actual',
+    description: 'LLAMAR SIEMPRE PRIMERO en cualquier conversación nueva. Resuelve automáticamente en qué período está el usuario ahora mismo: mes actual, quincena (1 o 2), fecha de inicio/fin, y si tiene presupuesto activo en el sistema legado. Nunca pidas al usuario un presupuesto_id — esta tool lo resuelve sola.',
+    input_schema: {
+      type: 'object',
+      properties: { firebase_uid: { type: 'string' } },
+      required: ['firebase_uid'],
+    },
+  },
+  // ── HERRAMIENTA DE REPORTE DE BRECHAS ───────────────────────────────────
+  {
+    name: 'reportar_brecha_capacidad',
+    description: 'Usa esta tool cuando ninguna otra tool puede cubrir lo que el usuario pidió (brecha real). NO la uses para negativas por diseño (cuando sí podrías técnicamente pero está prohibido sin confirmación del usuario). Registra la brecha y genera un prompt listo para Claude Code. En modo desarrollo, el prompt se muestra directamente en el chat.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        lo_que_pidio_usuario: { type: 'string', description: 'Descripción exacta de lo que el usuario solicitó' },
+        por_que_no_se_puede:  { type: 'string', description: 'Explicación técnica de por qué ninguna tool actual lo cubre' },
+        que_haria_falta:      { type: 'string', description: 'Qué tool o funcionalidad habría que construir' },
+        tipo_brecha:          { type: 'string', enum: ['total', 'aproximada'], description: 'total = ninguna tool sirve; aproximada = existe una parecida pero no calza exacto' },
+        accion_tomada:        { type: 'string', enum: ['ninguna', 'uso_tool_aproximada'], description: 'Si se usó una alternativa parcial' },
+      },
+      required: ['lo_que_pidio_usuario', 'por_que_no_se_puede', 'que_haria_falta', 'tipo_brecha', 'accion_tomada'],
+    },
+  },
   {
     name: 'get_dashboard_resumen',
     description: 'Resumen financiero del usuario: score de salud (0-100), ingreso neto mensual, gastos fijos totales, cuotas de deudas, disponible mensual, número de deudas activas y objetivos de ahorro.',
@@ -12090,6 +12119,105 @@ async function _aiToolPatrones(presupuestoId, uid) {
   };
 }
 
+// --- Tool: get_presupuesto_actual — resuelve período activo sin pedir IDs al usuario ---
+
+async function _aiToolPresupuestoActual(uid) {
+  const ahora  = new Date();
+  const anio   = ahora.getFullYear();
+  const mes    = ahora.getMonth() + 1;
+  const dia    = ahora.getDate();
+  const quincena = dia <= 15 ? 1 : 2;
+  const ML = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  // Modelo nuevo: ¿existe este mes en meses_financieros?
+  const [[mesRow]] = await db.execute(
+    `SELECT id, ingreso_estimado, fijos_estimados, variables_estimadas, remanente_estimado
+     FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+    [uid, anio, mes]
+  );
+
+  // Modelo legado: presupuesto activo más reciente
+  const [[presLegado]] = await db.execute(
+    `SELECT p.id, p.nombre, p.tipo_periodo, p.monto_total,
+            per.id AS periodo_id, per.numero_periodo, per.fecha_inicio, per.fecha_fin, per.estado
+     FROM presupuestos p
+     LEFT JOIN periodos per ON per.presupuesto_id = p.id AND per.estado = 'activo' AND per.firebase_uid = p.firebase_uid
+     WHERE p.firebase_uid = ? ORDER BY p.id DESC LIMIT 1`,
+    [uid]
+  );
+
+  // ¿Existe el estado financiero anual?
+  const [[efa]] = await db.execute(
+    `SELECT id FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`, [uid, anio]
+  );
+
+  const diasEnMes = new Date(anio, mes, 0).getDate();
+  const diasRestantesQ = quincena === 1 ? 15 - dia : diasEnMes - dia;
+  const fechaInicioQ = quincena === 1
+    ? `${anio}-${String(mes).padStart(2,'0')}-01`
+    : `${anio}-${String(mes).padStart(2,'0')}-16`;
+  const fechaFinQ = quincena === 1
+    ? `${anio}-${String(mes).padStart(2,'0')}-15`
+    : `${anio}-${String(mes).padStart(2,'0')}-${diasEnMes}`;
+
+  return {
+    anio, mes, mes_label: ML[mes],
+    quincena_actual: quincena,
+    fecha_inicio_quincena: fechaInicioQ,
+    fecha_fin_quincena: fechaFinQ,
+    dias_restantes_quincena: Math.max(0, diasRestantesQ),
+    modelo_nuevo: mesRow ? {
+      mes_id: mesRow.id,
+      ingreso_estimado: Number(mesRow.ingreso_estimado),
+      fijos_estimados: Number(mesRow.fijos_estimados),
+      variables_estimadas: Number(mesRow.variables_estimadas),
+      remanente_estimado: Number(mesRow.remanente_estimado),
+      tiene_estado_anual: !!efa,
+    } : null,
+    modelo_legado: presLegado ? {
+      presupuesto_id: presLegado.id,
+      nombre: presLegado.nombre,
+      tipo_periodo: presLegado.tipo_periodo,
+      monto_total: Number(presLegado.monto_total),
+      periodo_activo_id: presLegado.periodo_id || null,
+      numero_periodo: presLegado.numero_periodo || null,
+    } : null,
+    instruccion: `Usa anio=${anio}&mes=${mes} para consultas del modelo nuevo. Usa presupuesto_id=${presLegado?.id ?? 'no_disponible'} para consultas del modelo legado. Nunca le pidas estos IDs al usuario.`,
+  };
+}
+
+// --- Tool: reportar_brecha_capacidad — registra gaps y genera prompts para Claude Code ---
+
+function _aiToolReportarBrecha({ lo_que_pidio_usuario, por_que_no_se_puede, que_haria_falta, tipo_brecha, accion_tomada }) {
+  const prompt = `## Brecha de capacidad — Asesor IA Salarying
+
+**Usuario pidió:** ${lo_que_pidio_usuario}
+**Por qué no se puede:** ${por_que_no_se_puede}
+**Qué haría falta:** ${que_haria_falta}
+**Tipo:** ${tipo_brecha === 'total' ? 'Total (ninguna tool sirve)' : 'Aproximada (existe alternativa parcial)'}
+**Acción tomada:** ${accion_tomada}
+
+### Prompt para implementar en Claude Code:
+Agrega al módulo IA de Salarying (backend/server.js) la siguiente tool de solo lectura:
+- **Funcionalidad:** ${que_haria_falta}
+- **Caso de uso:** ${lo_que_pidio_usuario}
+- **Restricciones:** solo lectura, no escribe a BD, firebase_uid siempre requerido, inyectar resultado en AI_TOOLS y _aiEjecutarTool
+- Seguir el mismo patrón de las tools existentes (ver _aiToolRegistrosMes como ejemplo)`.trim();
+
+  _logInfo('/ai/brecha', `tipo:${tipo_brecha} | ${lo_que_pidio_usuario.slice(0,60)}`, '-');
+
+  return {
+    registrado: true,
+    tipo_brecha,
+    accion_tomada,
+    modo_dev: true,
+    prompt_claude_code: prompt,
+    mensaje_usuario: tipo_brecha === 'total'
+      ? 'Aún no tengo esa función. Aquí abajo está el prompt para que José lo construya.'
+      : `Usé una versión aproximada (${accion_tomada}). El prompt para la versión exacta está aquí abajo.`,
+  };
+}
+
 // --- Implementaciones de tools del modelo nuevo (registros_gasto / meses_financieros) ---
 
 async function _aiToolRegistrosMes(uid, anio, mes) {
@@ -12253,6 +12381,8 @@ async function _aiEjecutarTool(toolName, input, requestCache) {
   let result;
   try {
     switch (toolName) {
+      case 'get_presupuesto_actual':    result = await _aiToolPresupuestoActual(uid); break;
+      case 'reportar_brecha_capacidad': result = _aiToolReportarBrecha(input); break;
       case 'get_dashboard_resumen':    result = await _aiToolDashboard(uid); break;
       case 'get_income':               result = await _aiToolIncome(uid); break;
       case 'get_capacidad_real':       result = await _aiToolCapacidad(pid, uid); break;
@@ -12371,9 +12501,15 @@ app.post('/ai/chat', async (req, res) => {
   if (!firebase_uid || !mensaje) return res.status(400).json({ error: 'firebase_uid y mensaje requeridos' });
   if (!_aiCheckRate(firebase_uid)) return res.status(429).json({ error: 'Demasiadas consultas. Espera unos minutos.' });
   try {
-    const anio = new Date().getFullYear();
-    const mes  = new Date().getMonth() + 1;
-    const contextoMsg = `[uid=${firebase_uid} | año=${anio} | mes=${mes}${presupuesto_id ? ` | presupuesto_id=${presupuesto_id}` : ''}] ${mensaje}`;
+    // Pre-resolver el período activo para que Claude no necesite llamar get_presupuesto_actual
+    // explícitamente en cada mensaje (ahorra un round-trip de ~500ms).
+    let contextoperiodo = '';
+    try {
+      const pa = await _aiToolPresupuestoActual(firebase_uid);
+      contextoperiodo = pa.instruccion;
+    } catch (_) {}
+
+    const contextoMsg = `[uid=${firebase_uid} | ${contextoperiodo}] ${mensaje}`;
 
     const mensajes = [
       ...historial.slice(-6),
