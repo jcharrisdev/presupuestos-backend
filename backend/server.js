@@ -11648,6 +11648,593 @@ app.post('/user/cerrar-anio/:anio', async (req, res) => {
 });
 
 // =============================================================================
+// MÓDULO IA — Asistente financiero con Claude (tool_use loop)
+// Regla de oro: Claude NUNCA calcula — solo lee resultados de tools existentes.
+// Endpoints: POST /ai/diagnostico, /ai/chat, /ai/categorizar, /ai/reporte
+// =============================================================================
+
+const Anthropic = require('@anthropic-ai/sdk');
+let _anthropicClient = null;
+function _getAnthropic() {
+  if (!_anthropicClient) {
+    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'tu-api-key-aqui')
+      throw new Error('ANTHROPIC_API_KEY no configurada. Agrégala en las variables de entorno de Render.');
+    _anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _anthropicClient;
+}
+
+const AI_MODEL = 'claude-haiku-4-5-20251001';
+
+const AI_SYSTEM_PROMPT = `Eres el asistente financiero de Salarying, una app de presupuesto personal para usuarios de clase media a baja en Panamá. El salario típico es $600–$2,000 mensual. Muchos cobran quincenal, tienen deudas activas y un sobrante chico (a veces $40, a veces negativo).
+
+Reglas no negociables:
+1. Nunca recomiendes algo que el usuario no puede pagar. Ajusta cualquier consejo a su capacidad real.
+2. Si hay deuda con interés alto activa, priorízala SIEMPRE sobre cualquier sugerencia de ahorro.
+3. Cero jerga sin traducir: cuando uses "tasa de ahorro", "liquidez", etc., explícalo en palabras simples justo después.
+4. Toda cifra estimada o proyectada se marca explícitamente con "~" y la palabra "estimado".
+5. El ingreso es informativo: nunca lo uses para sugerir cambios al monto del presupuesto.
+6. Las fórmulas son quincenal-first: no asumas ciclos mensuales por defecto.
+7. Todo número negativo o alerta va acompañado de un siguiente paso concreto. Nunca muestres un problema sin una acción posible.
+8. Usa SOLO datos devueltos por las tools. Si una tool no tiene el dato, dilo con honestidad en vez de inventar.
+9. Sé empático y directo. No juzgues los hábitos del usuario. Informa, no sermonees.
+10. Responde siempre en español, en un lenguaje claro y cercano.`;
+
+// --- Definición de tools que Claude puede llamar ---
+
+const AI_TOOLS = [
+  {
+    name: 'get_dashboard_resumen',
+    description: 'Resumen financiero del usuario: score de salud (0-100), ingreso neto mensual, gastos fijos totales, cuotas de deudas, disponible mensual, número de deudas activas y objetivos de ahorro.',
+    input_schema: {
+      type: 'object',
+      properties: { firebase_uid: { type: 'string' } },
+      required: ['firebase_uid'],
+    },
+  },
+  {
+    name: 'get_income',
+    description: 'Ingreso registrado del usuario: tipo (salario/informal/ocasional), monto bruto, monto neto, deducciones totales y frecuencia de cobro (quincenal/mensual).',
+    input_schema: {
+      type: 'object',
+      properties: { firebase_uid: { type: 'string' } },
+      required: ['firebase_uid'],
+    },
+  },
+  {
+    name: 'get_capacidad_real',
+    description: 'Capacidad real de gasto del período: ingreso neto del período menos gastos fijos menos promedio histórico de variables de los últimos 3 períodos cerrados.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        presupuesto_id: { type: 'number' },
+        firebase_uid: { type: 'string' },
+      },
+      required: ['presupuesto_id', 'firebase_uid'],
+    },
+  },
+  {
+    name: 'get_fondo_seguridad',
+    description: 'Estado del fondo de emergencia: cuánto ha ahorrado el usuario y cuánto necesita para alcanzar nivel 1 (1 período de fijos), nivel 2 (2 períodos) y nivel 3 (6 períodos).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        presupuesto_id: { type: 'number' },
+        firebase_uid: { type: 'string' },
+      },
+      required: ['presupuesto_id', 'firebase_uid'],
+    },
+  },
+  {
+    name: 'get_deudas',
+    description: 'Lista de deudas activas: nombre, tipo (revolving/letra), tasa de interés mensual en %, pago mensual y monto pendiente. Ordenadas de mayor a menor tasa.',
+    input_schema: {
+      type: 'object',
+      properties: { firebase_uid: { type: 'string' } },
+      required: ['firebase_uid'],
+    },
+  },
+  {
+    name: 'get_clasificacion_gastos',
+    description: 'Distribución de gastos del período activo por clasificación: esencial, importante, flexible y sin clasificar. Incluye totales en $ y porcentajes vs el presupuesto.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        presupuesto_id: { type: 'number' },
+        firebase_uid: { type: 'string' },
+      },
+      required: ['presupuesto_id', 'firebase_uid'],
+    },
+  },
+  {
+    name: 'get_gastos_periodo',
+    description: 'Lista de gastos registrados en el período activo: descripción, categoría, clasificación, tipo (fijo/variable), monto y si está pagado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        presupuesto_id: { type: 'number' },
+        firebase_uid: { type: 'string' },
+      },
+      required: ['presupuesto_id', 'firebase_uid'],
+    },
+  },
+  {
+    name: 'get_historial_periodos',
+    description: 'Historial de períodos cerrados con totales de gasto fijo, variable y ahorro. Útil para identificar tendencias entre períodos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        presupuesto_id: { type: 'number' },
+        firebase_uid: { type: 'string' },
+        n: { type: 'number', description: 'Cantidad de períodos a devolver (default 3, máx 6)' },
+      },
+      required: ['presupuesto_id', 'firebase_uid'],
+    },
+  },
+  {
+    name: 'get_patrones_gustitos',
+    description: 'Patrones de gustitos (gastos pequeños frecuentes no presupuestados) detectados en el presupuesto: categoría, en cuántos períodos apareció, monto total y promedio.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        presupuesto_id: { type: 'number' },
+        firebase_uid: { type: 'string' },
+      },
+      required: ['presupuesto_id', 'firebase_uid'],
+    },
+  },
+];
+
+// --- Implementaciones de tools contra la BD (solo lectura) ---
+
+async function _aiToolDashboard(uid) {
+  const [[income]] = await db.execute(`SELECT * FROM user_income WHERE firebase_uid = ?`, [uid]);
+  const [gastosFijos] = await db.execute(`SELECT monto_mensual FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [uid]);
+  const [deudas] = await db.execute(
+    `SELECT id, nombre, tipo, tasa_interes_mensual, pago_minimo, cuota_fija, es_letra, monto_pendiente FROM deudas WHERE firebase_uid = ? AND activa = 1`,
+    [uid]
+  );
+  const [objetivos] = await db.execute(`SELECT nombre, monto_meta, monto_actual FROM objetivos_financieros WHERE firebase_uid = ? AND activo = 1`, [uid]);
+
+  const ingresoNeto  = income ? Number(income.ingreso_neto_mensual) : 0;
+  const totalFijos   = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0);
+  const totalDeudas  = deudas.reduce((s, d) => s + (d.es_letra ? Number(d.cuota_fija || 0) : Number(d.pago_minimo || 0)), 0);
+  const totalAhorros = objetivos.reduce((s, o) => s + Number(o.monto_actual), 0);
+  const disponible   = ingresoNeto - totalFijos - totalDeudas;
+  const score        = _calcularScore({ ingresoNeto, totalGastosFijos: totalFijos, totalCuotasDeudas: totalDeudas, totalAhorros, pagosCumplidos: 0, pagosTotales: 0 });
+
+  return {
+    tiene_perfil: !!income,
+    score_salud: score,
+    ..._scoreLegible(score),
+    ingreso_neto_mensual: parseFloat(ingresoNeto.toFixed(2)),
+    gastos_fijos_total: parseFloat(totalFijos.toFixed(2)),
+    cuotas_deudas_total: parseFloat(totalDeudas.toFixed(2)),
+    disponible_mensual: parseFloat(disponible.toFixed(2)),
+    ratio_comprometido_pct: ingresoNeto > 0 ? parseFloat(((totalFijos + totalDeudas) / ingresoNeto * 100).toFixed(1)) : 0,
+    deudas_activas: deudas.length,
+    monto_pendiente_deudas: parseFloat(deudas.reduce((s, d) => s + Number(d.monto_pendiente || 0), 0).toFixed(2)),
+    objetivos_activos: objetivos.length,
+  };
+}
+
+async function _aiToolIncome(uid) {
+  const [[row]] = await db.execute(`SELECT * FROM user_income WHERE firebase_uid = ?`, [uid]);
+  if (!row) return { tiene_income: false };
+  return {
+    tiene_income: true,
+    tipo_ingreso: row.tipo_ingreso,
+    ingreso_bruto_mensual: Number(row.ingreso_bruto_mensual),
+    ingreso_neto_mensual: Number(row.ingreso_neto_mensual),
+    frecuencia_cobro: row.frecuencia_cobro,
+    deducciones_total: parseFloat((Number(row.desc_seguro) + Number(row.desc_pension) + Number(row.desc_impuesto) + Number(row.desc_otros)).toFixed(2)),
+  };
+}
+
+async function _aiToolCapacidad(presupuestoId, uid) {
+  const [[presRow]] = await db.execute(`SELECT tipo_periodo FROM presupuestos WHERE id = ? AND firebase_uid = ?`, [presupuestoId, uid]);
+  if (!presRow) return { error: 'Presupuesto no encontrado' };
+  const divisor = presRow.tipo_periodo === 'quincenal' ? 2 : 1;
+
+  const [[incomeRow]] = await db.execute(`SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [uid]);
+  const ingreso_neto_periodo = incomeRow ? parseFloat((Number(incomeRow.ingreso_neto_mensual) / divisor).toFixed(2)) : null;
+
+  const [[gfRow]] = await db.execute(`SELECT COALESCE(SUM(monto_mensual), 0) AS total FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [uid]);
+  const gastos_fijos_periodo = parseFloat((Number(gfRow.total) / divisor).toFixed(2));
+
+  const [cerrados] = await db.execute(
+    `SELECT SUM(CASE WHEN m.tipo='no fijo' AND m.pagado=1 THEN m.monto_pagado_real ELSE 0 END) AS total_variable
+     FROM periodos p LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
+     WHERE p.presupuesto_id = ? AND p.firebase_uid = ? AND p.estado = 'cerrado'
+     GROUP BY p.id ORDER BY p.numero_periodo DESC LIMIT 3`,
+    [presupuestoId, uid]
+  );
+  const promedio_variable = cerrados.length > 0
+    ? parseFloat((cerrados.reduce((s, r) => s + parseFloat(r.total_variable || 0), 0) / cerrados.length).toFixed(2))
+    : 0;
+
+  return {
+    tipo_periodo: presRow.tipo_periodo,
+    ingreso_neto_periodo,
+    gastos_fijos_periodo,
+    promedio_variable_historico: promedio_variable,
+    capacidad_real: ingreso_neto_periodo !== null ? parseFloat((ingreso_neto_periodo - gastos_fijos_periodo - promedio_variable).toFixed(2)) : null,
+    periodos_historico: cerrados.length,
+  };
+}
+
+async function _aiToolFondoSeguridad(presupuestoId, uid) {
+  const [[fijoRow]] = await db.execute(
+    `SELECT COALESCE(SUM(m.monto), 0) AS gastos_fijos FROM movimientos m JOIN periodos p ON p.id = m.periodo_id
+     WHERE m.presupuesto_id = ? AND m.firebase_uid = ? AND p.estado = 'activo' AND m.tipo IN ('fijo','fijo_x_periodo')`,
+    [presupuestoId, uid]
+  );
+  const [[ahorroRow]] = await db.execute(
+    `SELECT COALESCE(SUM(sub.total), 0) AS total_ahorrado FROM (
+       SELECT g.id, COALESCE(SUM(CASE WHEN m.pagado=1 THEN m.monto_pagado_real ELSE 0 END), 0)
+              + COALESCE((SELECT SUM(a.monto) FROM aportaciones_ahorro a WHERE a.gasto_id = g.id), 0) AS total
+       FROM gastos g LEFT JOIN movimientos m ON m.gasto_id = g.id
+       WHERE g.firebase_uid = ? AND g.tipo = 'ahorro' GROUP BY g.id
+     ) sub`, [uid]
+  );
+  const gastos_fijos    = parseFloat(fijoRow.gastos_fijos);
+  const total_ahorrado  = parseFloat(ahorroRow.total_ahorrado);
+  const obj1 = Math.round(gastos_fijos * 100) / 100;
+  const obj2 = Math.round(gastos_fijos * 2 * 100) / 100;
+  const obj3 = Math.round(gastos_fijos * 6 * 100) / 100;
+  let nivel_actual = 0;
+  if (total_ahorrado >= obj3) nivel_actual = 3;
+  else if (total_ahorrado >= obj2) nivel_actual = 2;
+  else if (total_ahorrado >= obj1) nivel_actual = 1;
+  return { total_ahorrado, gastos_fijos_un_periodo: gastos_fijos, objetivo_nivel1: obj1, objetivo_nivel2: obj2, objetivo_nivel3: obj3, nivel_actual };
+}
+
+async function _aiToolDeudas(uid) {
+  const [rows] = await db.execute(
+    `SELECT id, nombre, tipo, tasa_interes_mensual, pago_minimo, cuota_fija, es_letra, monto_pendiente
+     FROM deudas WHERE firebase_uid = ? AND activa = 1 ORDER BY tasa_interes_mensual DESC`,
+    [uid]
+  );
+  return {
+    total_deudas: rows.length,
+    deudas: rows.map(d => ({
+      id: d.id,
+      nombre: d.nombre,
+      tipo: d.tipo,
+      es_letra: !!d.es_letra,
+      tasa_interes_mensual_pct: Number(d.tasa_interes_mensual || 0),
+      pago_mensual: d.es_letra ? Number(d.cuota_fija || 0) : Number(d.pago_minimo || 0),
+      monto_pendiente: Number(d.monto_pendiente || 0),
+    })),
+  };
+}
+
+async function _aiToolClasificacion(presupuestoId, uid) {
+  try {
+    const periodo = await getPeriodoActivo(presupuestoId, uid);
+    const [[presRow]] = await db.execute(`SELECT monto_total FROM presupuestos WHERE id = ? AND firebase_uid = ?`, [presupuestoId, uid]);
+    if (!presRow) return { error: 'Presupuesto no encontrado' };
+    const [rows] = await db.execute(
+      `SELECT COALESCE(clasificacion,'sin_clasificar') AS clasificacion, COUNT(*) AS cantidad, SUM(monto) AS total
+       FROM movimientos WHERE presupuesto_id = ? AND periodo_id = ? AND firebase_uid = ? GROUP BY clasificacion`,
+      [presupuestoId, periodo.id, uid]
+    );
+    const montoTotal = Number(presRow.monto_total);
+    const dist = {};
+    rows.forEach(r => {
+      dist[r.clasificacion] = {
+        total: parseFloat(Number(r.total).toFixed(2)),
+        cantidad: Number(r.cantidad),
+        pct: montoTotal > 0 ? parseFloat((Number(r.total) / montoTotal * 100).toFixed(1)) : 0,
+      };
+    });
+    return { distribucion: dist, monto_total_presupuesto: montoTotal };
+  } catch (e) { return { error: e.message }; }
+}
+
+async function _aiToolGastosPeriodo(presupuestoId, uid) {
+  try {
+    const periodo = await getPeriodoActivo(presupuestoId, uid);
+    const [movs] = await db.execute(
+      `SELECT descripcion, categoria, clasificacion, tipo, monto, monto_pagado_real, pagado
+       FROM movimientos WHERE presupuesto_id = ? AND periodo_id = ? AND firebase_uid = ? ORDER BY monto DESC LIMIT 50`,
+      [presupuestoId, periodo.id, uid]
+    );
+    return {
+      periodo_id: periodo.id,
+      fecha_inicio: periodo.fecha_inicio,
+      fecha_fin: periodo.fecha_fin,
+      gastos: movs.map(m => ({
+        descripcion: m.descripcion,
+        categoria: m.categoria,
+        clasificacion: m.clasificacion,
+        tipo: m.tipo,
+        monto: Number(m.monto),
+        monto_pagado: Number(m.monto_pagado_real || 0),
+        pagado: !!m.pagado,
+      })),
+    };
+  } catch (e) { return { error: e.message }; }
+}
+
+async function _aiToolHistorial(presupuestoId, uid, n) {
+  const limite = Math.min(Math.max(Number(n) || 3, 1), 6);
+  const [rows] = await db.execute(
+    `SELECT p.numero_periodo, p.fecha_inicio, p.fecha_fin,
+       COALESCE(SUM(CASE WHEN m.tipo IN ('fijo','fijo_x_periodo') AND m.pagado=1 THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_fijo,
+       COALESCE(SUM(CASE WHEN m.tipo='no fijo' AND m.pagado=1 THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_variable,
+       COALESCE(SUM(CASE WHEN m.tipo='ahorro' AND m.pagado=1 THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_ahorro,
+       COALESCE(SUM(CASE WHEN m.pagado=1 THEN COALESCE(m.monto_pagado_real, m.monto) ELSE 0 END), 0) AS total_gastado
+     FROM periodos p LEFT JOIN movimientos m ON m.periodo_id = p.id AND m.firebase_uid = p.firebase_uid
+     WHERE p.presupuesto_id = ? AND p.firebase_uid = ? AND p.estado = 'cerrado'
+     GROUP BY p.id ORDER BY p.numero_periodo DESC LIMIT ${parseInt(limite)}`,
+    [presupuestoId, uid]
+  );
+  return {
+    periodos: rows.map(r => ({
+      numero: Number(r.numero_periodo),
+      fecha_inicio: r.fecha_inicio,
+      fecha_fin: r.fecha_fin,
+      total_fijo: parseFloat(Number(r.total_fijo).toFixed(2)),
+      total_variable: parseFloat(Number(r.total_variable).toFixed(2)),
+      total_ahorro: parseFloat(Number(r.total_ahorro).toFixed(2)),
+      total_gastado: parseFloat(Number(r.total_gastado).toFixed(2)),
+    })),
+  };
+}
+
+async function _aiToolPatrones(presupuestoId, uid) {
+  const [rows] = await db.execute(
+    `SELECT g.category, COUNT(DISTINCT p.id) AS periodos_con_gasto, COUNT(*) AS total_registros,
+       ROUND(SUM(g.amount), 2) AS monto_total, ROUND(AVG(g.amount), 2) AS monto_promedio
+     FROM gustitos g
+     JOIN periodos p ON (g.spent_at >= p.fecha_inicio AND g.spent_at <= p.fecha_fin AND p.presupuesto_id = ? AND p.firebase_uid = ?)
+     WHERE g.budget_id = ? AND g.user_id = ? AND g.deleted_at IS NULL AND g.category IS NOT NULL AND g.category != ''
+     GROUP BY g.category HAVING periodos_con_gasto >= 2 ORDER BY periodos_con_gasto DESC, monto_total DESC`,
+    [presupuestoId, uid, presupuestoId, uid]
+  );
+  return {
+    patrones: rows.map(r => ({
+      categoria: r.category,
+      periodos: Number(r.periodos_con_gasto),
+      registros: Number(r.total_registros),
+      monto_total: Number(r.monto_total),
+      monto_promedio: Number(r.monto_promedio),
+    })),
+  };
+}
+
+// --- Ejecutor central: despacha tool_name → función de BD ---
+
+async function _aiEjecutarTool(toolName, input, requestCache) {
+  const cacheKey = `${toolName}:${JSON.stringify(input)}`;
+  if (requestCache.has(cacheKey)) return requestCache.get(cacheKey);
+
+  const uid = input.firebase_uid;
+  const pid = input.presupuesto_id;
+  let result;
+  try {
+    switch (toolName) {
+      case 'get_dashboard_resumen':    result = await _aiToolDashboard(uid); break;
+      case 'get_income':               result = await _aiToolIncome(uid); break;
+      case 'get_capacidad_real':       result = await _aiToolCapacidad(pid, uid); break;
+      case 'get_fondo_seguridad':      result = await _aiToolFondoSeguridad(pid, uid); break;
+      case 'get_deudas':               result = await _aiToolDeudas(uid); break;
+      case 'get_clasificacion_gastos': result = await _aiToolClasificacion(pid, uid); break;
+      case 'get_gastos_periodo':       result = await _aiToolGastosPeriodo(pid, uid); break;
+      case 'get_historial_periodos':   result = await _aiToolHistorial(pid, uid, input.n); break;
+      case 'get_patrones_gustitos':    result = await _aiToolPatrones(pid, uid); break;
+      default:                         result = { error: `Tool desconocida: ${toolName}` };
+    }
+  } catch (e) { result = { error: e.message }; }
+
+  requestCache.set(cacheKey, result);
+  return result;
+}
+
+// --- Loop de tool_use: envía → ejecuta → repite hasta respuesta texto ---
+
+async function _aiLoopConTools(mensajes, tools, maxTokens = 1024) {
+  const claude = _getAnthropic();
+  const loggedTools = [];
+  const requestCache = new Map();
+  let currentMessages = [...mensajes];
+
+  let response = await claude.messages.create({
+    model: AI_MODEL,
+    max_tokens: maxTokens,
+    system: AI_SYSTEM_PROMPT,
+    messages: currentMessages,
+    tools,
+  });
+
+  while (response.stop_reason === 'tool_use') {
+    const toolBlocks = response.content.filter(b => b.type === 'tool_use');
+    loggedTools.push(...toolBlocks.map(b => b.name));
+
+    const toolResults = await Promise.all(
+      toolBlocks.map(async block => {
+        const result = await _aiEjecutarTool(block.name, block.input, requestCache);
+        return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) };
+      })
+    );
+
+    currentMessages = [
+      ...currentMessages,
+      { role: 'assistant', content: response.content },
+      { role: 'user', content: toolResults },
+    ];
+
+    response = await claude.messages.create({
+      model: AI_MODEL,
+      max_tokens: maxTokens,
+      system: AI_SYSTEM_PROMPT,
+      messages: currentMessages,
+      tools,
+    });
+  }
+
+  const texto = response.content.find(b => b.type === 'text')?.text || '';
+  return { respuesta: texto, tools_usadas: loggedTools };
+}
+
+// POST /ai/diagnostico
+// body: { firebase_uid, presupuesto_id? }
+app.post('/ai/diagnostico', async (req, res) => {
+  const { firebase_uid, presupuesto_id } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    let prompt = `Analiza el estado financiero del usuario (uid: ${firebase_uid}) y detecta qué información mínima le falta para entender su situación con claridad.`;
+    if (presupuesto_id) prompt += ` Presupuesto activo: ID ${presupuesto_id}.`;
+    prompt += `
+
+Revisa usando las tools disponibles:
+1. Si tiene ingreso registrado (sin ingreso no se puede calcular capacidad real).
+2. Si tiene deudas con interés activas — si las hay, van SIEMPRE primero en la lista.
+3. Si tiene presupuesto con gastos variables definidos, o solo trabaja con fijos.
+4. Si su fondo de seguridad existe y en qué nivel está.
+5. Si los gastos del período activo tienen categoría y clasificación completa.
+
+Devuelve una lista priorizada de 3-5 brechas (la más crítica primero). Para cada brecha incluye:
+- Qué falta, en palabras simples sin jerga financiera.
+- Por qué importa para su situación real.
+- El siguiente paso concreto (a qué pantalla ir o qué botón tocar en la app).
+
+Si no encuentras brechas, dilo claramente: "Tu perfil está completo, tienes todo para entender tus finanzas."`;
+
+    const { respuesta, tools_usadas } = await _aiLoopConTools(
+      [{ role: 'user', content: prompt }],
+      AI_TOOLS,
+      1200
+    );
+    _logInfo('/ai/diagnostico', `tools: [${tools_usadas.join(', ')}]`, firebase_uid);
+    res.json({ diagnostico: respuesta, tools_usadas });
+  } catch (e) {
+    console.error('AI /diagnostico error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /ai/chat
+// body: { firebase_uid, mensaje, presupuesto_id?, historial? }
+app.post('/ai/chat', async (req, res) => {
+  const { firebase_uid, mensaje, presupuesto_id, historial = [] } = req.body;
+  if (!firebase_uid || !mensaje) return res.status(400).json({ error: 'firebase_uid y mensaje requeridos' });
+  try {
+    const contextoMsg = presupuesto_id
+      ? `[uid=${firebase_uid} | presupuesto_id=${presupuesto_id}] ${mensaje}`
+      : `[uid=${firebase_uid}] ${mensaje}`;
+
+    const mensajes = [
+      ...historial.slice(-6),
+      { role: 'user', content: contextoMsg },
+    ];
+
+    const { respuesta, tools_usadas } = await _aiLoopConTools(mensajes, AI_TOOLS, 1500);
+    _logInfo('/ai/chat', `tools: [${tools_usadas.join(', ')}]`, firebase_uid);
+    res.json({ respuesta, tools_usadas });
+  } catch (e) {
+    console.error('AI /chat error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /ai/categorizar
+// body: { firebase_uid, descripcion, monto }
+// NO escribe a BD — devuelve sugerencia para que el usuario confirme en UI.
+app.post('/ai/categorizar', async (req, res) => {
+  const { firebase_uid, descripcion, monto } = req.body;
+  if (!firebase_uid || !descripcion) return res.status(400).json({ error: 'firebase_uid y descripcion requeridos' });
+  try {
+    const montoNum = Number(monto) || 0;
+    const prompt = `Analiza este gasto y sugiere cómo categorizarlo. Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional.
+
+Gasto: "${descripcion}"
+Monto: $${montoNum.toFixed(2)}
+
+JSON esperado:
+{
+  "categoria": "una de: Comida, Transporte, Entretenimiento, Salud, Servicios, Educacion, Ropa, Ahorro, Otro",
+  "clasificacion": "una de: esencial, importante, flexible",
+  "es_hormiga": true o false,
+  "razon": "explicación breve en 1 línea"
+}
+
+Criterios de clasificación:
+- esencial: necesidades básicas (comida básica, transporte al trabajo, salud, servicios del hogar)
+- importante: mejora calidad de vida pero no es urgente (ropa necesaria, educación)
+- flexible: discrecional, puede posponerse (entretenimiento, gustos, salidas)
+- es_hormiga: true si monto <= $25 Y la descripción sugiere gasto frecuente/pequeño (café, snack, taxi corto, propina)`;
+
+    const claude = _getAnthropic();
+    const response = await claude.messages.create({
+      model: AI_MODEL,
+      max_tokens: 300,
+      system: AI_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const texto = response.content.find(b => b.type === 'text')?.text || '{}';
+    let sugerencia;
+    try {
+      const match = texto.match(/\{[\s\S]*\}/);
+      sugerencia = JSON.parse(match ? match[0] : texto);
+    } catch {
+      sugerencia = { categoria: 'Otro', clasificacion: 'flexible', es_hormiga: montoNum <= 25, razon: texto };
+    }
+
+    _logInfo('/ai/categorizar', `"${descripcion}" → ${sugerencia.categoria}/${sugerencia.clasificacion}`, firebase_uid);
+    res.json({ sugerencia, nota: 'Sugerencia pendiente de confirmación. No se escribe a la BD hasta que el usuario la apruebe.' });
+  } catch (e) {
+    console.error('AI /categorizar error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /ai/reporte
+// body: { firebase_uid, presupuesto_id }
+app.post('/ai/reporte', async (req, res) => {
+  const { firebase_uid, presupuesto_id } = req.body;
+  if (!firebase_uid || !presupuesto_id) return res.status(400).json({ error: 'firebase_uid y presupuesto_id requeridos' });
+  try {
+    const prompt = `Genera un reporte financiero narrativo para el presupuesto ID ${presupuesto_id} del usuario (uid: ${firebase_uid}).
+
+Usa las tools para recopilar:
+1. Dashboard general (score, disponible, estado de deudas)
+2. Gastos del período activo (en qué se va el dinero)
+3. Historial de los últimos 3 períodos cerrados (tendencia)
+4. Patrones de gustitos si existen
+
+Estructura el reporte con estas secciones exactas:
+
+**¿Cómo vas este período?**
+Estado actual con los números reales: cuánto llevas gastado, cuánto queda, score de salud.
+
+**¿En qué se va el dinero?**
+Top categorías o tipos de gasto más altos de este período.
+
+**Tendencia vs períodos anteriores**
+¿Vas mejor o peor que antes? Marca con ~ cualquier cifra que sea estimado o promedio.
+
+**Lo más importante ahora**
+1 o 2 acciones concretas priorizadas. Si hay deuda con interés activa, menciónala primero.
+
+Tono: amigable, directo, sin jerga. Si usas un término técnico, explícalo en la misma oración.`;
+
+    const { respuesta, tools_usadas } = await _aiLoopConTools(
+      [{ role: 'user', content: prompt }],
+      AI_TOOLS,
+      2000
+    );
+    _logInfo('/ai/reporte', `tools: [${tools_usadas.join(', ')}]`, firebase_uid);
+    res.json({ reporte: respuesta, tools_usadas });
+  } catch (e) {
+    console.error('AI /reporte error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// =============================================================================
 // INICIO DEL SERVIDOR
 // =============================================================================
 const PORT = process.env.PORT || 3002;
