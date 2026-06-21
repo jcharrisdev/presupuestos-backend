@@ -248,6 +248,20 @@ pool.getConnection(async (err, conn) => {
       UNIQUE KEY uq_ac_mes_cat (mes_id, categoria)
     )`);
 
+    // Tabla de acciones propuestas por el asistente IA (pendiente de confirmación del usuario)
+    await db.execute(`CREATE TABLE IF NOT EXISTS acciones_pendientes (
+      id                   INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid         VARCHAR(255) NOT NULL,
+      tipo                 ENUM('registrar_pago','marcar_pagado','crear_gasto','abonar_deuda') NOT NULL,
+      parametros           LONGTEXT NOT NULL,
+      resumen_para_usuario TEXT NOT NULL,
+      status               ENUM('pendiente','confirmada','cancelada','expirada') DEFAULT 'pendiente',
+      created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      executed_at          TIMESTAMP NULL,
+      KEY idx_acc_user (firebase_uid),
+      KEY idx_acc_status (status)
+    )`).catch(() => {});
+
     await db.execute(`CREATE TABLE IF NOT EXISTS alertas_financieras (
       id              INT AUTO_INCREMENT PRIMARY KEY,
       firebase_uid    VARCHAR(255) NOT NULL,
@@ -4686,6 +4700,12 @@ cron.schedule('0 0 * * *', async () => {
        WHERE estado = 'pendiente' AND fecha_evento < CURDATE()`
     );
     console.log(`⏰ Cron vencidos: ${result.affectedRows} eventos actualizados`);
+    // Expirar acciones pendientes de IA no confirmadas en >24h
+    const [accExp] = await db.execute(
+      `UPDATE acciones_pendientes SET status='expirada'
+       WHERE status='pendiente' AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+    );
+    if (accExp.affectedRows > 0) console.log(`⏰ Cron IA: ${accExp.affectedRows} acciones expiradas`);
   } catch (err) {
     console.error('Error en cron vencimientos:', err);
   }
@@ -11704,7 +11724,10 @@ Reglas no negociables:
 8. Usa SOLO datos devueltos por las tools. Si una tool no tiene el dato, dilo con honestidad en vez de inventar.
 9. Sé empático y directo. No juzgues los hábitos del usuario. Informa, no sermonees.
 10. Responde siempre en español, en un lenguaje claro y cercano.
-11. NUNCA pidas al usuario un presupuesto_id, periodo_id u otro ID interno. Usa get_presupuesto_actual para resolverlo solo — pedir IDs internos a un usuario es exactamente la fricción y jerga que este asistente prohíbe.
+11. NUNCA llames una tool de escritura directa — toda acción pasa por proponer_accion. Nunca ejecutes la acción dentro de la misma respuesta donde la propones: una vez que llamaste proponer_accion, para y deja que el usuario confirme.
+12. El resumen_para_usuario en proponer_accion debe incluir siempre: qué va a cambiar, los números reales antes/después, y si la acción deja al usuario sobre presupuesto o afecta una deuda con interés. Nunca lo ocultes para que la propuesta "se vea bien".
+13. Después de que el usuario confirme una acción, vuelve a consultar el dato real (tool de lectura) antes de confirmarle que se aplicó — nunca asumas que funcionó solo porque se llamó el endpoint.
+14. NUNCA pidas al usuario un presupuesto_id, periodo_id u otro ID interno. Usa get_presupuesto_actual para resolverlo solo — pedir IDs internos a un usuario es exactamente la fricción y jerga que este asistente prohíbe.
 12. Distingue siempre entre NEGATIVA POR DISEÑO (no puedo hacer X porque requiere confirmación del usuario antes de escribir en sus finanzas — esto es una barrera de seguridad intencional, no una brecha) y BRECHA REAL (ninguna tool cubre lo pedido). En la primera, explica el diseño. En la segunda, usa reportar_brecha_capacidad.
 13. Redactar un prompt de texto para Claude Code es SIEMPRE seguro y permitido — nunca lo confundas con "ejecutar una acción". Si hay una brecha real, siempre ofrece el prompt, aunque no puedas ejecutar la funcionalidad.`;
 
@@ -11735,6 +11758,21 @@ const AI_TOOLS = [
         accion_tomada:        { type: 'string', enum: ['ninguna', 'uso_tool_aproximada'], description: 'Si se usó una alternativa parcial' },
       },
       required: ['lo_que_pidio_usuario', 'por_que_no_se_puede', 'que_haria_falta', 'tipo_brecha', 'accion_tomada'],
+    },
+  },
+  // ── ÚNICA TOOL DE ESCRITURA — siempre propone, nunca ejecuta directamente ──
+  {
+    name: 'proponer_accion',
+    description: 'ÚNICA tool disponible para modificar datos. Propone una acción al usuario — NO la ejecuta. El usuario debe tocar [Confirmar] en la tarjeta que aparece en el chat. Incluir siempre en resumen_para_usuario: qué va a cambiar, números reales de antes/después, y cualquier advertencia (sobre presupuesto, deuda con interés).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        firebase_uid:         { type: 'string' },
+        tipo:                 { type: 'string', enum: ['registrar_pago', 'marcar_pagado', 'crear_gasto', 'abonar_deuda'] },
+        parametros:           { type: 'object', description: 'Varía según tipo. registrar_pago: {anio,mes,nombre,monto,categoria,tipo,fecha,origen_deuda_id?}. marcar_pagado: {anio,mes,gasto_fijo_id,nombre,monto,fecha}. crear_gasto: {anio,mes,nombre,monto,categoria,tipo,clasificacion?,fecha}. abonar_deuda: {deuda_id,monto,anio?,mes?}' },
+        resumen_para_usuario: { type: 'string', description: 'Texto en español claro. Ejemplo: "Vas a registrar $20 de gasolina el 20/06. Tu saldo de Transporte pasará de $80 a $60 de $100 presupuestados."' },
+      },
+      required: ['firebase_uid', 'tipo', 'parametros', 'resumen_para_usuario'],
     },
   },
   {
@@ -12119,6 +12157,121 @@ async function _aiToolPatrones(presupuestoId, uid) {
   };
 }
 
+// =============================================================================
+// MÓDULO DE ACCIONES — proponer → confirmar (determinístico) → ejecutar
+// =============================================================================
+
+async function _aiToolProponerAccion(uid, tipo, parametros, resumen) {
+  if (!['registrar_pago','marcar_pagado','crear_gasto','abonar_deuda'].includes(tipo))
+    return { error: `Tipo de acción desconocido: ${tipo}` };
+  const monto = parametros.monto;
+  if (monto !== undefined && (isNaN(Number(monto)) || Number(monto) <= 0))
+    return { error: 'El monto debe ser un número mayor a 0' };
+
+  const [r] = await db.execute(
+    `INSERT INTO acciones_pendientes (firebase_uid, tipo, parametros, resumen_para_usuario, status)
+     VALUES (?, ?, ?, ?, 'pendiente')`,
+    [uid, tipo, JSON.stringify(parametros), resumen]
+  );
+  return {
+    accion_id: r.insertId,
+    tipo, resumen_para_usuario: resumen,
+    instruccion: 'Tarjeta de confirmación enviada al usuario. NO ejecutes la acción — espera a que el usuario toque [Confirmar] o [Cancelar].',
+  };
+}
+
+// --- Ejecutores determinísticos (sin LLM) — solo llamados desde /acciones/:id/confirmar ---
+
+async function _ejecutarCrearGasto(uid, p) {
+  const anio = Number(p.anio) || new Date().getFullYear();
+  const mes  = Number(p.mes)  || (new Date().getMonth() + 1);
+  const [[mesRow]] = await db.execute(
+    `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`, [uid, anio, mes]
+  );
+  if (!mesRow) throw new Error(`No hay estado financiero para ${anio}/${mes}. Genera el estado anual primero.`);
+
+  const fecha    = p.fecha || new Date().toISOString().slice(0, 10);
+  const tipo     = p.tipo  || 'variable';
+  const esHormiga = (tipo === 'no_presupuestado' && Number(p.monto) <= 25) ? 1 : 0;
+  const [r] = await db.execute(
+    `INSERT INTO registros_gasto
+       (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, clasificacion, es_hormiga)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [uid, mesRow.id, anio, mes, tipo, p.categoria || 'otro',
+     (p.nombre || p.descripcion || '').trim(), parseFloat(Number(p.monto).toFixed(2)),
+     fecha, p.clasificacion || null, esHormiga]
+  );
+  await _actualizarTotalesMes(mesRow.id, uid);
+  _generarAlertasMes(uid, anio, mes).catch(() => {});
+  return { registro_id: r.insertId, nombre: p.nombre || p.descripcion, monto: Number(p.monto), fecha, categoria: p.categoria };
+}
+
+async function _ejecutarRegistrarPago(uid, p) {
+  // Alias: registrar_pago = crear_gasto (inserta en registros_gasto)
+  return _ejecutarCrearGasto(uid, { ...p, tipo: p.tipo || 'fijo' });
+}
+
+async function _ejecutarMarcarPagado(uid, p) {
+  // Marca un gasto fijo del perfil como pagado en el mes actual
+  const [[gasto]] = await db.execute(
+    `SELECT * FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [p.gasto_fijo_id, uid]
+  );
+  if (!gasto) throw new Error('Gasto fijo no encontrado');
+  return _ejecutarCrearGasto(uid, {
+    anio: p.anio, mes: p.mes,
+    nombre: p.nombre || gasto.descripcion,
+    monto: p.monto  || gasto.monto_mensual,
+    categoria: gasto.tipo || 'otro',
+    tipo: 'fijo',
+    fecha: p.fecha || new Date().toISOString().slice(0, 10),
+    origen_fijo_id: gasto.id,
+  });
+}
+
+async function _ejecutarAbonarDeuda(uid, p) {
+  const [[deuda]] = await db.execute(
+    `SELECT id, nombre, monto_pendiente, activa FROM deudas WHERE id = ? AND firebase_uid = ?`,
+    [p.deuda_id, uid]
+  );
+  if (!deuda || !deuda.activa) throw new Error('Deuda no encontrada o no activa');
+
+  const montoNum        = parseFloat(Number(p.monto).toFixed(2));
+  const pendienteAntes  = Number(deuda.monto_pendiente);
+  const nuevoPendiente  = parseFloat(Math.max(0, pendienteAntes - montoNum).toFixed(2));
+  const saldada         = nuevoPendiente === 0;
+
+  // Actualizar monto_pendiente en deudas
+  await db.execute(
+    `UPDATE deudas SET monto_pendiente = ?, activa = ? WHERE id = ? AND firebase_uid = ?`,
+    [nuevoPendiente, saldada ? 0 : 1, p.deuda_id, uid]
+  );
+
+  // Registrar el abono en registros_gasto para historial y alertas
+  const anio = Number(p.anio) || new Date().getFullYear();
+  const mes  = Number(p.mes)  || (new Date().getMonth() + 1);
+  const [[mesRow]] = await db.execute(
+    `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`, [uid, anio, mes]
+  );
+  if (mesRow) {
+    const fecha = p.fecha || new Date().toISOString().slice(0, 10);
+    await db.execute(
+      `INSERT INTO registros_gasto (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, origen_deuda_id)
+       VALUES (?, ?, ?, ?, 'fijo', 'deudas', ?, ?, ?, 1, ?)`,
+      [uid, mesRow.id, anio, mes, `Abono ${deuda.nombre}`, montoNum, fecha, p.deuda_id]
+    );
+    await _actualizarTotalesMes(mesRow.id, uid);
+    _generarAlertasMes(uid, anio, mes).catch(() => {});
+  }
+
+  return {
+    deuda_nombre: deuda.nombre,
+    monto_abonado: montoNum,
+    monto_pendiente_antes: pendienteAntes,
+    monto_pendiente_ahora: nuevoPendiente,
+    saldada,
+  };
+}
+
 // --- Tool: get_presupuesto_actual — resuelve período activo sin pedir IDs al usuario ---
 
 async function _aiToolPresupuestoActual(uid) {
@@ -12383,6 +12536,7 @@ async function _aiEjecutarTool(toolName, input, requestCache) {
     switch (toolName) {
       case 'get_presupuesto_actual':    result = await _aiToolPresupuestoActual(uid); break;
       case 'reportar_brecha_capacidad': result = _aiToolReportarBrecha(input); break;
+      case 'proponer_accion':           result = await _aiToolProponerAccion(uid, input.tipo, input.parametros || {}, input.resumen_para_usuario || ''); break;
       case 'get_dashboard_resumen':    result = await _aiToolDashboard(uid); break;
       case 'get_income':               result = await _aiToolIncome(uid); break;
       case 'get_capacidad_real':       result = await _aiToolCapacidad(pid, uid); break;
@@ -12413,6 +12567,7 @@ async function _aiLoopConTools(mensajes, tools, maxTokens = 1024, model = AI_MOD
   const loggedTools = [];
   const requestCache = new Map();
   let currentMessages = [...mensajes];
+  let accionPendiente = null; // Captura el resultado de proponer_accion si Claude la llama
 
   let response = await claude.messages.create({
     model, max_tokens: maxTokens,
@@ -12426,6 +12581,7 @@ async function _aiLoopConTools(mensajes, tools, maxTokens = 1024, model = AI_MOD
     const toolResults = await Promise.all(
       toolBlocks.map(async block => {
         const result = await _aiEjecutarTool(block.name, block.input, requestCache);
+        if (block.name === 'proponer_accion' && result.accion_id) accionPendiente = result;
         return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) };
       })
     );
@@ -12443,7 +12599,7 @@ async function _aiLoopConTools(mensajes, tools, maxTokens = 1024, model = AI_MOD
   }
 
   const texto = response.content.find(b => b.type === 'text')?.text || '';
-  return { respuesta: texto, tools_usadas: loggedTools, tokens: response.usage?.output_tokens || 0 };
+  return { respuesta: texto, tools_usadas: loggedTools, tokens: response.usage?.output_tokens || 0, accion_pendiente: accionPendiente };
 }
 
 // POST /ai/diagnostico
@@ -12516,9 +12672,9 @@ app.post('/ai/chat', async (req, res) => {
       { role: 'user', content: contextoMsg },
     ];
 
-    const { respuesta, tools_usadas, tokens } = await _aiLoopConTools(mensajes, AI_TOOLS, 2000, AI_MODEL_SONNET);
-    _logInfo('/ai/chat', `tools:[${tools_usadas.join(',')}] tokens:${tokens}`, firebase_uid);
-    res.json({ respuesta, tools_usadas });
+    const { respuesta, tools_usadas, tokens, accion_pendiente } = await _aiLoopConTools(mensajes, AI_TOOLS, 2000, AI_MODEL_SONNET);
+    _logInfo('/ai/chat', `tools:[${tools_usadas.join(',')}] tokens:${tokens}${accion_pendiente ? ` accion:${accion_pendiente.accion_id}` : ''}`, firebase_uid);
+    res.json({ respuesta, tools_usadas, accion_pendiente: accion_pendiente || null });
   } catch (e) {
     console.error('AI /chat error:', e.message);
     res.status(500).json({ error: e.message });
@@ -12622,6 +12778,85 @@ Tono: amigable, directo. Explica cualquier término técnico en la misma oració
     console.error('AI /reporte error:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// =============================================================================
+// MÓDULO DE ACCIONES — endpoints determinísticos (sin LLM)
+// =============================================================================
+
+// GET /acciones/pendientes?firebase_uid=
+app.get('/acciones/pendientes', async (req, res) => {
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT id, tipo, parametros, resumen_para_usuario, status, created_at
+       FROM acciones_pendientes
+       WHERE firebase_uid = ? AND status = 'pendiente'
+         AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+       ORDER BY created_at DESC`,
+      [firebase_uid]
+    );
+    res.json({ acciones: rows.map(r => ({
+      ...r,
+      parametros: typeof r.parametros === 'string' ? JSON.parse(r.parametros) : r.parametros,
+    }))});
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /acciones/:id/confirmar
+app.post('/acciones/:id/confirmar', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[accion]] = await db.execute(
+      `SELECT * FROM acciones_pendientes WHERE id = ? AND firebase_uid = ? AND status = 'pendiente'`,
+      [id, firebase_uid]
+    );
+    if (!accion) return res.status(404).json({ error: 'Acción no encontrada, ya procesada o cancelada' });
+
+    // Verificar que no haya expirado
+    const creadaHace = Date.now() - new Date(accion.created_at).getTime();
+    if (creadaHace > 86400000) {
+      await db.execute(`UPDATE acciones_pendientes SET status='expirada' WHERE id=?`, [id]);
+      return res.status(410).json({ error: 'Esta propuesta expiró (más de 24h). Solicítala de nuevo.' });
+    }
+
+    const params = typeof accion.parametros === 'string' ? JSON.parse(accion.parametros) : accion.parametros;
+    let resultado;
+    switch (accion.tipo) {
+      case 'registrar_pago':  resultado = await _ejecutarRegistrarPago(firebase_uid, params); break;
+      case 'marcar_pagado':   resultado = await _ejecutarMarcarPagado(firebase_uid, params);  break;
+      case 'crear_gasto':     resultado = await _ejecutarCrearGasto(firebase_uid, params);    break;
+      case 'abonar_deuda':    resultado = await _ejecutarAbonarDeuda(firebase_uid, params);   break;
+      default: return res.status(400).json({ error: `Tipo desconocido: ${accion.tipo}` });
+    }
+
+    await db.execute(
+      `UPDATE acciones_pendientes SET status='confirmada', executed_at=NOW() WHERE id=?`, [id]
+    );
+    _logInfo(`/acciones/${id}/confirmar`, `tipo:${accion.tipo}`, firebase_uid);
+    res.json({ success: true, tipo: accion.tipo, resultado });
+  } catch (e) {
+    console.error('confirmar accion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /acciones/:id/cancelar
+app.post('/acciones/:id/cancelar', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [r] = await db.execute(
+      `UPDATE acciones_pendientes SET status='cancelada' WHERE id=? AND firebase_uid=? AND status='pendiente'`,
+      [id, firebase_uid]
+    );
+    if (r.affectedRows === 0) return res.status(404).json({ error: 'Acción no encontrada o ya procesada' });
+    res.json({ success: true, cancelada: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /ai/nudge

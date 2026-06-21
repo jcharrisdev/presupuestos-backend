@@ -94,4 +94,22 @@ class IaService {
     if (r.statusCode != 200) throw Exception('Error ${r.statusCode}');
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
+
+  static Future<Map<String, dynamic>> confirmarAccion(String uid, int accionId) async {
+    final r = await ApiClient.post('/acciones/$accionId/confirmar', {'firebase_uid': uid});
+    if (r.statusCode != 200) throw Exception(jsonDecode(r.body)['error'] ?? 'Error ${r.statusCode}');
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> cancelarAccion(String uid, int accionId) async {
+    final r = await ApiClient.post('/acciones/$accionId/cancelar', {'firebase_uid': uid});
+    if (r.statusCode != 200) throw Exception('Error ${r.statusCode}');
+  }
+
+  static Future<List<Map<String, dynamic>>> accionesPendientes(String uid) async {
+    final r = await ApiClient.get('/acciones/pendientes?firebase_uid=$uid');
+    if (r.statusCode != 200) return [];
+    final data = jsonDecode(r.body) as Map<String, dynamic>;
+    return (data['acciones'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
 }
