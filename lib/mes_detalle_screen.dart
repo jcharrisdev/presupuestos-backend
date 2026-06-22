@@ -57,6 +57,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
   List<Map<String, dynamic>> _alertas = [];
   bool _loading = true;
   String? _error;
+  int _quincenasKey = 0; // Incrementar fuerza reload de _TabQuincenas
 
   @override
   void initState() {
@@ -109,7 +110,11 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
             tooltip: 'Asesor IA',
             onPressed: () => Navigator.push(context, MaterialPageRoute(
               builder: (_) => IaChatScreen(firebaseUid: widget.firebaseUid),
-            )),
+            )).then((_) {
+              // Forzar reload del Tab Quincenas por si el usuario confirmó una acción
+              if (mounted) setState(() => _quincenasKey++);
+              _cargar();
+            }),
           ),
           IconButton(
             icon: const Icon(Icons.info_outline, size: 20),
@@ -197,6 +202,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                         onAgregar: _abrirAgregarGasto,
                       ),
                       _TabQuincenas(
+                        key: ValueKey(_quincenasKey),
                         uid: widget.firebaseUid,
                         anio: widget.anio,
                         mes: widget.mes,
@@ -2426,7 +2432,7 @@ class _TabQuincenas extends StatefulWidget {
   final String uid;
   final int anio;
   final int mes;
-  const _TabQuincenas({required this.uid, required this.anio, required this.mes});
+  const _TabQuincenas({super.key, required this.uid, required this.anio, required this.mes});
   @override
   State<_TabQuincenas> createState() => _TabQuincenasState();
 }

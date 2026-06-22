@@ -12227,13 +12227,23 @@ async function _ejecutarCrearGasto(uid, p) {
     }
   }
 
+  // Auto-link a gastos_variables_base si no viene origen explícito y hay uno con esa categoría
+  let origenVariableId = p.origen_variable_id || null;
+  if (!origenVariableId && !p.origen_fijo_id && !p.origen_deuda_id && tipo === 'variable') {
+    const [[gvb]] = await db.execute(
+      `SELECT id FROM gastos_variables_base WHERE firebase_uid = ? AND categoria = ? AND activo = 1 LIMIT 1`,
+      [uid, categoria]
+    );
+    if (gvb) origenVariableId = gvb.id;
+  }
+
   const [r] = await db.execute(
     `INSERT INTO registros_gasto
        (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha,
-        pagado, origen_fijo_id, origen_deuda_id, definition_id, es_hormiga)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+        pagado, origen_fijo_id, origen_variable_id, origen_deuda_id, definition_id, es_hormiga)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     [uid, mesRow.id, anio, mes, tipo, categoria, nombre, montoNum, fecha,
-     p.origen_fijo_id || null, p.origen_deuda_id || null, definitionId, esHormiga]
+     p.origen_fijo_id || null, origenVariableId, p.origen_deuda_id || null, definitionId, esHormiga]
   );
   await _actualizarTotalesMes(mesRow.id, uid);
   _generarAlertasMes(uid, anio, mes).catch(() => {});
