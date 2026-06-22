@@ -11725,6 +11725,7 @@ Reglas no negociables:
 9. Sé empático y directo. No juzgues los hábitos del usuario. Informa, no sermonees.
 10. Responde siempre en español, en un lenguaje claro y cercano.
 11. NUNCA llames una tool de escritura directa — toda acción pasa por proponer_accion. Nunca ejecutes la acción dentro de la misma respuesta donde la propones: una vez que llamaste proponer_accion, para y deja que el usuario confirme.
+11b. Antes de proponer_accion, llama get_presupuesto_actual para conocer la quincena actual. Siempre incluye en el resumen_para_usuario en qué quincena aparecerá el gasto (ej: "aparecerá en Quincena 2 de junio"). Para gastos fijos con dos días de pago, pregunta al usuario si es solo esta quincena o ambas antes de proponer.
 12. El resumen_para_usuario en proponer_accion debe incluir siempre: qué va a cambiar, los números reales antes/después, y si la acción deja al usuario sobre presupuesto o afecta una deuda con interés. Nunca lo ocultes para que la propuesta "se vea bien".
 13. Después de que el usuario confirme una acción, vuelve a consultar el dato real (tool de lectura) antes de confirmarle que se aplicó — nunca asumas que funcionó solo porque se llamó el endpoint.
 14. NUNCA pidas al usuario un presupuesto_id, periodo_id u otro ID interno. Usa get_presupuesto_actual para resolverlo solo — pedir IDs internos a un usuario es exactamente la fricción y jerga que este asistente prohíbe.
@@ -11763,14 +11764,25 @@ const AI_TOOLS = [
   // ── ÚNICA TOOL DE ESCRITURA — siempre propone, nunca ejecuta directamente ──
   {
     name: 'proponer_accion',
-    description: 'ÚNICA tool disponible para modificar datos. Propone una acción al usuario — NO la ejecuta. El usuario debe tocar [Confirmar] en la tarjeta que aparece en el chat. Incluir siempre en resumen_para_usuario: qué va a cambiar, números reales de antes/después, y cualquier advertencia (sobre presupuesto, deuda con interés).',
+    description: `ÚNICA tool disponible para modificar datos. Propone una acción al usuario — NO la ejecuta. El usuario confirma tocando un botón.
+
+ANTES de llamar esta tool:
+1. Llama get_presupuesto_actual para saber la quincena exacta (Q1 = días 1-15, Q2 = días 16-fin de mes).
+2. Si es un gasto fijo recurrente con dos días de pago, pregunta al usuario si quiere registrar solo la quincena actual o ambas.
+3. Para gastos variables/puntuales (gasolina, comida, etc.) la quincena se determina por la fecha — no hay que preguntar, solo mencionarla en el resumen.
+
+El resumen_para_usuario DEBE incluir siempre:
+- Qué se va a guardar (nombre, monto, categoría).
+- En qué quincena aparecerá (ej: "aparecerá en tu Quincena 2 de junio").
+- Antes/después en números reales si hay presupuesto disponible.
+- Advertencia si deja la categoría sobre presupuesto.`,
     input_schema: {
       type: 'object',
       properties: {
         firebase_uid:         { type: 'string' },
         tipo:                 { type: 'string', enum: ['registrar_pago', 'marcar_pagado', 'crear_gasto', 'abonar_deuda'] },
-        parametros:           { type: 'object', description: 'Varía según tipo. registrar_pago: {anio,mes,nombre,monto,categoria,tipo,fecha,origen_deuda_id?}. marcar_pagado: {anio,mes,gasto_fijo_id,nombre,monto,fecha}. crear_gasto: {anio,mes,nombre,monto,categoria,tipo,clasificacion?,fecha}. abonar_deuda: {deuda_id,monto,anio?,mes?}' },
-        resumen_para_usuario: { type: 'string', description: 'Texto en español claro. Ejemplo: "Vas a registrar $20 de gasolina el 20/06. Tu saldo de Transporte pasará de $80 a $60 de $100 presupuestados."' },
+        parametros:           { type: 'object', description: 'Varía según tipo. crear_gasto/registrar_pago: {anio,mes,nombre,monto,categoria,tipo,fecha}. marcar_pagado: {anio,mes,gasto_fijo_id,nombre,monto,fecha}. abonar_deuda: {deuda_id,monto,anio?,mes?,fecha?}. NOTA: la fecha determina la quincena automáticamente.' },
+        resumen_para_usuario: { type: 'string', description: 'Ejemplo: "Vas a registrar $20 de Gasolina en Transporte, el 22/06 (Quincena 2 de junio). Tu presupuesto de Transporte es $80/mes → llevarías $20 gastados → quedarían ~$60 disponibles. ✅ No te deja sobre presupuesto."' },
       },
       required: ['firebase_uid', 'tipo', 'parametros', 'resumen_para_usuario'],
     },
@@ -12192,18 +12204,40 @@ async function _ejecutarCrearGasto(uid, p) {
 
   const fecha    = p.fecha || new Date().toISOString().slice(0, 10);
   const tipo     = p.tipo  || 'variable';
+  const nombre   = (p.nombre || p.descripcion || '').trim();
+  const categoria = p.categoria || 'otro';
   const esHormiga = (tipo === 'no_presupuestado' && Number(p.monto) <= 25) ? 1 : 0;
+  const montoNum  = parseFloat(Number(p.monto).toFixed(2));
+
+  // Resolver definition_id igual que POST /registros
+  let definitionId = null;
+  if (tipo !== 'fijo') {
+    const [[existingDef]] = await db.execute(
+      `SELECT id FROM expense_definitions WHERE firebase_uid = ? AND nombre = ? AND categoria = ? AND activo = 1`,
+      [uid, nombre, categoria]
+    );
+    if (existingDef) {
+      definitionId = existingDef.id;
+    } else {
+      const [newDef] = await db.execute(
+        `INSERT INTO expense_definitions (firebase_uid, nombre, categoria, tipo_habitual) VALUES (?, ?, ?, ?)`,
+        [uid, nombre, categoria, tipo]
+      );
+      definitionId = newDef.insertId;
+    }
+  }
+
   const [r] = await db.execute(
     `INSERT INTO registros_gasto
-       (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha, pagado, clasificacion, es_hormiga)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [uid, mesRow.id, anio, mes, tipo, p.categoria || 'otro',
-     (p.nombre || p.descripcion || '').trim(), parseFloat(Number(p.monto).toFixed(2)),
-     fecha, p.clasificacion || null, esHormiga]
+       (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha,
+        pagado, origen_fijo_id, origen_deuda_id, definition_id, es_hormiga)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+    [uid, mesRow.id, anio, mes, tipo, categoria, nombre, montoNum, fecha,
+     p.origen_fijo_id || null, p.origen_deuda_id || null, definitionId, esHormiga]
   );
   await _actualizarTotalesMes(mesRow.id, uid);
   _generarAlertasMes(uid, anio, mes).catch(() => {});
-  return { registro_id: r.insertId, nombre: p.nombre || p.descripcion, monto: Number(p.monto), fecha, categoria: p.categoria };
+  return { registro_id: r.insertId, nombre, monto: montoNum, fecha, categoria, tipo };
 }
 
 async function _ejecutarRegistrarPago(uid, p) {
