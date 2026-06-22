@@ -1,7 +1,13 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 
 class IaService {
+  /// Se incrementa cada vez que el usuario confirma una acción IA.
+  /// Cualquier widget puede escucharlo con addListener para auto-recargarse.
+  static final actionRefreshNotifier = ValueNotifier<int>(0);
+  static void notifyActionCompleted() => actionRefreshNotifier.value++;
+
   static Future<Map<String, dynamic>> diagnostico(
     String uid, {
     int? presupuestoId,

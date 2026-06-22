@@ -399,6 +399,7 @@ class _IaChatScreenState extends State<IaChatScreen> {
     try {
       final r = await IaService.confirmarAccion(widget.firebaseUid, accionId);
       if (!mounted) return;
+      IaService.notifyActionCompleted(); // Notifica a TabQuincenas y otros que se recarguen
       setState(() {
         m.accionEstado = 'confirmada';
         final resultado = r['resultado'] as Map<String, dynamic>? ?? {};

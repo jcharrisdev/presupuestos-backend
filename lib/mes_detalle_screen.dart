@@ -2446,8 +2446,17 @@ class _TabQuincenasState extends State<_TabQuincenas> {
   @override
   void initState() {
     super.initState();
+    IaService.actionRefreshNotifier.addListener(_onIaAction);
     _cargar();
   }
+
+  @override
+  void dispose() {
+    IaService.actionRefreshNotifier.removeListener(_onIaAction);
+    super.dispose();
+  }
+
+  void _onIaAction() => _cargar();
 
   Future<void> _cargar() async {
     setState(() { _loading = true; _errorMsg = null; });
