@@ -11745,6 +11745,23 @@ const AI_TOOLS = [
       required: ['firebase_uid'],
     },
   },
+  // ── HERRAMIENTA OBLIGATORIA ANTES DE CUALQUIER PAGO ────────────────────
+  {
+    name: 'get_compromisos_mes',
+    description: `LLAMAR SIEMPRE antes de proponer cualquier acción de pago. Devuelve todos los compromisos del usuario (gastos fijos, variables presupuestadas, deudas) con sus IDs exactos.
+
+Cómo usar los IDs devueltos:
+- fijos[].gasto_fijo_id → usar en marcar_pagado parametros (para gastos fijos del perfil)
+- variables_base[].origen_variable_id → usar en registrar_pago parametros (para variables presupuestadas)
+- deudas[].deuda_id → usar en abonar_deuda parametros
+
+Si el item que el usuario quiere pagar NO está en ninguna lista, NO crear automáticamente. Preguntar primero: "No tengo [item] en tu presupuesto. ¿Solo registrarlo como gasto puntual de esta quincena, o también quieres añadirlo a tu presupuesto base?"`,
+    input_schema: {
+      type: 'object',
+      properties: { firebase_uid: { type: 'string' } },
+      required: ['firebase_uid'],
+    },
+  },
   // ── HERRAMIENTA DE REPORTE DE BRECHAS ───────────────────────────────────
   {
     name: 'reportar_brecha_capacidad',
@@ -11766,16 +11783,19 @@ const AI_TOOLS = [
     name: 'proponer_accion',
     description: `ÚNICA tool disponible para modificar datos. Propone una acción al usuario — NO la ejecuta. El usuario confirma tocando un botón.
 
-ANTES de llamar esta tool:
-1. Llama get_presupuesto_actual para saber la quincena exacta (Q1 = días 1-15, Q2 = días 16-fin de mes).
-2. Si es un gasto fijo recurrente con dos días de pago, pregunta al usuario si quiere registrar solo la quincena actual o ambas.
-3. Para gastos variables/puntuales (gasolina, comida, etc.) la quincena se determina por la fecha — no hay que preguntar, solo mencionarla en el resumen.
+FLUJO OBLIGATORIO antes de llamar esta tool:
+1. Llama get_presupuesto_actual → obtén mes/quincena actual.
+2. Llama get_compromisos_mes → obtén la lista de fijos, variables_base y deudas con sus IDs.
+3. Busca si el item pedido coincide con algo en esas listas (por nombre, tipo o categoría):
+   - Si COINCIDE con un fijo → usa tipo='marcar_pagado' + parametros.gasto_fijo_id=[ID del fijo]
+   - Si COINCIDE con una variable_base → usa tipo='registrar_pago' + parametros.origen_variable_id=[ID]
+   - Si COINCIDE con una deuda → usa tipo='abonar_deuda' + parametros.deuda_id=[ID]
+   - Si NO coincide con nada → NO proponer todavía. Pregunta al usuario: "No tengo [item] en tu presupuesto. ¿Solo registro este gasto como puntual (no afecta tu presupuesto base), o también lo añado a tu presupuesto base para que aparezca cada mes?"
+4. Solo si el usuario responde que sí a la pregunta anterior → usa tipo='crear_gasto' (sin origen_*_id).
 
-El resumen_para_usuario DEBE incluir siempre:
-- Qué se va a guardar (nombre, monto, categoría).
-- En qué quincena aparecerá (ej: "aparecerá en tu Quincena 2 de junio").
-- Antes/después en números reales si hay presupuesto disponible.
-- Advertencia si deja la categoría sobre presupuesto.`,
+NUNCA crear un gasto de tipo variable con la misma categoría/nombre que un compromiso existente en fijos o variables_base — eso crea duplicados.
+
+El resumen_para_usuario DEBE incluir: qué va a cambiar, quincena donde aparecerá, antes/después en números reales, y advertencia si deja la categoría sobre presupuesto.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -12227,23 +12247,14 @@ async function _ejecutarCrearGasto(uid, p) {
     }
   }
 
-  // Auto-link a gastos_variables_base si no viene origen explícito y hay uno con esa categoría
-  let origenVariableId = p.origen_variable_id || null;
-  if (!origenVariableId && !p.origen_fijo_id && !p.origen_deuda_id && tipo === 'variable') {
-    const [[gvb]] = await db.execute(
-      `SELECT id FROM gastos_variables_base WHERE firebase_uid = ? AND categoria = ? AND activo = 1 LIMIT 1`,
-      [uid, categoria]
-    );
-    if (gvb) origenVariableId = gvb.id;
-  }
-
+  // origen_* debe venir explícito en parametros (Claude lo obtiene con get_compromisos_mes)
   const [r] = await db.execute(
     `INSERT INTO registros_gasto
        (firebase_uid, mes_id, anio, mes, tipo, categoria, nombre, monto, fecha,
         pagado, origen_fijo_id, origen_variable_id, origen_deuda_id, definition_id, es_hormiga)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     [uid, mesRow.id, anio, mes, tipo, categoria, nombre, montoNum, fecha,
-     p.origen_fijo_id || null, origenVariableId, p.origen_deuda_id || null, definitionId, esHormiga]
+     p.origen_fijo_id || null, p.origen_variable_id || null, p.origen_deuda_id || null, definitionId, esHormiga]
   );
   await _actualizarTotalesMes(mesRow.id, uid);
   _generarAlertasMes(uid, anio, mes).catch(() => {});
@@ -12313,6 +12324,47 @@ async function _ejecutarAbonarDeuda(uid, p) {
     monto_pendiente_antes: pendienteAntes,
     monto_pendiente_ahora: nuevoPendiente,
     saldada,
+  };
+}
+
+// --- Tool: get_compromisos_mes — lista fijos, variables presupuestadas y deudas con IDs ---
+
+async function _aiToolCompromisosMes(uid) {
+  const [fijos] = await db.execute(
+    `SELECT id AS gasto_fijo_id, descripcion AS nombre, monto_mensual, tipo, dia_pago, dia_pago_2
+     FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1 ORDER BY descripcion`, [uid]
+  );
+  const [variables] = await db.execute(
+    `SELECT id AS origen_variable_id, nombre, categoria, monto_estimado AS monto_mensual
+     FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1 ORDER BY nombre`, [uid]
+  );
+  const [deudas] = await db.execute(
+    `SELECT id AS deuda_id, nombre, tipo,
+            IF(es_letra=1, cuota_fija, pago_minimo) AS cuota_mensual, monto_pendiente
+     FROM deudas WHERE firebase_uid = ? AND activa = 1 AND monto_pendiente > 0 ORDER BY nombre`, [uid]
+  );
+  return {
+    fijos: fijos.map(f => ({
+      gasto_fijo_id: f.gasto_fijo_id,
+      nombre: f.nombre,
+      monto_mensual: Number(f.monto_mensual),
+      tipo: f.tipo,
+      dia_pago: f.dia_pago,
+    })),
+    variables_base: variables.map(v => ({
+      origen_variable_id: v.origen_variable_id,
+      nombre: v.nombre,
+      categoria: v.categoria,
+      monto_mensual: Number(v.monto_mensual),
+    })),
+    deudas: deudas.map(d => ({
+      deuda_id: d.deuda_id,
+      nombre: d.nombre,
+      tipo: d.tipo,
+      cuota_mensual: Number(d.cuota_mensual),
+      monto_pendiente: Number(d.monto_pendiente),
+    })),
+    instruccion: 'Usa estos IDs directamente en parametros de proponer_accion. Si el item pedido no está en ninguna lista, pregunta al usuario antes de crear algo nuevo.',
   };
 }
 
@@ -12578,6 +12630,7 @@ async function _aiEjecutarTool(toolName, input, requestCache) {
   let result;
   try {
     switch (toolName) {
+      case 'get_compromisos_mes':       result = await _aiToolCompromisosMes(uid); break;
       case 'get_presupuesto_actual':    result = await _aiToolPresupuestoActual(uid); break;
       case 'reportar_brecha_capacidad': result = _aiToolReportarBrecha(input); break;
       case 'proponer_accion':           result = await _aiToolProponerAccion(uid, input.tipo, input.parametros || {}, input.resumen_para_usuario || ''); break;
