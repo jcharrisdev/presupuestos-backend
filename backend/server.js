@@ -771,6 +771,33 @@ pool.getConnection(async (err, conn) => {
     )`);
     console.log('✅ Migración objetivos_financieros OK');
   } catch (e) { if (!e.message.includes('already exists')) console.error('⚠️ objetivos:', e.message); }
+
+  // Migración: registros de ingresos extra (fotografía, freelance, bonos, etc.)
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS registros_ingreso (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid  VARCHAR(255) NOT NULL,
+      monto         DECIMAL(10,2) NOT NULL,
+      descripcion   VARCHAR(255),
+      fuente_nombre VARCHAR(100) NOT NULL DEFAULT 'Extra',
+      fecha         DATE NOT NULL,
+      anio          SMALLINT NOT NULL,
+      mes           TINYINT NOT NULL,
+      created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_ri_user_mes (firebase_uid, anio, mes)
+    )`);
+    console.log('✅ Migración registros_ingreso OK');
+  } catch (e) { if (!e.message.includes('already exists')) console.error('⚠️ registros_ingreso:', e.message); }
+
+  // Migración: fuente_ingreso en registros_gasto (de qué ingreso salió este gasto)
+  try {
+    await db.execute(`ALTER TABLE registros_gasto ADD COLUMN fuente_ingreso VARCHAR(100) DEFAULT NULL`);
+    console.log('✅ Migración fuente_ingreso en registros_gasto OK');
+  } catch (e) {
+    if (!e.message.includes('Duplicate column') && !e.message.includes('already exists')) {
+      console.error('⚠️ Migración fuente_ingreso:', e.message);
+    }
+  }
 });
 
 // Usamos la versión con Promises (async/await) del pool
@@ -1244,6 +1271,7 @@ app.post('/user/income', async (req, res) => {
     const [[saved]] = await db.execute(`SELECT * FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
     res.json({ tiene_income: true, ...saved });
     _logInfo('/user/income', `Ingreso configurado: $${Number(ingreso_neto_mensual).toFixed(2)}/mes (${tipo_ingreso})`, firebase_uid);
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1253,6 +1281,96 @@ app.delete('/user/income', async (req, res) => {
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     await db.execute(`DELETE FROM user_income WHERE firebase_uid = ?`, [firebase_uid]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =============================================================================
+// MÓDULO: INGRESOS EXTRA (fotografía, freelance, bonos, regalos, etc.)
+// Los ingresos extra se suman al ingreso_real del mes correspondiente.
+// =============================================================================
+
+// Helper: recalcula ingreso_real del mes = salario base + suma de ingresos extra
+async function _recalcularIngresoRealMes(firebase_uid, anio, mes) {
+  const [[income]] = await db.execute(
+    `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
+  );
+  const base = income ? Number(income.ingreso_neto_mensual) : 0;
+  const [[extra]] = await db.execute(
+    `SELECT COALESCE(SUM(monto), 0) AS total FROM registros_ingreso
+     WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+    [firebase_uid, anio, mes]
+  );
+  const totalExtra = Number(extra.total);
+  const ingresoReal = parseFloat((base + totalExtra).toFixed(2));
+  await db.execute(
+    `UPDATE meses_financieros SET ingreso_real = ?
+     WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+    [ingresoReal, firebase_uid, anio, mes]
+  );
+}
+
+// GET /user/ingresos-extra?firebase_uid=&anio=&mes=
+app.get('/user/ingresos-extra', async (req, res) => {
+  const { firebase_uid, anio, mes } = req.query;
+  if (!firebase_uid || !anio || !mes) return res.status(400).json({ error: 'firebase_uid, anio y mes requeridos' });
+  try {
+    const [rows] = await db.execute(
+      `SELECT * FROM registros_ingreso
+       WHERE firebase_uid = ? AND anio = ? AND mes = ?
+       ORDER BY fecha DESC, created_at DESC`,
+      [firebase_uid, anio, mes]
+    );
+    const total = rows.reduce((s, r) => s + Number(r.monto), 0);
+    // Agrupar por fuente para la vista bucket
+    const buckets = {};
+    for (const r of rows) {
+      if (!buckets[r.fuente_nombre]) buckets[r.fuente_nombre] = { fuente_nombre: r.fuente_nombre, total: 0, registros: [] };
+      buckets[r.fuente_nombre].total += Number(r.monto);
+      buckets[r.fuente_nombre].registros.push(r);
+    }
+    res.json({
+      ingresos: rows,
+      total: parseFloat(total.toFixed(2)),
+      buckets: Object.values(buckets).map(b => ({ ...b, total: parseFloat(b.total.toFixed(2)) })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /user/ingresos-extra
+app.post('/user/ingresos-extra', async (req, res) => {
+  const { firebase_uid, monto, descripcion, fuente_nombre, fecha } = req.body;
+  if (!firebase_uid || !monto || !fuente_nombre || !fecha)
+    return res.status(400).json({ error: 'firebase_uid, monto, fuente_nombre y fecha requeridos' });
+  if (Number(monto) <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
+  try {
+    const d = new Date(fecha);
+    const anio = d.getFullYear();
+    const mes  = d.getMonth() + 1;
+    const [result] = await db.execute(
+      `INSERT INTO registros_ingreso (firebase_uid, monto, descripcion, fuente_nombre, fecha, anio, mes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [firebase_uid, Number(monto).toFixed(2), descripcion || null, fuente_nombre, fecha, anio, mes]
+    );
+    await _recalcularIngresoRealMes(firebase_uid, anio, mes);
+    const [[saved]] = await db.execute(`SELECT * FROM registros_ingreso WHERE id = ?`, [result.insertId]);
+    _logInfo('/user/ingresos-extra', `Ingreso extra registrado: $${Number(monto).toFixed(2)} (${fuente_nombre})`, firebase_uid);
+    res.status(201).json(saved);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /user/ingresos-extra/:id
+app.delete('/user/ingresos-extra/:id', async (req, res) => {
+  const { id } = req.params;
+  const { firebase_uid } = req.body;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[row]] = await db.execute(
+      `SELECT * FROM registros_ingreso WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
+    );
+    if (!row) return res.status(404).json({ error: 'Ingreso no encontrado' });
+    await db.execute(`DELETE FROM registros_ingreso WHERE id = ?`, [id]);
+    await _recalcularIngresoRealMes(firebase_uid, row.anio, row.mes);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -10457,6 +10575,23 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     const hormigaRegistros = registros.filter(r => r.es_hormiga == 1);
     const hormigaTotal = hormigaRegistros.reduce((s, r) => s + Number(r.monto), 0);
 
+    // Ingresos extra del mes (para vista bucket)
+    const [ingresosExtra] = await db.execute(
+      `SELECT * FROM registros_ingreso
+       WHERE firebase_uid = ? AND anio = ? AND mes = ?
+       ORDER BY fecha DESC`,
+      [firebase_uid, anio, mes]
+    );
+    const totalIngresosExtra = ingresosExtra.reduce((s, r) => s + Number(r.monto), 0);
+
+    // Buckets de gastos por fuente_ingreso (para vista bucket)
+    const gastosPorFuente = {};
+    for (const r of registros) {
+      const fuente = r.fuente_ingreso || '__base__';
+      if (!gastosPorFuente[fuente]) gastosPorFuente[fuente] = 0;
+      gastosPorFuente[fuente] += Number(r.monto);
+    }
+
     res.json({
       mes: mesRow,
       compromisos_fijos: {
@@ -10493,6 +10628,8 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         // AA2 — la cuota mensual de eventos reduce el disponible estimado del mes
         remanente_estimado:  parseFloat((Number(mesRow.ingreso_estimado) - totalFijosEstimado - Number(mesRow.variables_estimados) - totalEventosMes).toFixed(2)),
         ingreso_real:        parseFloat(ingresoReal.toFixed(2)),
+        ingreso_base:        Number(mesRow.ingreso_estimado),
+        ingresos_extra_total: parseFloat(totalIngresosExtra.toFixed(2)),
         fijos_reales:        parseFloat(fijosReales.toFixed(2)),
         variables_reales:    parseFloat(variablesReales.toFixed(2)),
         no_presupuestados:   parseFloat(noPresReales.toFixed(2)),
@@ -10501,6 +10638,8 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         hormiga_count:       hormigaRegistros.length,
         hormiga_total:       parseFloat(hormigaTotal.toFixed(2)),
       },
+      ingresos_extra: ingresosExtra,
+      gastos_por_fuente: gastosPorFuente,
       registros,
       analisis_categorias: analisisCategorias,
     });
@@ -10664,7 +10803,7 @@ async function _recalcularEstimadosAnio(firebase_uid, anio) {
      firebase_uid, year]
   );
 
-  // Actualizar meses_financieros — estimados por mes (respeta aplica_meses)
+  // Actualizar meses_financieros — estimados + ingreso por mes (respeta aplica_meses)
   const [meses] = await db.execute(
     `SELECT id, mes FROM meses_financieros WHERE firebase_uid = ? AND anio = ?`,
     [firebase_uid, year]
@@ -10678,13 +10817,24 @@ async function _recalcularEstimadosAnio(firebase_uid, anio) {
       }
       return s + _montoMensual(g);
     }, 0);
+    // ingreso_real = salario base + ingresos extra del mes
+    const [[extraRow]] = await db.execute(
+      `SELECT COALESCE(SUM(monto), 0) AS total FROM registros_ingreso
+       WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, year, m]
+    );
+    const ingresoReal = parseFloat((ingresoMensual + Number(extraRow.total)).toFixed(2));
     await db.execute(
       `UPDATE meses_financieros SET
+         ingreso_estimado    = ?,
+         ingreso_real        = ?,
          fijos_estimados     = ?,
          variables_estimados = ?,
          remanente_estimado  = ?
        WHERE id = ?`,
-      [parseFloat(totalFijosMensual.toFixed(2)),
+      [parseFloat(ingresoMensual.toFixed(2)),
+       ingresoReal,
+       parseFloat(totalFijosMensual.toFixed(2)),
        parseFloat(varMes.toFixed(2)),
        parseFloat((ingresoMensual - totalFijosMensual - varMes).toFixed(2)),
        mesRow.id]
@@ -10812,7 +10962,7 @@ app.post('/registros', async (req, res) => {
   const {
     firebase_uid, anio, mes, tipo, categoria = 'otro', subcategoria_id,
     nombre, monto, fecha, pagado = 0, origen_fijo_id, origen_variable_id, origen_deuda_id,
-    notas, en_calendario = 0, definition_id: defIdParam,
+    notas, en_calendario = 0, definition_id: defIdParam, fuente_ingreso,
   } = req.body;
   if (!firebase_uid || !anio || !mes || !tipo || !nombre || monto == null || !fecha)
     return res.status(400).json({ error: 'firebase_uid, anio, mes, tipo, nombre, monto y fecha son requeridos' });
@@ -10854,12 +11004,12 @@ app.post('/registros', async (req, res) => {
       `INSERT INTO registros_gasto
          (firebase_uid, mes_id, anio, mes, tipo, categoria, subcategoria_id,
           nombre, monto, fecha, pagado, origen_fijo_id, origen_variable_id, origen_deuda_id,
-          notas, en_calendario, definition_id, es_hormiga)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          notas, en_calendario, definition_id, es_hormiga, fuente_ingreso)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [firebase_uid, mesRow.id, anio, mes, tipo, categoria, subcategoria_id || null,
        nombre, monto, fecha, pagado ? 1 : 0, origen_fijo_id || null,
        origen_variable_id || null, origen_deuda_id || null, notas || null, en_calendario ? 1 : 0,
-       definitionId, esHormiga]
+       definitionId, esHormiga, fuente_ingreso || null]
     );
     await _actualizarTotalesMes(mesRow.id, firebase_uid);
 
@@ -10873,7 +11023,7 @@ app.post('/registros', async (req, res) => {
 // PUT /registros/:id
 app.put('/registros/:id', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid, nombre, categoria, subcategoria_id, monto, fecha, tipo, pagado, notas } = req.body;
+  const { firebase_uid, nombre, categoria, subcategoria_id, monto, fecha, tipo, pagado, notas, fuente_ingreso } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[existing]] = await db.execute(`SELECT * FROM registros_gasto WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
@@ -10888,6 +11038,7 @@ app.put('/registros/:id', async (req, res) => {
     if (tipo !== undefined)            { fields.push('tipo = ?');            vals.push(tipo); }
     if (pagado !== undefined)          { fields.push('pagado = ?');          vals.push(pagado ? 1 : 0); }
     if (notas !== undefined)           { fields.push('notas = ?');           vals.push(notas); }
+    if (fuente_ingreso !== undefined)  { fields.push('fuente_ingreso = ?');  vals.push(fuente_ingreso || null); }
     if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
     vals.push(id, firebase_uid);
     await db.execute(`UPDATE registros_gasto SET ${fields.join(', ')} WHERE id = ? AND firebase_uid = ?`, vals);

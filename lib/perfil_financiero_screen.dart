@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'services/user_profile_service.dart';
 import 'services/gastos_variables_service.dart';
+import 'services/ingreso_extra_service.dart';
 import 'deudas/deudas_screen.dart';
 import 'widgets/financiero/mes_rango_selector.dart';
 import 'widgets/financiero/categoria_selector.dart';
@@ -17,7 +18,7 @@ class PerfilFinancieroScreen extends StatefulWidget {
   final String firebaseUid;
   /// Pestaña inicial: 0 Ingresos · 1 Fijos · 2 Variables (base).
   final int initialTab;
-  const PerfilFinancieroScreen({Key? key, required this.firebaseUid, this.initialTab = 0}) : super(key: key);
+  const PerfilFinancieroScreen({super.key, required this.firebaseUid, this.initialTab = 0});
 
   @override
   State<PerfilFinancieroScreen> createState() => _PerfilFinancieroScreenState();
@@ -30,10 +31,14 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   List<dynamic> _gastos = [];
   List<dynamic> _ahorros = [];
   List<dynamic> _variablesBase = [];
+  List<dynamic> _ingresosExtra = [];
   double _totalMensual = 0;
   double _totalAhorrosMensual = 0;
   double _totalVariablesMensual = 0;
+  double _totalIngresosExtra = 0;
   bool _loading = true;
+
+  final _now = DateTime.now();
 
   @override
   void initState() {
@@ -57,6 +62,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
     try {
       varData = await GastosVariablesService.getAll(widget.firebaseUid);
     } catch (_) {}
+    final extraData = await IngresoExtraService.getByMes(
+      widget.firebaseUid, _now.year, _now.month);
     if (!mounted) return;
     setState(() {
       _income = income;
@@ -66,6 +73,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
       _totalAhorrosMensual = _d(ahData['total_cuota_mensual']);
       _variablesBase = (varData['gastos'] as List?) ?? [];
       _totalVariablesMensual = _d(varData['total_mensual']);
+      _ingresosExtra = (extraData['ingresos'] as List?) ?? [];
+      _totalIngresosExtra = _d(extraData['total']);
       _loading = false;
     });
   }
@@ -169,6 +178,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
 
   // ── Tab 1: Ingreso ────────────────────────────────────────────────────────
   Widget _buildTabIngreso() {
+    final mesNombre = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+        'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][_now.month];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -186,9 +197,10 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
             onAction: _mostrarFormIngreso,
           )
         else ...[
+          // ── Ingreso base ──────────────────────────────────────────────────
           _InfoCard(rows: [
             _InfoRow('Tipo de ingreso', _labelTipoIngreso(_income!['tipo_ingreso'])),
-            _InfoRow('Bruto mensual', '${Money.fmt(_d(_income!["ingreso_bruto_mensual"]))}'),
+            _InfoRow('Bruto mensual', Money.fmt(_d(_income!["ingreso_bruto_mensual"]))),
             if (_d(_income!['desc_seguro']) > 0)
               _InfoRow('  − CSS (9.75%)', '-${Money.fmt(_d(_income!["desc_seguro"]))}', color: AppTheme.textMuted),
             if (_d(_income!['desc_pension']) > 0)
@@ -208,10 +220,10 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
             ),
             child: Column(children: [
-              Text('Neto mensual que recibes',
+              Text('Neto mensual (ingreso base)',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
               const SizedBox(height: 4),
-              Text('${Money.fmt(_ingreso)}',
+              Text(Money.fmt(_ingreso),
                   style: const TextStyle(color: AppTheme.success, fontSize: 28, fontWeight: FontWeight.bold)),
               Text(
                 _income!['frecuencia_cobro'] == 'quincenal'
@@ -220,12 +232,12 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
             ]),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Row(children: [
             Expanded(child: OutlinedButton.icon(
               onPressed: _mostrarFormIngreso,
               icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Editar ingreso'),
+              label: const Text('Editar ingreso base'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.primary,
                 side: const BorderSide(color: AppTheme.primary),
@@ -242,9 +254,124 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
               ),
             ),
           ]),
+
+          // ── Ingresos extra de este mes ────────────────────────────────────
+          const SizedBox(height: 24),
+          Row(children: [
+            Expanded(child: Text(
+              'Ingresos extra · $mesNombre ${_now.year}',
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+            )),
+            TextButton.icon(
+              onPressed: _mostrarFormIngresoExtra,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Registrar'),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          if (_ingresosExtra.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Text(
+                'Sin ingresos extra este mes.\nSi hiciste un trabajo extra, recibiste un bono o vendiste algo, regístralo aquí.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else ...[
+            ..._ingresosExtra.map((ing) => _IngresoExtraRow(
+              ingreso: ing,
+              onEliminar: () => _eliminarIngresoExtra(ing['id'] as int),
+            )),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.success.withValues(alpha: 0.2)),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('Total extra este mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                Text(Money.fmt(_totalIngresosExtra),
+                    style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 14)),
+              ]),
+            ),
+          ],
+          if (_totalIngresosExtra > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('Ingreso total este mes', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                Text(Money.fmt(_ingreso + _totalIngresosExtra),
+                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+              ]),
+            ),
+          ],
         ],
       ]),
     );
+  }
+
+  void _mostrarFormIngresoExtra() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => _IngresoExtraFormSheet(
+        firebaseUid: widget.firebaseUid,
+        anio: _now.year,
+        mes: _now.month,
+        onGuardado: () { Navigator.pop(context); _cargar(); },
+      ),
+    );
+  }
+
+  Future<void> _eliminarIngresoExtra(int id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text('Eliminar ingreso', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text('¿Eliminar este ingreso extra? El ingreso real del mes se ajustará automáticamente.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await IngresoExtraService.eliminar(widget.firebaseUid, id);
+        _cargar();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
+        );
+        }
+      }
+    }
   }
 
   // ── Tab 2: Mis gastos (Fijos + Deudas + Variables) ────────────────────────
@@ -528,7 +655,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
           padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
           decoration: BoxDecoration(
             color: AppTheme.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -777,18 +904,18 @@ class _GastoTile extends StatelessWidget {
             const SizedBox(height: 4),
             Wrap(spacing: 6, children: [
               _Chip(_labelTipo(gasto['tipo'] as String? ?? 'otro'), color: AppTheme.textSecondary),
-              if (esDeuda) _Chip('Deuda', color: AppTheme.danger),
-              if (frecuencia == 'variable') _Chip('Variable', color: AppTheme.warning),
+              if (esDeuda) const _Chip('Deuda', color: AppTheme.danger),
+              if (frecuencia == 'variable') const _Chip('Variable', color: AppTheme.warning),
               if (diaPago != null && diaPago2 != null)
                 _Chip('Días $diaPago y $diaPago2', color: AppTheme.info, icon: Icons.calendar_today)
               else if (diaPago != null)
                 _Chip('Día $diaPago', color: AppTheme.info, icon: Icons.calendar_today),
               if (recordatorio)
-                _Chip('Recordatorio', color: AppTheme.primary, icon: Icons.notifications_outlined),
+                const _Chip('Recordatorio', color: AppTheme.primary, icon: Icons.notifications_outlined),
             ]),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${Money.fmt(monto)}',
+            Text(Money.fmt(monto),
                 style: TextStyle(
                     color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
             Text(frecuencia == 'variable' ? '~estimado/mes' : '/mes',
@@ -798,7 +925,11 @@ class _GastoTile extends StatelessWidget {
           PopupMenuButton<String>(
             color: AppTheme.surfaceAlt,
             icon: Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
-            onSelected: (v) { if (v == 'edit') onEdit(); else onDelete(); },
+            onSelected: (v) { if (v == 'edit') {
+              onEdit();
+            } else {
+              onDelete();
+            } },
             itemBuilder: (_) => [
               PopupMenuItem(value: 'edit',
                   child: Text('Editar', style: TextStyle(color: AppTheme.textPrimary))),
@@ -899,7 +1030,7 @@ class _AhorroTile extends StatelessWidget {
               color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
           const SizedBox(height: 4),
           Wrap(spacing: 6, children: [
-            _Chip('Ahorro', color: AppTheme.colorAhorro),
+            const _Chip('Ahorro', color: AppTheme.colorAhorro),
             if (periodosRestantes != null)
               _Chip('$periodosRestantes períodos restantes', color: AppTheme.textSecondary),
             _Chip('${Money.fmt(cuotaPeriodo)}/${tipoPeriodo == 'quincenal' ? 'quincena' : 'mes'}',
@@ -907,7 +1038,7 @@ class _AhorroTile extends StatelessWidget {
           ]),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${Money.fmt(cuotaMensual)}',
+          Text(Money.fmt(cuotaMensual),
               style: const TextStyle(
                   color: AppTheme.colorAhorro, fontWeight: FontWeight.bold, fontSize: 15)),
           Text('/mes', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
@@ -1131,7 +1262,7 @@ class _IngresoFormSheetState extends State<_IngresoFormSheet> {
                 child: Column(children: [
                   Text('Neto mensual', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                   const SizedBox(height: 4),
-                  Text('${Money.fmt(_netoCalculado)}',
+                  Text(Money.fmt(_netoCalculado),
                       style: const TextStyle(color: AppTheme.success, fontSize: 24, fontWeight: FontWeight.bold)),
                   if (_frecuencia == 'quincenal')
                     Text('Quincenal: ${Money.fmt((_netoCalculado / 2))}',
@@ -1581,7 +1712,7 @@ class _VariableBaseTile extends StatelessWidget {
           Text(gasto['categoria'] as String? ?? '', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${Money.fmt(monto)}', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+          Text(Money.fmt(monto), style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w700, fontSize: 14)),
           Text('/$frecLabel', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
         ]),
         const SizedBox(width: 8),
@@ -1602,6 +1733,234 @@ class _VariableBaseTile extends StatelessWidget {
           ),
           constraints: const BoxConstraints(),
           padding: EdgeInsets.zero,
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Fila de ingreso extra ──────────────────────────────────────────────────────
+class _IngresoExtraRow extends StatelessWidget {
+  final Map<String, dynamic> ingreso;
+  final VoidCallback onEliminar;
+  const _IngresoExtraRow({required this.ingreso, required this.onEliminar});
+
+  @override
+  Widget build(BuildContext context) {
+    final monto = double.tryParse(ingreso['monto']?.toString() ?? '0') ?? 0;
+    final fuente = ingreso['fuente_nombre'] as String? ?? 'Extra';
+    final desc   = ingreso['descripcion'] as String?;
+    final fecha  = ingreso['fecha'] as String? ?? '';
+    final fechaLabel = fecha.length >= 10 ? fecha.substring(5, 10).replaceAll('-', '/') : fecha;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: AppTheme.success.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.arrow_downward, color: AppTheme.success, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(fuente, style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+          if (desc != null && desc.isNotEmpty)
+            Text(desc, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+          Text(fechaLabel, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+        ])),
+        Text(Money.fmt(monto),
+            style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(width: 4),
+        IconButton(
+          icon: Icon(Icons.close, size: 16, color: AppTheme.textMuted),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          onPressed: onEliminar,
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Sheet para registrar ingreso extra ────────────────────────────────────────
+class _IngresoExtraFormSheet extends StatefulWidget {
+  final String firebaseUid;
+  final int anio;
+  final int mes;
+  final VoidCallback onGuardado;
+  const _IngresoExtraFormSheet({
+    required this.firebaseUid, required this.anio,
+    required this.mes, required this.onGuardado,
+  });
+
+  @override
+  State<_IngresoExtraFormSheet> createState() => _IngresoExtraFormSheetState();
+}
+
+class _IngresoExtraFormSheetState extends State<_IngresoExtraFormSheet> {
+  final _montoCtrl  = TextEditingController();
+  final _fuenteCtrl = TextEditingController();
+  final _descCtrl   = TextEditingController();
+  DateTime _fecha = DateTime.now();
+  bool _saving = false;
+  String? _error;
+
+  static const _fuentesSugeridas = [
+    'Fotografía', 'Freelance', 'Venta', 'Bono', 'Tutorías', 'Regalo', 'Otro',
+  ];
+
+  @override
+  void dispose() {
+    _montoCtrl.dispose();
+    _fuenteCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    final monto = double.tryParse(_montoCtrl.text.trim().replaceAll(',', '.'));
+    if (monto == null || monto <= 0) {
+      setState(() => _error = 'Ingresa un monto válido');
+      return;
+    }
+    if (_fuenteCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Indica el origen del ingreso');
+      return;
+    }
+    setState(() { _saving = true; _error = null; });
+    try {
+      await IngresoExtraService.crear(
+        widget.firebaseUid,
+        monto: monto,
+        fuenteNombre: _fuenteCtrl.text.trim(),
+        fecha: _fecha.toIso8601String().substring(0, 10),
+        descripcion: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      );
+      widget.onGuardado();
+    } catch (e) {
+      setState(() { _error = e.toString(); _saving = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 20, 16, 16 + bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.arrow_downward, color: AppTheme.success, size: 20),
+          const SizedBox(width: 8),
+          Text('Registrar ingreso extra',
+              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+          const Spacer(),
+          IconButton(icon: Icon(Icons.close, color: AppTheme.textMuted), onPressed: () => Navigator.pop(context)),
+        ]),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _montoCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: TextStyle(color: AppTheme.textPrimary),
+          decoration: InputDecoration(
+            labelText: 'Monto recibido',
+            labelStyle: TextStyle(color: AppTheme.textSecondary),
+            prefixText: '\$ ',
+            prefixStyle: const TextStyle(color: AppTheme.success),
+            filled: true, fillColor: AppTheme.background,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.border)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _fuenteCtrl,
+          style: TextStyle(color: AppTheme.textPrimary),
+          decoration: InputDecoration(
+            labelText: 'Origen del ingreso',
+            hintText: 'ej: Fotografía, Freelance, Venta...',
+            labelStyle: TextStyle(color: AppTheme.textSecondary),
+            hintStyle: TextStyle(color: AppTheme.textMuted),
+            filled: true, fillColor: AppTheme.background,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.border)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, children: _fuentesSugeridas.map((s) => ActionChip(
+          label: Text(s, style: const TextStyle(fontSize: 11)),
+          backgroundColor: AppTheme.background,
+          side: BorderSide(color: AppTheme.border),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          onPressed: () => setState(() => _fuenteCtrl.text = s),
+        )).toList()),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _descCtrl,
+          style: TextStyle(color: AppTheme.textPrimary),
+          decoration: InputDecoration(
+            labelText: 'Descripción (opcional)',
+            hintText: 'ej: Boda García, clase extra, venta laptop...',
+            labelStyle: TextStyle(color: AppTheme.textSecondary),
+            hintStyle: TextStyle(color: AppTheme.textMuted),
+            filled: true, fillColor: AppTheme.background,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.border)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: () async {
+            final lastDay = DateTime(widget.anio, widget.mes + 1, 0).day;
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _fecha,
+              firstDate: DateTime(widget.anio, widget.mes, 1),
+              lastDate: DateTime(widget.anio, widget.mes, lastDay),
+            );
+            if (picked != null) setState(() => _fecha = picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppTheme.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Row(children: [
+              Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.textSecondary),
+              const SizedBox(width: 8),
+              Text('Fecha: ${_fecha.day}/${_fecha.month}/${_fecha.year}',
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14)),
+            ]),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: const TextStyle(color: AppTheme.danger, fontSize: 12)),
+        ],
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _saving ? null : _guardar,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.success,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: _saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : const Text('Guardar ingreso', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
         ),
       ]),
     );
