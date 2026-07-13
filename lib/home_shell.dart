@@ -21,7 +21,6 @@ import 'ventas_landing_screen.dart';
 import 'patrimonio_screen.dart';
 import 'objetivos_screen.dart';
 import 'widgets/widgets.dart';
-import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'gustitos/gustitos_screen.dart';
 import 'eventos/eventos_screen.dart';
 import 'services/theme_pref.dart';
@@ -129,24 +128,6 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
-  Future<void> _abrirRegistroRapido(BuildContext context, DateTime now) async {
-    final res = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AgregarGastoSheet(
-        firebaseUid: widget.firebaseUid,
-        anio: now.year,
-        mes: now.month,
-      ),
-    );
-    if (res == true && _initializedTabs.contains(1)) {
-      // Forzar recarga del tab Mes si está inicializado
-      setState(() { _initializedTabs.remove(1); });
-      Future.microtask(() => setState(() { _initializedTabs.add(1); }));
-    }
-  }
-
   Future<void> _logout() async {
     await AuthService.signOut();
     if (!mounted) return;
@@ -162,19 +143,13 @@ class _HomeShellState extends State<HomeShell> {
     final now  = DateTime.now();
 
     final List<Widget> screens = [
-      EstadoFinancieroAnualScreen(
-        firebaseUid: uid,
-        periodoInicial: _periodo,
-        onPeriodoChanged: (p) {
-          setState(() => _periodo = p);
-          UserSettingsService.setPeriodo(uid, p);
-        },
-      ),
+      DashboardScreen(firebaseUid: uid),
       MesDetalleScreen(
         firebaseUid: uid,
         anio: now.year,
         mes: now.month,
         label: _mesesLabel[now.month],
+        initialTabIndex: 1,
       ),
       DeudasScreen(firebaseUid: uid),
       _MasTab(
@@ -187,6 +162,11 @@ class _HomeShellState extends State<HomeShell> {
         onToggleNegocio: _toggleNegocio,
         onLogout: _logout,
         facturasPendientes: _facturasPendientes,
+        periodo: _periodo,
+        onPeriodoChanged: (p) {
+          setState(() => _periodo = p);
+          UserSettingsService.setPeriodo(uid, p);
+        },
       ),
     ];
 
@@ -196,13 +176,6 @@ class _HomeShellState extends State<HomeShell> {
         children: List.generate(screens.length, (i) =>
           _initializedTabs.contains(i) ? screens[i] : const SizedBox.shrink()),
       ),
-      floatingActionButton: (_idx == 0) ? FloatingActionButton(
-        heroTag: 'fab_global',
-        backgroundColor: AppTheme.primary,
-        foregroundColor: AppTheme.background,
-        onPressed: () => _abrirRegistroRapido(context, now),
-        child: const Icon(Icons.add, size: 28),
-      ) : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _idx,
         backgroundColor: AppTheme.surface,
@@ -211,9 +184,9 @@ class _HomeShellState extends State<HomeShell> {
         onDestinationSelected: (i) => setState(() { _idx = i; _initializedTabs.add(i); }),
         destinations: [
           const NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart_rounded),
-            label: 'Estado',
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Hoy',
           ),
           NavigationDestination(
             icon: Badge.count(
@@ -258,6 +231,8 @@ class _MasTab extends StatelessWidget {
   final ValueChanged<bool> onToggleNegocio;
   final VoidCallback onLogout;
   final int facturasPendientes;
+  final String periodo;
+  final ValueChanged<String> onPeriodoChanged;
 
   const _MasTab({
     required this.firebaseUid,
@@ -269,6 +244,8 @@ class _MasTab extends StatelessWidget {
     required this.onToggleNegocio,
     required this.onLogout,
     this.facturasPendientes = 0,
+    required this.periodo,
+    required this.onPeriodoChanged,
   });
 
   @override
@@ -376,12 +353,16 @@ class _MasTab extends StatelessWidget {
                   )),
                 ),
                 _ModuloCard(
-                  icon: Icons.dashboard_outlined,
-                  title: 'Dashboard',
-                  subtitle: 'Resumen inteligente',
+                  icon: Icons.bar_chart_outlined,
+                  title: 'Estado anual',
+                  subtitle: 'Plan de 12 meses',
                   color: AppTheme.warning,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => DashboardScreen(firebaseUid: firebaseUid),
+                    builder: (_) => EstadoFinancieroAnualScreen(
+                      firebaseUid: firebaseUid,
+                      periodoInicial: periodo,
+                      onPeriodoChanged: onPeriodoChanged,
+                    ),
                   )),
                 ),
                 _ModuloCard(

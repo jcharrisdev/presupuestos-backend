@@ -95,8 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Dashboard'),
-            Text('Tu hoy: estado actual y esta quincena',
+            Text('Hoy'),
+            Text('Simple: qué pagar, cuánto puedes usar y qué recortar',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.normal)),
           ],
         ),
@@ -166,6 +166,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final deudas = ((_mes?['compromisos_fijos']?['deudas']) as List? ?? [])
         .cast<Map<String, dynamic>>();
     final quincena = _now.day <= 15 ? 1 : 2;
+    final ingresoQuincena = ingreso / 2;
+    final compromisosQuincena = _compromisosQuincena(
+      quincena: quincena,
+      gastosFijos: gastosFijos,
+      deudas: deudas,
+    );
+    final disponibleQuincena = ingresoQuincena - compromisosQuincena;
 
     // Sobres por categoría
     final sobres = (_mes?['analisis_categorias'] as List? ?? [])
@@ -191,6 +198,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         countSemana++;
       }
     }
+    final diasRestantesMes = DateTime(_now.year, _now.month + 1, 0).day - _now.day + 1;
+    final gastoDiarioSeguro = diasRestantesMes > 0 && remReal > 0
+        ? remReal / diasRestantesMes
+        : 0.0;
+    final ultimoDiaMes = DateTime(_now.year, _now.month + 1, 0).day;
+    final finQuincena = quincena == 1 ? 15 : ultimoDiaMes;
+    final diasRestantesQuincena = (finQuincena - _now.day + 1).clamp(1, 31).toInt();
+    final gastoDiarioQuincena = disponibleQuincena > 0
+        ? disponibleQuincena / diasRestantesQuincena
+        : 0.0;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -229,6 +246,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
         ],
+
+        // ── MODO QUINCENA: decisión principal del día ───────────────────
+        _QuincenaDecisionCard(
+          quincena: quincena,
+          ingresoQuincena: ingresoQuincena,
+          compromisosQuincena: compromisosQuincena,
+          disponibleQuincena: disponibleQuincena,
+          diasRestantes: diasRestantesQuincena,
+          gastoDiarioSeguro: gastoDiarioQuincena,
+          onRegistrarGasto: _abrirAgregarGasto,
+          onEscanearFactura: _abrirScanner,
+          onVerPagos: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => MesDetalleScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _now.year,
+              mes: _now.month,
+              label: mesNombre,
+              initialTabIndex: 2,
+            ),
+          )).then((_) => _cargar()),
+        ),
+        const SizedBox(height: 12),
+
+        // ── GUÍA SIMPLE "FOR DUMMIES" ───────────────────────────────────
+        _DummiesGuideCard(
+          remanente: remReal,
+          gastoDiarioSeguro: gastoDiarioSeguro,
+          pendientesCount: pendientes.length,
+          pendientesTotal: totalPendiente,
+          hormigaCount: _d(r['hormiga_count']).toInt(),
+          hormigaTotal: _d(r['hormiga_total']),
+          onRegistrarGasto: _abrirAgregarGasto,
+          onVerMes: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => MesDetalleScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _now.year,
+              mes: _now.month,
+              label: mesNombre,
+              initialTabIndex: 1,
+            ),
+          )).then((_) => _cargar()),
+        ),
+        const SizedBox(height: 12),
 
         // ── CARD PRINCIPAL DEL MES ────────────────────────────────────────
         GestureDetector(
@@ -623,7 +683,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (res == true) _cargar();
   }
 
+  void _abrirScanner() {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => InvoiceScannerScreen(firebaseUid: widget.firebaseUid),
+    )).then((_) => _cargar());
+  }
+
   double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0.0;
+
+  double _compromisosQuincena({
+    required int quincena,
+    required List<Map<String, dynamic>> gastosFijos,
+    required List<Map<String, dynamic>> deudas,
+  }) {
+    double total = 0;
+    for (final g in gastosFijos) {
+      final diaPago  = g['dia_pago'] as int?;
+      final diaPago2 = g['dia_pago_2'] as int?;
+      final monto = _d(g['monto']);
+      final tieneDos = diaPago != null && diaPago2 != null;
+      final montoQ = tieneDos ? monto / 2 : monto;
+
+      if (diaPago == null || diaPago == 15) {
+        total += monto / 2;
+      } else {
+        if (quincena == 1 && diaPago >= 1 && diaPago <= 14) total += montoQ;
+        if (quincena == 2 && diaPago >= 16) total += montoQ;
+        if (diaPago2 != null) {
+          if (quincena == 1 && diaPago2 >= 1 && diaPago2 <= 14) total += montoQ;
+          if (quincena == 2 && diaPago2 >= 16) total += montoQ;
+        }
+      }
+    }
+    for (final d in deudas) {
+      total += _d(d['cuota']) / 2;
+    }
+    return total;
+  }
 
   static String _mesLabel(int m) => const [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -645,6 +741,340 @@ class _MiniStat extends StatelessWidget {
     Text(value, style: TextStyle(color: color,
         fontSize: 14, fontWeight: FontWeight.w700)),
   ]);
+}
+
+class _QuincenaDecisionCard extends StatelessWidget {
+  final int quincena;
+  final double ingresoQuincena;
+  final double compromisosQuincena;
+  final double disponibleQuincena;
+  final int diasRestantes;
+  final double gastoDiarioSeguro;
+  final VoidCallback onRegistrarGasto;
+  final VoidCallback onEscanearFactura;
+  final VoidCallback onVerPagos;
+
+  const _QuincenaDecisionCard({
+    required this.quincena,
+    required this.ingresoQuincena,
+    required this.compromisosQuincena,
+    required this.disponibleQuincena,
+    required this.diasRestantes,
+    required this.gastoDiarioSeguro,
+    required this.onRegistrarGasto,
+    required this.onEscanearFactura,
+    required this.onVerPagos,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = disponibleQuincena <= 0
+        ? AppTheme.danger
+        : disponibleQuincena < ingresoQuincena * 0.20
+            ? AppTheme.warning
+            : AppTheme.success;
+    final estado = disponibleQuincena <= 0
+        ? 'No gastes libremente'
+        : disponibleQuincena < ingresoQuincena * 0.20
+            ? 'Modo cuidado'
+            : 'Puedes respirar';
+    final consejo = disponibleQuincena <= 0
+        ? 'Tus compromisos cubren o superan esta quincena. Solo registra pagos necesarios.'
+        : 'Si te limitas a ${Money.fmt(gastoDiarioSeguro)} por día, llegas mejor al próximo cobro.';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.18),
+            AppTheme.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text('MODO QUINCENA · Q$quincena',
+                style: TextStyle(color: color, fontSize: 11,
+                    fontWeight: FontWeight.w900, letterSpacing: 0.6)),
+          ),
+          const Spacer(),
+          Icon(Icons.payments_outlined, color: color, size: 20),
+        ]),
+        const SizedBox(height: 14),
+        Text(estado,
+            style: TextStyle(color: AppTheme.textPrimary,
+                fontSize: 22, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 4),
+        Text(consejo,
+            style: TextStyle(color: AppTheme.textSecondary,
+                fontSize: 13, height: 1.35)),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: _DecisionMetric(
+            label: 'Cobro Q$quincena',
+            value: Money.fmt(ingresoQuincena),
+            color: AppTheme.success,
+          )),
+          Expanded(child: _DecisionMetric(
+            label: 'Separar',
+            value: Money.fmt(compromisosQuincena),
+            color: AppTheme.warning,
+          )),
+          Expanded(child: _DecisionMetric(
+            label: 'Libre',
+            value: Money.fmt(disponibleQuincena),
+            color: color,
+          )),
+        ]),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.background.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Row(children: [
+            Icon(Icons.today_outlined, color: color, size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(
+              'Te quedan $diasRestantes ${diasRestantes == 1 ? 'día' : 'días'} en esta quincena.',
+              style: TextStyle(color: AppTheme.textSecondary,
+                  fontSize: 12, fontWeight: FontWeight.w600),
+            )),
+            Text(Money.fmt(gastoDiarioSeguro),
+                style: TextStyle(color: color,
+                    fontSize: 15, fontWeight: FontWeight.w900)),
+            Text(' /día',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: onRegistrarGasto,
+              icon: const Icon(Icons.add_card, size: 17),
+              label: const Text('Gasté algo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: AppTheme.background,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onEscanearFactura,
+              icon: const Icon(Icons.qr_code_scanner, size: 17),
+              label: const Text('Factura'),
+              style: OutlinedButton.styleFrom(foregroundColor: AppTheme.primary),
+            ),
+          ),
+          IconButton(
+            onPressed: onVerPagos,
+            tooltip: 'Ver pagos de la quincena',
+            color: color,
+            icon: const Icon(Icons.checklist_rtl),
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _DecisionMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _DecisionMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label,
+          style: TextStyle(color: AppTheme.textMuted,
+              fontSize: 10, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      Text(value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: color,
+              fontSize: 14, fontWeight: FontWeight.w900)),
+    ],
+  );
+}
+
+class _DummiesGuideCard extends StatelessWidget {
+  final double remanente;
+  final double gastoDiarioSeguro;
+  final int pendientesCount;
+  final double pendientesTotal;
+  final int hormigaCount;
+  final double hormigaTotal;
+  final VoidCallback onRegistrarGasto;
+  final VoidCallback onVerMes;
+
+  const _DummiesGuideCard({
+    required this.remanente,
+    required this.gastoDiarioSeguro,
+    required this.pendientesCount,
+    required this.pendientesTotal,
+    required this.hormigaCount,
+    required this.hormigaTotal,
+    required this.onRegistrarGasto,
+    required this.onVerMes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = remanente < 0
+        ? AppTheme.danger
+        : pendientesCount > 0
+            ? AppTheme.warning
+            : AppTheme.success;
+    final titulo = remanente < 0
+        ? 'Alto: estás en negativo'
+        : pendientesCount > 0
+            ? 'Primero paga lo pendiente'
+            : 'Vas bien por ahora';
+    final accion = remanente < 0
+        ? 'No hagas gastos nuevos. Revisa qué puedes mover o cancelar.'
+        : pendientesCount > 0
+            ? 'Separa ${Money.fmt(pendientesTotal)} antes de gastar en otra cosa.'
+            : 'Puedes gastar aprox. ${Money.fmt(gastoDiarioSeguro)} por día sin pasarte.';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.emoji_objects_outlined, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('GUÍA SIMPLE',
+                style: TextStyle(color: color, fontSize: 11,
+                    fontWeight: FontWeight.w800, letterSpacing: 0.7)),
+            const SizedBox(height: 4),
+            Text(titulo,
+                style: TextStyle(color: AppTheme.textPrimary,
+                    fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(accion,
+                style: TextStyle(color: AppTheme.textSecondary,
+                    fontSize: 13, height: 1.35)),
+          ])),
+        ]),
+        const SizedBox(height: 14),
+        _SimpleStep(
+          number: '1',
+          text: pendientesCount > 0
+              ? 'Paga o separa tus compromisos pendientes.'
+              : 'No tienes compromisos urgentes pendientes.',
+          color: pendientesCount > 0 ? AppTheme.warning : AppTheme.success,
+        ),
+        _SimpleStep(
+          number: '2',
+          text: 'Registra cada compra al momento para saber cuánto queda.',
+          color: AppTheme.primary,
+        ),
+        _SimpleStep(
+          number: '3',
+          text: hormigaCount > 0
+              ? 'Cuida los gastos hormiga: ya van $hormigaCount por ${Money.fmt(hormigaTotal)}.'
+              : 'Mantén los gastos hormiga en cero o muy bajitos.',
+          color: hormigaCount > 0 ? AppTheme.warning : AppTheme.success,
+        ),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: onRegistrarGasto,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Registrar gasto'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: AppTheme.background,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton(
+            onPressed: onVerMes,
+            style: OutlinedButton.styleFrom(foregroundColor: color),
+            child: const Text('Ver mes'),
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _SimpleStep extends StatelessWidget {
+  final String number;
+  final String text;
+  final Color color;
+
+  const _SimpleStep({
+    required this.number,
+    required this.text,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 7),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 22,
+        height: 22,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          shape: BoxShape.circle,
+        ),
+        child: Text(number,
+            style: TextStyle(color: color, fontSize: 11,
+                fontWeight: FontWeight.w800)),
+      ),
+      const SizedBox(width: 9),
+      Expanded(child: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(text,
+            style: TextStyle(color: AppTheme.textSecondary,
+                fontSize: 12, height: 1.3)),
+      )),
+    ]),
+  );
 }
 
 class _SectionLabel extends StatelessWidget {
