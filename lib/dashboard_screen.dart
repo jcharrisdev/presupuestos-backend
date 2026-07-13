@@ -95,8 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Dashboard'),
-            Text('Tu hoy: estado actual y esta quincena',
+            Text('Hoy'),
+            Text('Simple: qué pagar, cuánto puedes usar y qué recortar',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.normal)),
           ],
         ),
@@ -191,6 +191,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         countSemana++;
       }
     }
+    final diasRestantesMes = DateTime(_now.year, _now.month + 1, 0).day - _now.day + 1;
+    final gastoDiarioSeguro = diasRestantesMes > 0 && remReal > 0
+        ? remReal / diasRestantesMes
+        : 0.0;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -229,6 +233,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
         ],
+
+        // ── GUÍA SIMPLE "FOR DUMMIES" ───────────────────────────────────
+        _DummiesGuideCard(
+          remanente: remReal,
+          gastoDiarioSeguro: gastoDiarioSeguro,
+          pendientesCount: pendientes.length,
+          pendientesTotal: totalPendiente,
+          hormigaCount: _d(r['hormiga_count']).toInt(),
+          hormigaTotal: _d(r['hormiga_total']),
+          onRegistrarGasto: _abrirAgregarGasto,
+          onVerMes: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => MesDetalleScreen(
+              firebaseUid: widget.firebaseUid,
+              anio: _now.year,
+              mes: _now.month,
+              label: mesNombre,
+              initialTabIndex: 1,
+            ),
+          )).then((_) => _cargar()),
+        ),
+        const SizedBox(height: 12),
 
         // ── CARD PRINCIPAL DEL MES ────────────────────────────────────────
         GestureDetector(
@@ -645,6 +670,161 @@ class _MiniStat extends StatelessWidget {
     Text(value, style: TextStyle(color: color,
         fontSize: 14, fontWeight: FontWeight.w700)),
   ]);
+}
+
+class _DummiesGuideCard extends StatelessWidget {
+  final double remanente;
+  final double gastoDiarioSeguro;
+  final int pendientesCount;
+  final double pendientesTotal;
+  final int hormigaCount;
+  final double hormigaTotal;
+  final VoidCallback onRegistrarGasto;
+  final VoidCallback onVerMes;
+
+  const _DummiesGuideCard({
+    required this.remanente,
+    required this.gastoDiarioSeguro,
+    required this.pendientesCount,
+    required this.pendientesTotal,
+    required this.hormigaCount,
+    required this.hormigaTotal,
+    required this.onRegistrarGasto,
+    required this.onVerMes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = remanente < 0
+        ? AppTheme.danger
+        : pendientesCount > 0
+            ? AppTheme.warning
+            : AppTheme.success;
+    final titulo = remanente < 0
+        ? 'Alto: estás en negativo'
+        : pendientesCount > 0
+            ? 'Primero paga lo pendiente'
+            : 'Vas bien por ahora';
+    final accion = remanente < 0
+        ? 'No hagas gastos nuevos. Revisa qué puedes mover o cancelar.'
+        : pendientesCount > 0
+            ? 'Separa ${Money.fmt(pendientesTotal)} antes de gastar en otra cosa.'
+            : 'Puedes gastar aprox. ${Money.fmt(gastoDiarioSeguro)} por día sin pasarte.';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.emoji_objects_outlined, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('GUÍA SIMPLE',
+                style: TextStyle(color: color, fontSize: 11,
+                    fontWeight: FontWeight.w800, letterSpacing: 0.7)),
+            const SizedBox(height: 4),
+            Text(titulo,
+                style: TextStyle(color: AppTheme.textPrimary,
+                    fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(accion,
+                style: TextStyle(color: AppTheme.textSecondary,
+                    fontSize: 13, height: 1.35)),
+          ])),
+        ]),
+        const SizedBox(height: 14),
+        _SimpleStep(
+          number: '1',
+          text: pendientesCount > 0
+              ? 'Paga o separa tus compromisos pendientes.'
+              : 'No tienes compromisos urgentes pendientes.',
+          color: pendientesCount > 0 ? AppTheme.warning : AppTheme.success,
+        ),
+        _SimpleStep(
+          number: '2',
+          text: 'Registra cada compra al momento para saber cuánto queda.',
+          color: AppTheme.primary,
+        ),
+        _SimpleStep(
+          number: '3',
+          text: hormigaCount > 0
+              ? 'Cuida los gastos hormiga: ya van $hormigaCount por ${Money.fmt(hormigaTotal)}.'
+              : 'Mantén los gastos hormiga en cero o muy bajitos.',
+          color: hormigaCount > 0 ? AppTheme.warning : AppTheme.success,
+        ),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: onRegistrarGasto,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Registrar gasto'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: AppTheme.background,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton(
+            onPressed: onVerMes,
+            style: OutlinedButton.styleFrom(foregroundColor: color),
+            child: const Text('Ver mes'),
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _SimpleStep extends StatelessWidget {
+  final String number;
+  final String text;
+  final Color color;
+
+  const _SimpleStep({
+    required this.number,
+    required this.text,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 7),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 22,
+        height: 22,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          shape: BoxShape.circle,
+        ),
+        child: Text(number,
+            style: TextStyle(color: color, fontSize: 11,
+                fontWeight: FontWeight.w800)),
+      ),
+      const SizedBox(width: 9),
+      Expanded(child: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(text,
+            style: TextStyle(color: AppTheme.textSecondary,
+                fontSize: 12, height: 1.3)),
+      )),
+    ]),
+  );
 }
 
 class _SectionLabel extends StatelessWidget {
