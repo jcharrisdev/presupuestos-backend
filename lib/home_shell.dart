@@ -149,6 +149,7 @@ class _HomeShellState extends State<HomeShell> {
         anio: now.year,
         mes: now.month,
         label: _mesesLabel[now.month],
+        initialTabIndex: 1,
       ),
       DeudasScreen(firebaseUid: uid),
       _MasTab(
