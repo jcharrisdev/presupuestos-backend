@@ -6,6 +6,18 @@
 
 ---
 
+## FIN-01 / E-01 — Resumen mensual de caja (2026-09-10)
+
+**Estado:** EN VALIDACIÓN en rama. Sin despliegue ni build de Flutter verificado.
+
+**Problema confirmado en `main` f195aab:** el disponible del mes descuenta todos los registros, incluso los que tienen `pagado=0`. El Dashboard trata cualquier registro de un fijo como pago completo y omite su saldo parcial.
+
+**Cambio:** el endpoint mensual añade un cálculo común de gastos registrados, pagados y pendientes; compromisos que faltan registrar; total pendiente; disponible tras pagos y disponible tras pagar los pendientes. Los registros vinculados cubren su compromiso una sola vez. Dashboard y Resumen del Mes consumen una tarjeta compartida con esos valores. Se conservan los campos históricos y la compatibilidad con respuestas anteriores en caché.
+
+**Verificado:** 16 pruebas de Node, incluyendo el handler mensual con BD simulada, los tres casos de E-01, pagos parciales, vínculos fijo/deuda, cuotas de eventos, centavos y aislamiento por usuario. `node --check backend/server.js` sin errores. Las pruebas no arrancan el servidor ni acceden a datos reales.
+
+**Pendiente:** `flutter analyze`, pruebas de widgets y build web limpio con el SDK de Flutter; prueba funcional con una versión accesible. El Estado Anual, cierre, análisis por categoría y campos históricos siguen midiendo registros, no caja. El ingreso conserva la selección histórica: un cero almacenado usa el estimado si existe. Distinguir ingreso cero confirmado de ingreso no registrado requiere otro cambio del modelo. No marcar E-01 como listo para probar hasta completar esos controles y registrar build/enlace.
+
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
 
 **Progreso: 78 ✅ implementadas · 0 ⚠️ parciales · 8 ❌ pendientes** (86 ítems)

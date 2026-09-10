@@ -25,6 +25,7 @@ const express = require('express');
 const mysql   = require('mysql2');
 const cors    = require('cors');
 const cron    = require('node-cron');
+const { calcularResumenMensual } = require('./finanzas/resumen-mensual');
 const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
 const app = express();
@@ -10554,7 +10555,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
 
     // Gastos fijos del perfil para este mes (para mostrar compromisos)
     const [gastosFijosPerfil] = await db.execute(
-      `SELECT id, descripcion, monto_mensual, tipo, dia_pago, dia_pago_2, frecuencia
+      `SELECT id, descripcion, monto_mensual, tipo, dia_pago, dia_pago_2, frecuencia, categoria, deuda_id
        FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
       [firebase_uid]
     );
@@ -10571,6 +10572,14 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       [firebase_uid, anio, mes, mes]
     );
     const totalEventosMes = eventosDelMes.reduce((s, e) => s + Number(e.cuota_mensual), 0);
+
+    const resumenMensual = calcularResumenMensual({
+      ingreso: ingresoReal,
+      registros,
+      gastosFijos: gastosFijosPerfil,
+      deudas: deudasDelMes,
+      eventos: eventosDelMes,
+    });
 
     const hormigaRegistros = registros.filter(r => r.es_hormiga == 1);
     const hormigaTotal = hormigaRegistros.reduce((s, r) => s + Number(r.monto), 0);
@@ -10628,6 +10637,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         // AA2 — la cuota mensual de eventos reduce el disponible estimado del mes
         remanente_estimado:  parseFloat((Number(mesRow.ingreso_estimado) - totalFijosEstimado - Number(mesRow.variables_estimados) - totalEventosMes).toFixed(2)),
         ingreso_real:        parseFloat(ingresoReal.toFixed(2)),
+        ingreso_es_estimado: Number(mesRow.ingreso_real) === 0 || mesRow.ingreso_real == null,
         ingreso_base:        Number(mesRow.ingreso_estimado),
         ingresos_extra_total: parseFloat(totalIngresosExtra.toFixed(2)),
         fijos_reales:        parseFloat(fijosReales.toFixed(2)),
@@ -10637,6 +10647,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         presupuesto_sano:    remanenteReal >= 0,
         hormiga_count:       hormigaRegistros.length,
         hormiga_total:       parseFloat(hormigaTotal.toFixed(2)),
+        ...resumenMensual,
       },
       ingresos_extra: ingresosExtra,
       gastos_por_fuente: gastosPorFuente,

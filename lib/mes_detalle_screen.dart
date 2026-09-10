@@ -14,6 +14,7 @@ import 'widgets/ayuda_sheet.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
 import 'widgets/financiero/categoria_selector.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
+import 'widgets/financiero/resumen_mensual_card.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
 import 'ia/ia_chat_screen.dart';
 import 'ia/ia_diagnostico_sheet.dart';
@@ -134,7 +135,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                 AyudaItem(Icons.qr_code_scanner, 'Escanear factura',
                     'Escanea el QR de un recibo DGI. La app extrae los datos y los asigna al mes automáticamente.'),
                 AyudaItem(Icons.check_circle_outline, 'Marcar pagado',
-                    'Toca un gasto para marcarlo como pagado. No afecta el monto real, solo el control visual.'),
+                    'Confirma si el dinero ya salió. En el resumen de caja, el gasto pasa de pendiente a pagado y actualiza tu disponible.'),
               ],
             ),
           ),
@@ -267,6 +268,7 @@ class _TabResumen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = data['resumen'] as Map<String, dynamic>;
+    final tieneResumenCaja = ResumenMensualCard.tieneDatos(r);
     final ingEst  = _d(r['ingreso_estimado']);
     final ingReal = _d(r['ingreso_real']);
     final fijosEst  = _d(r['fijos_estimados']);
@@ -293,6 +295,9 @@ class _TabResumen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         // ── DISPONIBLE LIBRE ─────────────────────────────────────────────
+        if (tieneResumenCaja)
+          ResumenMensualCard(resumen: r)
+        else
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
@@ -353,6 +358,7 @@ class _TabResumen extends StatelessWidget {
         const SizedBox(height: 14),
 
         // Banner sano / en déficit
+        if (!tieneResumenCaja)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -404,7 +410,9 @@ class _TabResumen extends StatelessWidget {
             children: [
               const SizedBox(height: 8),
               // Tabla planificado vs real
-              _seccion('LO QUE PLANIFICASTE VS LO QUE GASTASTE'),
+              _seccion(tieneResumenCaja
+                  ? 'PLAN VS GASTOS REGISTRADOS (PAGADOS Y PENDIENTES)'
+                  : 'LO QUE PLANIFICASTE VS LO QUE GASTASTE'),
               _FilaComparativa('Ingreso', ingEst, ingReal, AppTheme.success),
               _FilaComparativa('Gastos fijos', fijosEst, fijosReal, AppTheme.colorFijo),
               _FilaComparativa('Gastos variables', varEst, varReal, AppTheme.warning),
@@ -436,14 +444,14 @@ class _TabResumen extends StatelessWidget {
                 ),
               ],
               Divider(color: AppTheme.border, height: 24),
-              _FilaComparativa('Te sobra', remEst, remReal,
+              _FilaComparativa(tieneResumenCaja ? 'Tras lo registrado' : 'Te sobra', remEst, remReal,
                   remReal >= 0 ? AppTheme.success : AppTheme.danger, bold: true),
               const SizedBox(height: 24),
 
               // Barra de progreso de uso del mes
-              _seccion('USO DEL INGRESO'),
+              if (!tieneResumenCaja) _seccion('USO DEL INGRESO'),
               const SizedBox(height: 8),
-              _BarraUso(ingreso: ingReal > 0 ? ingReal : ingEst,
+              if (!tieneResumenCaja) _BarraUso(ingreso: ingReal > 0 ? ingReal : ingEst,
                   fijos: fijosReal, variables: varReal, noPres: noPres),
               const SizedBox(height: 24),
 
