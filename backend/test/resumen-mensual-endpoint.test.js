@@ -28,6 +28,8 @@ function crearEndpoint({ mes = { id: 7, ingreso_estimado: '1000.00', ingreso_rea
       }
       if (sql.includes('FROM registros_gasto rg')) {
         assert.deepEqual(Array.from(params), [7, 'prueba-usuario']);
+        assert.match(sql, /LEFT JOIN eventos_gastos eg/);
+        assert.match(sql, /eg\.evento_id AS origen_evento_presupuesto_id/);
         return [registros];
       }
       if (sql.includes('FROM deudas d')) return [deudas];
@@ -97,6 +99,27 @@ test('GET excluye del pendiente las deudas cuyo primer pago es posterior al mes'
   assert.equal(status, 200);
   assert.equal(body.resumen.total_pendiente, 90);
   assert.equal(body.resumen.disponible_proyectado, 910);
+});
+
+test('GET atribuye un gasto de evento al presupuesto padre y no al id del detalle', async () => {
+  const api = crearEndpoint({
+    registros: [{
+      id: 9,
+      tipo: 'variable',
+      categoria: 'eventos',
+      monto: '20.00',
+      pagado: 1,
+      origen_evento_id: 42,
+      origen_evento_presupuesto_id: 3,
+    }],
+    eventos: [{ id: 3, nombre: 'Viaje', cuota_mensual: '60.00' }],
+  });
+  const { status, body } = await api.get();
+  assert.equal(status, 200);
+  assert.equal(body.resumen.gastos_pagados, 20);
+  assert.equal(body.resumen.compromisos_pendientes, 40);
+  assert.equal(body.resumen.total_pendiente, 40);
+  assert.equal(body.resumen.disponible_proyectado, 940);
 });
 
 test('GET conserva la selección histórica del ingreso y la identifica como estimada', async () => {

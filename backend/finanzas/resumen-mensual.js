@@ -42,9 +42,14 @@ function calcularResumenMensual({ ingreso, registros = [], gastosFijos = [], deu
     else pendientes += monto;
 
     // Un registro solo cubre un compromiso, incluso si conserva dos vínculos.
+    const tieneEventoResuelto = Object.prototype.hasOwnProperty.call(
+      registro, 'origen_evento_presupuesto_id');
+    const eventoId = tieneEventoResuelto
+      ? registro.origen_evento_presupuesto_id
+      : registro.origen_evento_id;
     const compromiso = porOrigen.get(`fijo:${registro.origen_fijo_id}`)
       ?? porOrigen.get(`deuda:${registro.origen_deuda_id}`)
-      ?? porOrigen.get(`evento:${registro.origen_evento_id}`);
+      ?? porOrigen.get(`evento:${eventoId}`);
     if (compromiso) {
       if (estaPagado) compromiso.pagado += monto;
       else compromiso.registradoPendiente += monto;

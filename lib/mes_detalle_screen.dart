@@ -2036,8 +2036,24 @@ class _RegistroTile extends StatelessWidget {
             onTap: () async {
               Navigator.pop(context);
               final pagado = (reg['pagado'] as int? ?? 0) == 1;
-              await RegistrosService.marcarPagado(uid, reg['id'] as int, !pagado);
-              onChanged();
+              try {
+                await RegistrosService.marcarPagado(
+                  uid,
+                  reg['id'] as int,
+                  !pagado,
+                );
+                onChanged();
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'No se pudo actualizar el gasto. Inténtalo nuevamente.',
+                      ),
+                    ),
+                  );
+                }
+              }
             },
           ),
           if (!esGustito) ...[

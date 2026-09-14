@@ -807,7 +807,7 @@ const db = pool.promise();
 // =============================================================================
 // SISTEMA DE LOGGING — guarda errores en server_logs para diagnóstico remoto
 // =============================================================================
-const LOG_SECRET = 'salarying_logs_2025';
+const LOG_SECRET = process.env.LOG_SECRET;
 
 async function _logError(ruta, error, uid = '-', reqBody = null) {
   try {
@@ -856,7 +856,7 @@ app.use((req, res, next) => {
 // GET /logs — devuelve los últimos errores del servidor (protegido por secret)
 app.get('/logs', async (req, res) => {
   const { secret, limit = 50, nivel, uid, desde } = req.query;
-  if (secret !== LOG_SECRET)
+  if (!LOG_SECRET || secret !== LOG_SECRET)
     return res.status(401).json({ error: 'Acceso denegado' });
   try {
     let sql = `SELECT id, nivel, ruta, firebase_uid, mensaje, stack, req_body, created_at
@@ -878,7 +878,7 @@ app.get('/logs', async (req, res) => {
 // DELETE /logs — limpia los logs (protegido por secret)
 app.delete('/logs', async (req, res) => {
   const { secret } = req.query;
-  if (secret !== LOG_SECRET) return res.status(401).json({ error: 'Acceso denegado' });
+  if (!LOG_SECRET || secret !== LOG_SECRET) return res.status(401).json({ error: 'Acceso denegado' });
   try {
     await db.execute(`DELETE FROM server_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`);
     res.json({ ok: true, mensaje: 'Logs de más de 7 días eliminados' });
@@ -10477,9 +10477,12 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado. Genera el estado anual primero.' });
 
     const [registros] = await db.execute(
-      `SELECT rg.*, s.nombre AS subcategoria_nombre
+      `SELECT rg.*, s.nombre AS subcategoria_nombre,
+              eg.evento_id AS origen_evento_presupuesto_id
        FROM registros_gasto rg
        LEFT JOIN subcategorias s ON s.id = rg.subcategoria_id
+       LEFT JOIN eventos_gastos eg
+         ON eg.id = rg.origen_evento_id AND eg.firebase_uid = rg.firebase_uid
        WHERE rg.mes_id = ? AND rg.firebase_uid = ?
        ORDER BY rg.fecha DESC, rg.created_at DESC`,
       [mesRow.id, firebase_uid]
@@ -11079,13 +11082,19 @@ app.patch('/registros/:id/pagar', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid, pagado } = req.body;
   if (!firebase_uid || pagado === undefined) return res.status(400).json({ error: 'firebase_uid y pagado requeridos' });
+
+  let pagadoNormalizado;
+  if (pagado === true || pagado === 1 || pagado === '1') pagadoNormalizado = 1;
+  else if (pagado === false || pagado === 0 || pagado === '0') pagadoNormalizado = 0;
+  else return res.status(400).json({ error: 'pagado debe ser 0 o 1' });
+
   try {
     const [r] = await db.execute(
       `UPDATE registros_gasto SET pagado = ? WHERE id = ? AND firebase_uid = ?`,
-      [pagado ? 1 : 0, id, firebase_uid]
+      [pagadoNormalizado, id, firebase_uid]
     );
     if (!r.affectedRows) return res.status(404).json({ error: 'Registro no encontrado' });
-    res.json({ success: true, pagado: pagado ? 1 : 0 });
+    res.json({ success: true, pagado: pagadoNormalizado });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -79,6 +79,21 @@ test('deudas y eventos sin registrar se incluyen, sin duplicar sus pagos', () =>
   assert.equal(r.disponible_proyectado, 895);
 });
 
+test('un vínculo de evento resuelto como nulo no se confunde con el id del detalle', () => {
+  const r = resumen([
+    registro(20, 1, {
+      origen_evento_id: 3,
+      origen_evento_presupuesto_id: null,
+    }),
+  ], {
+    eventos: [{ id: 3, cuota_mensual: 60 }],
+  });
+  assert.equal(r.gastos_pagados, 20);
+  assert.equal(r.compromisos_pendientes, 60);
+  assert.equal(r.total_pendiente, 60);
+  assert.equal(r.disponible_proyectado, 920);
+});
+
 test('un sobrepago no reduce otro compromiso ni produce pendientes negativos', () => {
   const r = resumen([registro(120, 1, { origen_fijo_id: 1 }), registro(10, 0, { origen_fijo_id: 1 })], {
     gastosFijos: [{ id: 1, monto_mensual: 100 }, { id: 2, monto_mensual: 50 }],
