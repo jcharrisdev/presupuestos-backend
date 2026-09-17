@@ -38,3 +38,6 @@ linux/flutter/ephemeral/
 build/*
 !build/web
 android/app/.cxx/
+
+# Secretos locales — nunca subir (el repo es público)
+*.local.md

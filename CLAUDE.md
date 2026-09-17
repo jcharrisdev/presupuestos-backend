@@ -2,7 +2,7 @@
 
 > Este archivo es la fuente de verdad para trabajar en Salarying.
 > Léelo completo antes de tocar cualquier código.
-> Última actualización: 2026-05-20
+> Última actualización: 2026-09-17
 
 ---
 
@@ -55,7 +55,8 @@ git commit -m "descripción"
 git push origin main
 
 # 3. Trigger deploy en Render
-curl -X POST "https://api.render.com/deploy/srv-d5kjem9r0fns73bfs23g?key=1s-LJtjaam4"
+# Clave real en DEPLOY_SECRETS.local.md (NUNCA poner la clave aquí — este repo es público)
+curl -X POST "https://api.render.com/deploy/srv-d5kjem9r0fns73bfs23g?key=<ver DEPLOY_SECRETS.local.md>"
 ```
 
 **REGLA CRÍTICA:** Render despliega desde git. Si no hay commit+push, el deploy no tiene los cambios.
