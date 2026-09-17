@@ -4,6 +4,7 @@
  * (gastos, gustitos, eventos, deudas, invoice-scanner, etc.).
  */
 const { db } = require('./db');
+const { _montoMensual } = require('./calculos_financieros');
 
 async function _actualizarTotalesMes(mesId, firebaseUid) {
   const [rows] = await db.execute(
@@ -254,4 +255,97 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
   return alertas;
 }
 
-module.exports = { _actualizarTotalesMes, _generarAlertasMes };
+// Recalcula los estimados en meses_financieros y estado_financiero_anual
+// cuando el perfil del usuario cambia (gastos fijos, variables base, deudas).
+// Fire-and-forget: llámalo con .catch() para no bloquear la respuesta principal.
+async function _recalcularEstimadosAnio(firebase_uid, anio) {
+  const year = anio || new Date().getFullYear();
+  const [[efa]] = await db.execute(
+    `SELECT id FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`,
+    [firebase_uid, year]
+  );
+  if (!efa) return; // aún no se generó el estado anual — nada que actualizar
+
+  const [[income]] = await db.execute(
+    `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
+  );
+  if (!income) return;
+
+  const [gastosFijos] = await db.execute(
+    `SELECT * FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+  );
+  const [deudasIndep] = await db.execute(
+    `SELECT d.* FROM deudas d
+     LEFT JOIN user_gastos_fijos ugf ON ugf.deuda_id = d.id
+     WHERE d.firebase_uid = ? AND d.activa = 1 AND ugf.id IS NULL`, [firebase_uid]
+  );
+  const [variablesBase] = await db.execute(
+    `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+  );
+
+  const ingresoMensual    = Number(income.ingreso_neto_mensual);
+  const totalFijosMensual = gastosFijos.reduce((s, g) => s + Number(g.monto_mensual), 0)
+                          + deudasIndep.reduce((s, d) => s + Number(d.pago_minimo || d.cuota_fija || 0), 0);
+  const totalVarAnual     = variablesBase.reduce((s, g) => {
+    const arr = g.aplica_meses
+      ? (typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses)
+      : [1,2,3,4,5,6,7,8,9,10,11,12];
+    return s + _montoMensual(g) * arr.length;
+  }, 0);
+
+  // Actualizar estado_financiero_anual
+  await db.execute(
+    `UPDATE estado_financiero_anual SET
+       ingreso_anual_estimado   = ?,
+       gastos_fijos_anuales     = ?,
+       gastos_variables_anuales = ?,
+       remanente_anual_estimado = ?,
+       updated_at               = NOW()
+     WHERE firebase_uid = ? AND anio = ?`,
+    [parseFloat((ingresoMensual * 12).toFixed(2)),
+     parseFloat((totalFijosMensual * 12).toFixed(2)),
+     parseFloat(totalVarAnual.toFixed(2)),
+     parseFloat(((ingresoMensual - totalFijosMensual) * 12 - totalVarAnual).toFixed(2)),
+     firebase_uid, year]
+  );
+
+  // Actualizar meses_financieros — estimados + ingreso por mes (respeta aplica_meses)
+  const [meses] = await db.execute(
+    `SELECT id, mes FROM meses_financieros WHERE firebase_uid = ? AND anio = ?`,
+    [firebase_uid, year]
+  );
+  for (const mesRow of meses) {
+    const m = mesRow.mes;
+    const varMes = variablesBase.reduce((s, g) => {
+      if (g.aplica_meses) {
+        const arr = typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses;
+        if (!arr.includes(Number(m))) return s;
+      }
+      return s + _montoMensual(g);
+    }, 0);
+    // ingreso_real = salario base + ingresos extra del mes
+    const [[extraRow]] = await db.execute(
+      `SELECT COALESCE(SUM(monto), 0) AS total FROM registros_ingreso
+       WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, year, m]
+    );
+    const ingresoReal = parseFloat((ingresoMensual + Number(extraRow.total)).toFixed(2));
+    await db.execute(
+      `UPDATE meses_financieros SET
+         ingreso_estimado    = ?,
+         ingreso_real        = ?,
+         fijos_estimados     = ?,
+         variables_estimados = ?,
+         remanente_estimado  = ?
+       WHERE id = ?`,
+      [parseFloat(ingresoMensual.toFixed(2)),
+       ingresoReal,
+       parseFloat(totalFijosMensual.toFixed(2)),
+       parseFloat(varMes.toFixed(2)),
+       parseFloat((ingresoMensual - totalFijosMensual - varMes).toFixed(2)),
+       mesRow.id]
+    );
+  }
+}
+
+module.exports = { _actualizarTotalesMes, _generarAlertasMes, _recalcularEstimadosAnio };

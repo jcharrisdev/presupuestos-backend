@@ -32,13 +32,17 @@ test('lib/calendario_helpers expone calcularFechasEvento y generarEventosCalenda
   assert.deepEqual(calcularFechasEvento('unico', 15, '2026-06-10'), ['2026-06-10']);
 });
 
-test('lib/mes_helpers expone _actualizarTotalesMes y _generarAlertasMes', () => {
-  const { _actualizarTotalesMes, _generarAlertasMes } = require('../lib/mes_helpers');
+test('lib/mes_helpers expone _actualizarTotalesMes, _generarAlertasMes y _recalcularEstimadosAnio', () => {
+  const { _actualizarTotalesMes, _generarAlertasMes, _recalcularEstimadosAnio } = require('../lib/mes_helpers');
   assert.equal(typeof _actualizarTotalesMes, 'function');
   assert.equal(typeof _generarAlertasMes, 'function');
+  assert.equal(typeof _recalcularEstimadosAnio, 'function');
 });
 
-for (const modulo of ['logs', 'ahorros', 'calendario', 'gustitos']) {
+for (const modulo of [
+  'logs', 'ahorros', 'calendario', 'gustitos',
+  'expense_definitions', 'timeline', 'quincena', 'alertas', 'eventos', 'deudas',
+]) {
   test(`routes/${modulo} exporta un Express Router`, () => {
     const router = require(`../routes/${modulo}`);
     // Un Router de Express es una función con .stack (las rutas registradas)
