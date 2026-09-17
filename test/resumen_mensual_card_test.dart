@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:salarying/mes_detalle_screen.dart';
 import 'package:salarying/utils/money.dart';
 import 'package:salarying/widgets/financiero/resumen_mensual_card.dart';
 
@@ -20,6 +21,15 @@ void main() {
     expect(ResumenMensualCard.tieneDatos(resumen), isTrue);
     expect(ResumenMensualCard.tieneDatos({...resumen, 'total_pendiente': null}), isFalse);
     expect(ResumenMensualCard.tieneDatos({...resumen, 'disponible_real': 'NaN'}), isFalse);
+  });
+
+  test('normaliza el estado pagado recibido desde MySQL y JSON', () {
+    for (final valor in [true, 1, '1']) {
+      expect(registroEstaPagado(valor), isTrue, reason: 'valor: $valor');
+    }
+    for (final valor in [false, 0, '0', null]) {
+      expect(registroEstaPagado(valor), isFalse, reason: 'valor: $valor');
+    }
   });
 
   testWidgets('presenta pagos y pendientes con los valores del servidor en pantalla estrecha', (tester) async {
