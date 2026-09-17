@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../services/gastos_variables_service.dart';
+import '../../utils/error_feedback.dart';
 
 /// Selector de categoría con soporte para categorías personalizadas.
 /// Cuando el usuario selecciona "Otro", aparece un campo de texto.
@@ -74,7 +75,7 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
       if (mounted) {
         setState(() => _categoriasCustom = subs.map((s) => s['nombre'] as String).toList());
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[categoria_selector] no se pudieron cargar categorías personalizadas: $e'); }
   }
 
   @override
@@ -161,7 +162,12 @@ class _CategoriaSelectorState extends State<CategoriaSelector> {
                 // Guardar en las categorías del usuario
                 GastosVariablesService.crearSubcategoria(widget.firebaseUid, 'custom', txt.toLowerCase())
                     .then((_) => _cargarCustom())
-                    .catchError((_) {});
+                    .catchError((e) {
+                      debugPrint('[categoria_selector] no se pudo guardar la categoría personalizada: $e');
+                      if (mounted) {
+                        ErrorFeedback.mostrar(context, 'No se pudo guardar "$txt" como categoría. Puede que no aparezca la próxima vez.');
+                      }
+                    });
                 setState(() => _mostrarCustom = false);
                 widget.onChanged(txt.toLowerCase(), txt.toLowerCase());
               }

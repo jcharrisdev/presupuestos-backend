@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 
 class UserSettingsService {
@@ -6,7 +7,7 @@ class UserSettingsService {
     try {
       final res = await ApiClient.get('/user/settings?firebase_uid=$uid');
       if (res.statusCode == 200) return json.decode(res.body);
-    } catch (_) {}
+    } catch (e) { debugPrint('[user_settings_service] no se pudo cargar settings: $e'); }
     return {'modo_negocio': 0};
   }
 

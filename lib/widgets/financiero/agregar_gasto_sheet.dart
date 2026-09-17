@@ -12,6 +12,7 @@ import 'mes_rango_selector.dart';
 import 'categoria_selector.dart';
 import 'split_section.dart';
 import '../../utils/money.dart';
+import '../../utils/error_feedback.dart';
 
 class AgregarGastoSheet extends StatefulWidget {
   final String firebaseUid;
@@ -175,7 +176,7 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         });
         return;
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[agregar_gasto_sheet] no se pudieron cargar definiciones: $e'); }
     if (mounted) setState(() => _loadingDefs = false);
   }
 
@@ -742,7 +743,12 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('"$catLabel" agregada a tu presupuesto base'),
                 backgroundColor: AppTheme.success));
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[agregar_gasto_sheet] no se pudo agregar al presupuesto base: $e');
+        if (mounted) {
+          ErrorFeedback.mostrar(context, 'No se pudo agregar "$catLabel" a tu presupuesto. Intenta de nuevo.');
+        }
+      }
     }
   }
 }

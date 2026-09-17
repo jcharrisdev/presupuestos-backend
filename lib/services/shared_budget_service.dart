@@ -60,6 +60,8 @@ class SharedBudgetService {
         '/shared-budget-invitations/code/${code.trim()}/join', body);
     if (res.statusCode == 200) return (true, 'Te uniste al presupuesto');
     String msg = 'No se pudo unir';
+    // Solo parsea el error del backend; si el body no es JSON válido, msg ya
+    // tiene un fallback razonable y SÍ se le muestra al usuario vía el caller.
     try { msg = json.decode(res.body)['error'] as String? ?? msg; } catch (_) {}
     return (false, msg);
   }

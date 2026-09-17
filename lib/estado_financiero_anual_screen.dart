@@ -81,13 +81,13 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       try {
         final alertas = await EstadoAnualService.getAlertas(widget.firebaseUid, anio: _anio);
         if (mounted) setState(() => _alertasCount = alertas['no_leidas'] as int? ?? 0);
-      } catch (_) {}
+      } catch (e) { debugPrint('[estado_financiero_anual] no se pudo cargar contador de alertas: $e'); }
       try {
         final resumen = await EstadoAnualService.getResumenAlertas(widget.firebaseUid, _anio);
         final porMes = (resumen['por_mes'] as Map? ?? {})
             .map((k, v) => MapEntry(int.tryParse(k.toString()) ?? 0, Map<String, dynamic>.from(v as Map)));
         if (mounted) setState(() => _alertasResumen = porMes);
-      } catch (_) {}
+      } catch (e) { debugPrint('[estado_financiero_anual] no se pudo cargar resumen de alertas: $e'); }
       // K3 — frecuencia de cobro para sugerir Vista Quincenal a quien cobra quincenal
       try {
         final r = await ApiClient.get('/user/income?firebase_uid=${widget.firebaseUid}');
@@ -95,14 +95,14 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
           final inc = jsonDecode(r.body) as Map<String, dynamic>;
           setState(() => _frecuenciaCobro = inc['frecuencia_cobro'] as String?);
         }
-      } catch (_) {}
+      } catch (e) { debugPrint('[estado_financiero_anual] no se pudo cargar frecuencia de cobro: $e'); }
       // U5 — ¿ya registró su primer gasto del mes actual? (para el checklist de setup)
       try {
         final mesActual = DateTime.now().month;
         final mesData = await EstadoAnualService.getMes(widget.firebaseUid, _anio, mesActual);
         final regs = (mesData['registros'] as List? ?? []);
         if (mounted) setState(() => _tieneRegistrosMes = regs.isNotEmpty);
-      } catch (_) {}
+      } catch (e) { debugPrint('[estado_financiero_anual] no se pudo verificar registros del mes: $e'); }
       _cargarConsejero();
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
@@ -114,7 +114,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       final now = DateTime.now();
       final c = await ConsejeroService.get(widget.firebaseUid, anio: _anio, mes: now.month);
       if (mounted) setState(() => _consejero = c);
-    } catch (_) {}
+    } catch (e) { debugPrint('[estado_financiero_anual] no se pudo cargar consejero: $e'); }
     _cargarComparativa();
     _cargarConsejeroIA();
     _cargarNudge();
@@ -139,7 +139,7 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
       if (r.statusCode == 200 && mounted) {
         setState(() => _comparativa = jsonDecode(r.body) as Map<String, dynamic>);
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[estado_financiero_anual] no se pudo cargar comparativa: $e'); }
   }
 
   Future<void> _cargarConsejeroIA() async {

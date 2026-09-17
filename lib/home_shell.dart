@@ -108,7 +108,7 @@ class _HomeShellState extends State<HomeShell> {
           widget.firebaseUid, anio: now.year, mes: now.month);
       final count = (al['alertas'] as List? ?? []).length;
       if (mounted) setState(() => _alertasCount = count);
-    } catch (_) {}
+    } catch (e) { debugPrint('[home_shell] no se pudo cargar contador de alertas: $e'); }
     // M2 — facturas escaneadas sin asignar
     try {
       final res = await ApiClient.get(
@@ -117,7 +117,7 @@ class _HomeShellState extends State<HomeShell> {
         final n = (jsonDecode(res.body)['pendientes'] as num?)?.toInt() ?? 0;
         if (mounted) setState(() => _facturasPendientes = n);
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[home_shell] no se pudo cargar facturas pendientes: $e'); }
   }
 
   Future<void> _toggleNegocio(bool valor) async {

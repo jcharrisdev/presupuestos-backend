@@ -53,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return da.compareTo(db);
         });
         if (pagos.length > 5) pagos = pagos.sublist(0, 5);
-      } catch (_) {}
+      } catch (e) { debugPrint('[dashboard_screen] no se pudieron cargar próximos pagos: $e'); }
 
       // Alertas no leídas
       List<Map<String, dynamic>> alertas = [];
@@ -61,7 +61,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final al = await EstadoAnualService.getAlertas(
             widget.firebaseUid, anio: _now.year, mes: _now.month);
         alertas = (al['alertas'] as List? ?? []).cast<Map<String, dynamic>>();
-      } catch (_) {}
+      } catch (e) { debugPrint('[dashboard_screen] no se pudieron cargar alertas: $e'); }
 
       // Metas de ahorro activas
       List<dynamic> metas = [];
@@ -69,7 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final m = await SavingsService.getAhorros(widget.firebaseUid);
         metas = m.where((x) =>
             (x['activa'] as int? ?? 1) == 1).take(3).toList();
-      } catch (_) {}
+      } catch (e) { debugPrint('[dashboard_screen] no se pudieron cargar metas de ahorro: $e'); }
 
       if (!mounted) return;
       setState(() {

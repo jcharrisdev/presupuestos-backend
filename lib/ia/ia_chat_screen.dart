@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/app_theme.dart';
+import '../utils/error_feedback.dart';
 import '../services/ia_service.dart';
 import 'ia_diagnostico_sheet.dart';
 import 'ia_reporte_sheet.dart';
@@ -431,7 +432,12 @@ class _IaChatScreenState extends State<IaChatScreen> {
   Future<void> _cancelar(_Msg m, int accionId) async {
     try {
       await IaService.cancelarAccion(widget.firebaseUid, accionId);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ia_chat_screen] no se pudo cancelar la acción: $e');
+      if (mounted) {
+        ErrorFeedback.mostrar(context, 'No se pudo cancelar. Puede que la acción ya se haya ejecutado.');
+      }
+    }
     if (mounted) setState(() => m.accionEstado = 'cancelada');
   }
 

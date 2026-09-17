@@ -76,7 +76,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
           _variantes[productoId] = List<Map<String, dynamic>>.from(json.decode(res.body));
         });
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[productos_screen] no se pudieron cargar variantes: $e'); }
   }
 
   // ─── CRUD PRODUCTOS ─────────────────────────────────────────────────────────

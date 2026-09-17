@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 
 /// Servicio para el perfil financiero global del usuario.
@@ -89,7 +90,7 @@ class UserProfileService {
   static Future<void> syncDeudas(String uid) async {
     try {
       await ApiClient.post('/user/sync-deudas', {'firebase_uid': uid});
-    } catch (_) {}
+    } catch (e) { debugPrint('[user_profile_service] no se pudo sincronizar deudas: $e'); }
   }
 
   // ── Eliminar ingreso (para reconfigurar) ──────────────────────────────────

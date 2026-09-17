@@ -39,7 +39,7 @@ class _GustitosScreenState extends State<GustitosScreen> {
         final s = jsonDecode(r.body) as Map<String, dynamic>;
         setState(() => _presupuesto = (double.tryParse(s['presupuesto_gustitos'].toString()) ?? 0));
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[gustitos_screen] no se pudo cargar presupuesto de gustitos: $e'); }
   }
 
   Future<void> _editarPresupuesto() async {

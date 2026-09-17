@@ -673,7 +673,7 @@ class _EventoCard extends StatelessWidget {
         diasRestantes = f.difference(hoyN).inDays;
         esHoy = diasRestantes == 0;
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[calendario] fecha de evento inválida "$fechaStr": $e'); }
 
     return Container(
       padding: const EdgeInsets.all(14),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'theme/app_theme.dart';
 import 'utils/money.dart';
+import 'utils/error_feedback.dart';
 import 'widgets/empty_state.dart';
 import 'services/api_client.dart';
 import 'services/estado_anual_service.dart';
@@ -87,7 +88,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
             _alertas = (al['alertas'] as List? ?? []).cast<Map<String, dynamic>>();
           });
         }
-      } catch (_) {}
+      } catch (e) { debugPrint('[mes_detalle_screen] no se pudieron cargar alertas del mes: $e'); }
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
@@ -761,7 +762,12 @@ class _TabGastosState extends State<_TabGastos> {
                       if (!sheetCtx.mounted) return;
                       Navigator.pop(sheetCtx);
                       widget.onChanged();
-                    } catch (_) {}
+                    } catch (e) {
+                      debugPrint('[mes_detalle_screen] no se pudo eliminar el pago: $e');
+                      if (sheetCtx.mounted) {
+                        ErrorFeedback.mostrar(sheetCtx, 'No se pudo eliminar el pago. Intenta de nuevo.');
+                      }
+                    }
                   },
                   child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
                 ),
@@ -1021,7 +1027,7 @@ class _TabGastosState extends State<_TabGastos> {
       final data = await GastosVariablesService.getAll(widget.uid);
       final todas = (data['gastos'] as List? ?? []).cast<Map<String, dynamic>>();
       lineas = todas.where((g) => g['categoria'] == categoria).toList();
-    } catch (_) {}
+    } catch (e) { debugPrint('[mes_detalle_screen] no se pudieron cargar líneas variables: $e'); }
 
     if (!context.mounted) return;
 
@@ -2769,7 +2775,12 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                         if (!sheetCtx.mounted) return;
                         Navigator.pop(sheetCtx);
                         widget.onRefresh();
-                      } catch (_) {}
+                      } catch (e) {
+                        debugPrint('[mes_detalle_screen] no se pudo eliminar el pago: $e');
+                        if (sheetCtx.mounted) {
+                          ErrorFeedback.mostrar(sheetCtx, 'No se pudo eliminar el pago. Intenta de nuevo.');
+                        }
+                      }
                     },
                     child: Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
                   ),

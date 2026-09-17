@@ -61,7 +61,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
     Map<String, dynamic> varData = {'gastos': [], 'total_mensual': 0};
     try {
       varData = await GastosVariablesService.getAll(widget.firebaseUid);
-    } catch (_) {}
+    } catch (e) { debugPrint('[perfil_financiero_screen] no se pudieron cargar gastos variables: $e'); }
     final extraData = await IngresoExtraService.getByMes(
       widget.firebaseUid, _now.year, _now.month);
     if (!mounted) return;

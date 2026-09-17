@@ -52,7 +52,7 @@ class _AlertasScreenState extends State<AlertasScreen> {
       await EstadoAnualService.marcarAlertaLeida(widget.firebaseUid, alerta['id'] as int);
       if (!mounted) return;
       setState(() => alerta['leida'] = 1);
-    } catch (_) {}
+    } catch (e) { debugPrint('[alertas_screen] no se pudo marcar leída: $e'); }
   }
 
   Future<void> _marcarTodasLeidas() async {
@@ -61,7 +61,7 @@ class _AlertasScreenState extends State<AlertasScreen> {
       try {
         await EstadoAnualService.marcarAlertaLeida(widget.firebaseUid, a['id'] as int);
         a['leida'] = 1;
-      } catch (_) {}
+      } catch (e) { debugPrint('[alertas_screen] no se pudo marcar leída: $e'); }
     }
     if (mounted) setState(() {});
   }
