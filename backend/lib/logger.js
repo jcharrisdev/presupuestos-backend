@@ -27,10 +27,12 @@ async function _logInfo(ruta, mensaje, uid = '-') {
 }
 
 // Auto-limpieza cada hora — borra todos los logs de más de 60 minutos
+// .unref(): no mantiene el proceso vivo solo por este timer (server.js sigue
+// vivo por app.listen; esto evita que un test que requiera este módulo cuelgue).
 setInterval(async () => {
   try {
     await db.execute(`DELETE FROM server_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE)`);
   } catch (_) {}
-}, 60 * 60 * 1000);
+}, 60 * 60 * 1000).unref();
 
 module.exports = { LOG_SECRET, _logError, _logInfo };
