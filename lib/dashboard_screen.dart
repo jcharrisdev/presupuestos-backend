@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'utils/money.dart';
+import 'widgets/financiero/resumen_mensual_card.dart';
 import 'services/estado_anual_service.dart';
 import 'services/calendar_service.dart';
 import 'services/savings_service.dart';
@@ -138,14 +139,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBody() {
     final r = (_mes?['resumen'] as Map<String, dynamic>?) ?? {};
+    final tieneResumenCaja = ResumenMensualCard.tieneDatos(r);
     final ingEst   = _d(r['ingreso_estimado']);
     final ingReal  = _d(r['ingreso_real']);
     final ingreso  = ingReal > 0 ? ingReal : ingEst;
     final fijos    = _d(r['fijos_reales']);
     final vars     = _d(r['variables_reales']);
     final noPres   = _d(r['no_presupuestados']);
-    final gastos   = fijos + vars + noPres;
-    final remReal  = _d(r['remanente_real']);
+    final gastos   = tieneResumenCaja ? _d(r['gastos_pagados']) : fijos + vars + noPres;
+    final remReal  = _d(r[tieneResumenCaja ? 'disponible_real' : 'remanente_real']);
     final pct      = ingreso > 0 ? (gastos / ingreso).clamp(0.0, 1.0) : 0.0;
     final mesNombre = _mesLabel(_now.month);
 
@@ -161,7 +163,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final id = (g['id'] as num?)?.toInt() ?? -1;
       return !pagadosIds.contains(id);
     }).toList();
-    final totalPendiente = pendientes.fold(0.0, (s, g) => s + _d(g['monto']));
+    final totalPendiente = tieneResumenCaja
+        ? _d(r['total_pendiente'])
+        : pendientes.fold(0.0, (s, g) => s + _d(g['monto']));
 
     final deudas = ((_mes?['compromisos_fijos']?['deudas']) as List? ?? [])
         .cast<Map<String, dynamic>>();
@@ -238,7 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               anio: _now.year, mes: _now.month, label: mesNombre,
             ),
           )).then((_) => _cargar()),
-          child: Container(
+          child: tieneResumenCaja ? ResumenMensualCard(resumen: r) : Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppTheme.surface,
@@ -318,7 +322,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
 
         // ── COMPROMISOS PENDIENTES ────────────────────────────────────────
-        if (pendientes.isNotEmpty) ...[
+        if (totalPendiente > 0) ...[
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () => Navigator.push(context, MaterialPageRoute(
@@ -338,7 +342,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const Icon(Icons.pending_actions, color: AppTheme.warning, size: 18),
                 const SizedBox(width: 10),
                 Expanded(child: Text(
-                  '${pendientes.length} ${pendientes.length == 1 ? 'compromiso' : 'compromisos'} por pagar · ${Money.fmt(totalPendiente)}',
+                  tieneResumenCaja
+                      ? 'Revisar pagos pendientes · ${Money.fmt(totalPendiente)}'
+                      : '${pendientes.length} ${pendientes.length == 1 ? 'compromiso' : 'compromisos'} por pagar · ${Money.fmt(totalPendiente)}',
                   style: const TextStyle(color: AppTheme.warning,
                       fontSize: 13, fontWeight: FontWeight.w600),
                 )),

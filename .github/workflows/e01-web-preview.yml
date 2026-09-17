@@ -1,0 +1,64 @@
+name: E-01 web preview
+
+on:
+  push:
+    branches:
+      - codex/fin-01-resumen-mensual-20260910
+
+permissions:
+  contents: write
+
+concurrency:
+  group: e01-web-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-preview:
+    name: Build and publish Flutter web preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Verify E-01 before publishing
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter test test/resumen_mensual_card_test.dart
+
+      - name: Build web release
+        run: flutter build web --release
+
+      - name: Add verifiable build identity
+        env:
+          SALARYING_VERSION: 1.5.1+8
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          jq -n \
+            --arg version "$SALARYING_VERSION" \
+            --arg source_commit "$SOURCE_COMMIT" \
+            '{version: $version, source_commit: $source_commit}' \
+            > build/web/salarying-build.json
+
+      - name: Publish compiled web files to the PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f build/web
+          if git diff --cached --quiet; then
+            echo "The published web build is already current."
+            exit 0
+          fi
+          git commit -m "build(web): publish E-01 preview 1.5.1+8"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

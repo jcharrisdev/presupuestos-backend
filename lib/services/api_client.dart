@@ -20,7 +20,7 @@ import 'package:http/http.dart' as http;
 /// ```
 class ApiClient {
   /// URL base del backend desplegado en Render.
-  static const String baseUrl = 'https://presupuestos-backend-h3l6.onrender.com';
+  static const String baseUrl = 'https://presupuestos-backend-backend-pr-2.onrender.com';
 
   /// Timeout global para todas las peticiones.
   ///
