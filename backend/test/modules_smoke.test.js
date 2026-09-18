@@ -39,9 +39,21 @@ test('lib/mes_helpers expone _actualizarTotalesMes, _generarAlertasMes y _recalc
   assert.equal(typeof _recalcularEstimadosAnio, 'function');
 });
 
+test('lib/periodo_helpers expone getPeriodoActivo, crearPrimerPeriodo, crearNuevoPeriodo, generarMovimientosPeriodo y _insertarPeriodo', () => {
+  const {
+    getPeriodoActivo, crearPrimerPeriodo, crearNuevoPeriodo, generarMovimientosPeriodo, _insertarPeriodo,
+  } = require('../lib/periodo_helpers');
+  assert.equal(typeof getPeriodoActivo, 'function');
+  assert.equal(typeof crearPrimerPeriodo, 'function');
+  assert.equal(typeof crearNuevoPeriodo, 'function');
+  assert.equal(typeof generarMovimientosPeriodo, 'function');
+  assert.equal(typeof _insertarPeriodo, 'function');
+});
+
 for (const modulo of [
   'logs', 'ahorros', 'calendario', 'gustitos',
   'expense_definitions', 'timeline', 'quincena', 'alertas', 'eventos', 'deudas',
+  'presupuestos', 'gastos', 'movimientos', 'sobres',
 ]) {
   test(`routes/${modulo} exporta un Express Router`, () => {
     const router = require(`../routes/${modulo}`);
