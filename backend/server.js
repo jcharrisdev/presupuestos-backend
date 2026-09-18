@@ -6,10 +6,11 @@
  * Base de datos: Clever Cloud MySQL
  *
  * MÓDULOS QUE GESTIONA ESTE ARCHIVO:
- *  Perfil financiero, ingresos extra, dashboard, producción/ventas/cobros a
- *  clientes, catálogo de productos, presupuestos compartidos, jobs, gastos
- *  variables base, estado financiero anual, registros de gasto, y el cron job
- *  de marcado automático de eventos vencidos cada medianoche.
+ *  Perfil financiero (income + gastos fijos), dashboard, producción/ventas/cobros a
+ *  clientes, catálogo de productos, presupuestos compartidos, jobs, patrimonio/
+ *  objetivos/comparativa/consejero-ia/subcategorias, estado financiero anual,
+ *  registros de gasto, y el cron job de marcado automático de eventos vencidos
+ *  cada medianoche.
  *  El resto vive en routes/*.js (montados abajo) y lib/*.js (lógica compartida
  *  como períodos, calendario y recálculo de estimados).
  *
@@ -33,7 +34,7 @@ const {
 } = require('./lib/calculos_financieros');
 const { pool, db } = require('./lib/db');
 const { LOG_SECRET, _logError, _logInfo } = require('./lib/logger');
-const { calcularFechasEvento, generarEventosCalendario } = require('./lib/calendario_helpers');
+const { calcularFechasEvento, generarEventosCalendario, generarEventosPerfilGasto: _generarEventosPerfilGasto } = require('./lib/calendario_helpers');
 const { _actualizarTotalesMes, _generarAlertasMes, _recalcularEstimadosAnio } = require('./lib/mes_helpers');
 const { getPeriodoActivo, crearPrimerPeriodo, crearNuevoPeriodo } = require('./lib/periodo_helpers');
 
@@ -54,6 +55,9 @@ app.use(require('./routes/presupuestos'));
 app.use(require('./routes/gastos'));
 app.use(require('./routes/movimientos'));
 app.use(require('./routes/sobres'));
+app.use(require('./routes/ingresos_extra'));
+app.use(require('./routes/gastos_globales'));
+app.use(require('./routes/gastos_variables_base'));
 
 // Verifica la conexión y ejecuta migraciones al arrancar
 pool.getConnection(async (err, conn) => {
@@ -902,94 +906,7 @@ app.delete('/user/income', async (req, res) => {
 });
 
 // =============================================================================
-// MÓDULO: INGRESOS EXTRA (fotografía, freelance, bonos, regalos, etc.)
-// Los ingresos extra se suman al ingreso_real del mes correspondiente.
-// =============================================================================
-
-// Helper: recalcula ingreso_real del mes = salario base + suma de ingresos extra
-async function _recalcularIngresoRealMes(firebase_uid, anio, mes) {
-  const [[income]] = await db.execute(
-    `SELECT ingreso_neto_mensual FROM user_income WHERE firebase_uid = ?`, [firebase_uid]
-  );
-  const base = income ? Number(income.ingreso_neto_mensual) : 0;
-  const [[extra]] = await db.execute(
-    `SELECT COALESCE(SUM(monto), 0) AS total FROM registros_ingreso
-     WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
-    [firebase_uid, anio, mes]
-  );
-  const totalExtra = Number(extra.total);
-  const ingresoReal = parseFloat((base + totalExtra).toFixed(2));
-  await db.execute(
-    `UPDATE meses_financieros SET ingreso_real = ?
-     WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
-    [ingresoReal, firebase_uid, anio, mes]
-  );
-}
-
-// GET /user/ingresos-extra?firebase_uid=&anio=&mes=
-app.get('/user/ingresos-extra', async (req, res) => {
-  const { firebase_uid, anio, mes } = req.query;
-  if (!firebase_uid || !anio || !mes) return res.status(400).json({ error: 'firebase_uid, anio y mes requeridos' });
-  try {
-    const [rows] = await db.execute(
-      `SELECT * FROM registros_ingreso
-       WHERE firebase_uid = ? AND anio = ? AND mes = ?
-       ORDER BY fecha DESC, created_at DESC`,
-      [firebase_uid, anio, mes]
-    );
-    const total = rows.reduce((s, r) => s + Number(r.monto), 0);
-    // Agrupar por fuente para la vista bucket
-    const buckets = {};
-    for (const r of rows) {
-      if (!buckets[r.fuente_nombre]) buckets[r.fuente_nombre] = { fuente_nombre: r.fuente_nombre, total: 0, registros: [] };
-      buckets[r.fuente_nombre].total += Number(r.monto);
-      buckets[r.fuente_nombre].registros.push(r);
-    }
-    res.json({
-      ingresos: rows,
-      total: parseFloat(total.toFixed(2)),
-      buckets: Object.values(buckets).map(b => ({ ...b, total: parseFloat(b.total.toFixed(2)) })),
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /user/ingresos-extra
-app.post('/user/ingresos-extra', async (req, res) => {
-  const { firebase_uid, monto, descripcion, fuente_nombre, fecha } = req.body;
-  if (!firebase_uid || !monto || !fuente_nombre || !fecha)
-    return res.status(400).json({ error: 'firebase_uid, monto, fuente_nombre y fecha requeridos' });
-  if (Number(monto) <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
-  try {
-    const d = new Date(fecha);
-    const anio = d.getFullYear();
-    const mes  = d.getMonth() + 1;
-    const [result] = await db.execute(
-      `INSERT INTO registros_ingreso (firebase_uid, monto, descripcion, fuente_nombre, fecha, anio, mes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [firebase_uid, Number(monto).toFixed(2), descripcion || null, fuente_nombre, fecha, anio, mes]
-    );
-    await _recalcularIngresoRealMes(firebase_uid, anio, mes);
-    const [[saved]] = await db.execute(`SELECT * FROM registros_ingreso WHERE id = ?`, [result.insertId]);
-    _logInfo('/user/ingresos-extra', `Ingreso extra registrado: $${Number(monto).toFixed(2)} (${fuente_nombre})`, firebase_uid);
-    res.status(201).json(saved);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /user/ingresos-extra/:id
-app.delete('/user/ingresos-extra/:id', async (req, res) => {
-  const { id } = req.params;
-  const { firebase_uid } = req.body;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const [[row]] = await db.execute(
-      `SELECT * FROM registros_ingreso WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
-    );
-    if (!row) return res.status(404).json({ error: 'Ingreso no encontrado' });
-    await db.execute(`DELETE FROM registros_ingreso WHERE id = ?`, [id]);
-    await _recalcularIngresoRealMes(firebase_uid, row.anio, row.mes);
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// Módulo Ingresos Extra movido a routes/ingresos_extra.js (montado al inicio de este archivo).
 
 // Helper: mapea tipo de gasto del perfil al tipo ENUM de deudas
 function _mapTipoGastoToDeuda(tipo) {
@@ -1062,33 +979,6 @@ app.get('/user/gastos-fijos/:id/historial', async (req, res) => {
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
-// Helper: genera eventos de calendario para un gasto del perfil con recordatorio.
-// Si diaPago2 está definido, genera un segundo evento por mes (quincenas).
-async function _generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, diaPago, diaPago2) {
-  const today = new Date();
-  let generados = 0;
-  const dias = [diaPago, diaPago2].filter(Boolean);
-  for (const diaNum of dias) {
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-      const diasEnMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      const dia = Math.min(diaNum, diasEnMes);
-      const fecha = new Date(d.getFullYear(), d.getMonth(), dia);
-      const fechaStr = fecha.toISOString().split('T')[0];
-      const estado = fecha < today ? 'vencido' : 'pendiente';
-      await db.execute(
-        `INSERT INTO calendario_eventos
-           (firebase_uid, user_gasto_fijo_id, titulo, tipo, fecha_evento,
-            monto_esperado, estado, notificacion_activa, dias_anticipacion)
-         VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 2)`,
-        [firebase_uid, ugfId, titulo, fechaStr, monto, estado]
-      );
-      generados++;
-    }
-  }
-  return generados;
-}
 
 // POST /user/gastos-fijos
 // Si es_deuda=1, crea automáticamente un registro en tabla deudas con los datos disponibles
@@ -6528,188 +6418,10 @@ app.get('/presupuestos/:id/proyeccion', async (req, res) => {
 // Módulo Sobres movido a routes/sobres.js (montado al inicio de este archivo).
 
 // =============================================================================
-// MÓDULO: GASTOS GLOBALES
-// Gastos reutilizables independientes de presupuesto.
-// Flag individual/compartido. Pueden usarse en cualquier presupuesto.
-// =============================================================================
-
-// GET /gastos-globales/stats?firebase_uid= — totales para widget del AppBar
-app.get('/gastos-globales/stats', async (req, res) => {
-  const { firebase_uid } = req.query;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const [[stats]] = await db.execute(
-      `SELECT
-         COUNT(*)                                        AS total,
-         SUM(modalidad = 'individual')                  AS individuales,
-         SUM(modalidad = 'compartido')                  AS compartidos,
-         SUM(tipo = 'fijo')                             AS fijos,
-         SUM(tipo = 'variable')                         AS variables,
-         COALESCE(SUM(CASE WHEN frecuencia = 'mensual' THEN monto ELSE 0 END), 0) AS total_mensual_estimado
-       FROM gastos_globales
-       WHERE firebase_uid = ? AND activo = 1`,
-      [firebase_uid]
-    );
-    // Cuántos gastos globales están en uso en presupuestos activos
-    const [[enUso]] = await db.execute(
-      `SELECT COUNT(DISTINCT g.gasto_global_id) AS en_uso
-       FROM gastos g
-       JOIN presupuestos p ON p.id = g.presupuesto_id
-       WHERE g.firebase_uid = ? AND g.gasto_global_id IS NOT NULL`,
-      [firebase_uid]
-    );
-    res.json({
-      total:                    Number(stats.total),
-      individuales:             Number(stats.individuales),
-      compartidos:              Number(stats.compartidos),
-      fijos:                    Number(stats.fijos),
-      variables:                Number(stats.variables),
-      total_mensual_estimado:   parseFloat(Number(stats.total_mensual_estimado).toFixed(2)),
-      en_uso_en_presupuestos:   Number(enUso.en_uso),
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// GET /gastos-globales?firebase_uid=&modalidad=&tipo=&buscar=&activo=1
-app.get('/gastos-globales', async (req, res) => {
-  const { firebase_uid, modalidad, tipo, buscar, activo = '1' } = req.query;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    // veces_usado = cuántos gastos en presupuestos enlazan a este global
-    let sql = `
-      SELECT gg.*,
-             COALESCE(uso.veces_usado, 0) AS veces_usado,
-             uso.ultimo_presupuesto_id
-      FROM gastos_globales gg
-      LEFT JOIN (
-        SELECT gasto_global_id,
-               COUNT(*)  AS veces_usado,
-               MAX(presupuesto_id) AS ultimo_presupuesto_id
-        FROM gastos
-        WHERE gasto_global_id IS NOT NULL
-        GROUP BY gasto_global_id
-      ) uso ON uso.gasto_global_id = gg.id
-      WHERE gg.firebase_uid = ?`;
-    const params = [firebase_uid];
-    if (activo !== 'todos') { sql += ` AND gg.activo = ?`;    params.push(Number(activo)); }
-    if (modalidad)          { sql += ` AND gg.modalidad = ?`; params.push(modalidad); }
-    if (tipo)               { sql += ` AND gg.tipo = ?`;      params.push(tipo); }
-    if (buscar)             { sql += ` AND gg.nombre LIKE ?`; params.push(`%${buscar}%`); }
-    sql += ` ORDER BY uso.veces_usado DESC, gg.nombre ASC`;
-    const [rows] = await db.execute(sql, params);
-    const totalMensual = rows
-      .filter(g => g.activo && g.frecuencia === 'mensual')
-      .reduce((s, g) => s + Number(g.monto), 0);
-    res.json({ gastos: rows, total_mensual: parseFloat(totalMensual.toFixed(2)) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /gastos-globales — crear gasto global
-app.post('/gastos-globales', async (req, res) => {
-  const {
-    firebase_uid, nombre, descripcion, monto,
-    categoria = 'otro', tipo = 'variable', modalidad = 'individual',
-    frecuencia = 'mensual', dia_pago = null, notas = null,
-  } = req.body;
-  if (!firebase_uid || !nombre || monto == null)
-    return res.status(400).json({ error: 'firebase_uid, nombre y monto son requeridos' });
-  try {
-    const [result] = await db.execute(
-      `INSERT INTO gastos_globales
-         (firebase_uid, nombre, descripcion, monto, categoria, tipo, modalidad, frecuencia, dia_pago, notas)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [firebase_uid, nombre, descripcion || null, monto, categoria, tipo, modalidad, frecuencia, dia_pago, notas]
-    );
-    if (dia_pago) {
-      await _generarEventosPerfilGasto(firebase_uid, null, nombre, monto, dia_pago);
-    }
-    const [[created]] = await db.execute(`SELECT * FROM gastos_globales WHERE id = ?`, [result.insertId]);
-    res.status(201).json(created);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// PUT /gastos-globales/:id — editar gasto global (incluyendo cambio individual↔compartido)
-app.put('/gastos-globales/:id', async (req, res) => {
-  const { id } = req.params;
-  const { firebase_uid, nombre, descripcion, monto, categoria, tipo, modalidad, frecuencia, dia_pago, notas, activo } = req.body;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const [[existing]] = await db.execute(
-      `SELECT * FROM gastos_globales WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
-    );
-    if (!existing) return res.status(404).json({ error: 'Gasto no encontrado' });
-
-    const fields = [], vals = [];
-    if (nombre !== undefined)      { fields.push('nombre = ?');      vals.push(nombre); }
-    if (descripcion !== undefined) { fields.push('descripcion = ?'); vals.push(descripcion); }
-    if (monto !== undefined)       { fields.push('monto = ?');       vals.push(monto); }
-    if (categoria !== undefined)   { fields.push('categoria = ?');   vals.push(categoria); }
-    if (tipo !== undefined)        { fields.push('tipo = ?');         vals.push(tipo); }
-    if (modalidad !== undefined)   { fields.push('modalidad = ?');   vals.push(modalidad); }
-    if (frecuencia !== undefined)  { fields.push('frecuencia = ?');  vals.push(frecuencia); }
-    if (dia_pago !== undefined)    { fields.push('dia_pago = ?');    vals.push(dia_pago); }
-    if (notas !== undefined)       { fields.push('notas = ?');       vals.push(notas); }
-    if (activo !== undefined)      { fields.push('activo = ?');      vals.push(activo); }
-    if (fields.length === 0) return res.status(400).json({ error: 'Nada que actualizar' });
-
-    vals.push(id, firebase_uid);
-    await db.execute(`UPDATE gastos_globales SET ${fields.join(', ')} WHERE id = ? AND firebase_uid = ?`, vals);
-    const [[updated]] = await db.execute(`SELECT * FROM gastos_globales WHERE id = ?`, [id]);
-    res.json(updated);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /gastos-globales/:id/usar — agrega un gasto global al período activo de un presupuesto
-// Cuerpo: { firebase_uid, presupuesto_id, fecha, tipo? }
-// Copia nombre/monto/dia_pago/frecuencia del global. El tipo por defecto es 'no fijo' (variable).
-app.post('/gastos-globales/:id/usar', async (req, res) => {
-  const { id } = req.params;
-  const { firebase_uid, presupuesto_id, fecha, tipo = 'no fijo', subcategoria, clasificacion } = req.body;
-  if (!firebase_uid || !presupuesto_id || !fecha)
-    return res.status(400).json({ error: 'firebase_uid, presupuesto_id y fecha son requeridos' });
-  try {
-    const [[global]] = await db.execute(
-      `SELECT * FROM gastos_globales WHERE id = ? AND firebase_uid = ? AND activo = 1`,
-      [id, firebase_uid]
-    );
-    if (!global) return res.status(404).json({ error: 'Gasto global no encontrado o inactivo' });
-
-    const fechaStr   = fecha.split('T')[0];
-    const tipofecha  = global.dia_pago ? 'fija' : 'flexible';
-    const [result] = await db.execute(
-      `INSERT INTO gastos
-         (presupuesto_id, descripcion, monto, tipo, fecha, pagado, firebase_uid,
-          tipo_fecha, dia_pago, frecuencia_pago, subcategoria, clasificacion, gasto_global_id)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
-      [presupuesto_id, global.nombre, global.monto, tipo, fechaStr, firebase_uid,
-       tipofecha, global.dia_pago, global.frecuencia,
-       subcategoria || null, clasificacion || null, global.id]
-    );
-    const gastoId = result.insertId;
-
-    // Generar eventos de calendario si tiene día de pago
-    if (tipofecha === 'fija') {
-      await generarEventosCalendario(gastoId, firebase_uid);
-    }
-
-    const [[creado]] = await db.execute(`SELECT * FROM gastos WHERE id = ?`, [gastoId]);
-    res.status(201).json({ gasto: creado, gasto_global: global });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /gastos-globales/:id — soft delete
-app.delete('/gastos-globales/:id', async (req, res) => {
-  const { id } = req.params;
-  const { firebase_uid } = req.query;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const [result] = await db.execute(
-      `UPDATE gastos_globales SET activo = 0 WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
-    );
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Gasto no encontrado' });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// Módulo Gastos Globales movido a routes/gastos_globales.js (montado al inicio de este archivo).
+// Los 2 endpoints /shared-budgets/* debajo pertenecen a Presupuestos Compartidos, no a Gastos
+// Globales (a pesar de estar bajo este header) — quedan en server.js hasta que se extraiga esa
+// tanda completa.
 
 // GET /shared-budgets/:id/balance-detalle?firebase_uid=X
 app.get('/shared-budgets/:id/balance-detalle', async (req, res) => {
@@ -6782,172 +6494,10 @@ app.patch('/shared-budgets/:id/mi-aporte', async (req, res) => {
 });
 
 // =============================================================================
-// MÓDULO: GASTOS VARIABLES BASE
-// Gastos esperados pero variables: supermercado, gasolina, medicinas, etc.
-// Son la segunda capa del perfil financiero (después de los compromisos fijos).
-// =============================================================================
-
-const CATEGORIAS_VALIDAS = [
-  'vivienda','alimentacion','transporte','deudas','salud','educacion',
-  'ocio','familia','emergencias','deportes','ropa','tecnologia','otro',
-];
-
-// GET /user/gastos-variables-base?firebase_uid=
-app.get('/user/gastos-variables-base', async (req, res) => {
-  const { firebase_uid } = req.query;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const [rows] = await db.execute(
-      `SELECT gvb.*, s.nombre AS subcategoria_nombre
-       FROM gastos_variables_base gvb
-       LEFT JOIN subcategorias s ON s.id = gvb.subcategoria_id
-       WHERE gvb.firebase_uid = ? AND gvb.activo = 1
-       ORDER BY gvb.categoria ASC, gvb.monto_estimado DESC`,
-      [firebase_uid]
-    );
-    const totalMensual = rows.reduce((s, g) => {
-      const factor = g.frecuencia === 'quincenal' ? 2
-                   : g.frecuencia === 'semanal'   ? 4.33
-                   : g.frecuencia === 'anual'      ? 1/12
-                   : 1;
-      return s + Number(g.monto_estimado) * factor;
-    }, 0);
-    // Agrupar por categoría
-    const porCategoria = {};
-    for (const g of rows) {
-      if (!porCategoria[g.categoria]) porCategoria[g.categoria] = { categoria: g.categoria, items: [], subtotal: 0 };
-      porCategoria[g.categoria].items.push(g);
-      porCategoria[g.categoria].subtotal += Number(g.monto_estimado);
-    }
-    res.json({ gastos: rows, total_mensual: parseFloat(totalMensual.toFixed(2)), por_categoria: Object.values(porCategoria) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /user/gastos-variables-base
-// mes_inicio (1-12): mes desde el cual aplica. Default 1 (enero)
-// mes_fin    (1-12): mes hasta el cual aplica. Default 12 (diciembre)
-app.post('/user/gastos-variables-base', async (req, res) => {
-  const { firebase_uid, nombre, categoria = 'otro', categoria_custom,
-    subcategoria_id, monto_estimado, frecuencia = 'mensual',
-    mes_inicio = 1, mes_fin = 12, en_calendario = 0, notas } = req.body;
-  if (!firebase_uid || !nombre || monto_estimado == null)
-    return res.status(400).json({ error: 'firebase_uid, nombre y monto_estimado requeridos' });
-  try {
-    // Si la categoría es "otro" y hay una personalizada, crearla/buscarla primero
-    let categoriaFinal = categoria;
-    if (categoria === 'otro' && categoria_custom) {
-      const nombreCat = categoria_custom.trim().toLowerCase();
-      const [[existeCat]] = await db.execute(
-        `SELECT id FROM subcategorias WHERE firebase_uid = ? AND categoria = 'custom' AND nombre = ?`,
-        [firebase_uid, nombreCat]
-      );
-      if (!existeCat) {
-        await db.execute(
-          `INSERT INTO subcategorias (firebase_uid, categoria, nombre) VALUES (?, 'custom', ?)`,
-          [firebase_uid, nombreCat]
-        );
-      }
-      categoriaFinal = nombreCat;
-    }
-    const aplicaMeses = _generarAplicaMeses(mes_inicio, mes_fin);
-    const [r] = await db.execute(
-      `INSERT INTO gastos_variables_base
-         (firebase_uid, nombre, categoria, subcategoria_id, monto_estimado, frecuencia,
-          aplica_meses, mes_inicio, mes_fin, en_calendario, notas)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [firebase_uid, nombre, categoriaFinal, subcategoria_id || null, monto_estimado, frecuencia,
-       JSON.stringify(aplicaMeses), Number(mes_inicio), Number(mes_fin), en_calendario ? 1 : 0, notas || null]
-    );
-    const [[created]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [r.insertId]);
-    res.status(201).json(created);
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
-    _logInfo('/user/gastos-variables-base', `Variable base creada: "${nombre}" $${Number(monto_estimado).toFixed(2)} - meses ${mes_inicio}-${mes_fin}`, firebase_uid);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// PUT /user/gastos-variables-base/:id
-app.put('/user/gastos-variables-base/:id', async (req, res) => {
-  const { id } = req.params;
-  const { firebase_uid, nombre, categoria, categoria_custom, subcategoria_id,
-    monto_estimado, frecuencia, mes_inicio, mes_fin, en_calendario, notas, activo } = req.body;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const fields = [], vals = [];
-    let categoriaFinal = categoria;
-    if (categoria === 'otro' && categoria_custom) {
-      categoriaFinal = categoria_custom.trim().toLowerCase();
-      const [[existeCat]] = await db.execute(
-        `SELECT id FROM subcategorias WHERE firebase_uid = ? AND categoria = 'custom' AND nombre = ?`,
-        [firebase_uid, categoriaFinal]
-      );
-      if (!existeCat) {
-        await db.execute(
-          `INSERT INTO subcategorias (firebase_uid, categoria, nombre) VALUES (?, 'custom', ?)`,
-          [firebase_uid, categoriaFinal]
-        );
-      }
-    }
-    if (nombre !== undefined)          { fields.push('nombre = ?');          vals.push(nombre); }
-    if (categoriaFinal !== undefined)  { fields.push('categoria = ?');       vals.push(categoriaFinal); }
-    if (subcategoria_id !== undefined) { fields.push('subcategoria_id = ?'); vals.push(subcategoria_id); }
-    if (monto_estimado !== undefined)  { fields.push('monto_estimado = ?');  vals.push(monto_estimado); }
-    if (frecuencia !== undefined)      { fields.push('frecuencia = ?');      vals.push(frecuencia); }
-    if (en_calendario !== undefined)   { fields.push('en_calendario = ?');   vals.push(en_calendario ? 1 : 0); }
-    if (notas !== undefined)           { fields.push('notas = ?');           vals.push(notas); }
-    if (activo !== undefined)          { fields.push('activo = ?');          vals.push(activo); }
-    // Recalcular aplica_meses si cambia el rango
-    if (mes_inicio !== undefined || mes_fin !== undefined) {
-      const [[existing]] = await db.execute(`SELECT mes_inicio, mes_fin FROM gastos_variables_base WHERE id = ?`, [id]);
-      const nuevoInicio = mes_inicio ?? existing?.mes_inicio ?? 1;
-      const nuevoFin    = mes_fin    ?? existing?.mes_fin    ?? 12;
-      const nuevosM = _generarAplicaMeses(nuevoInicio, nuevoFin);
-      fields.push('mes_inicio = ?', 'mes_fin = ?', 'aplica_meses = ?');
-      vals.push(Number(nuevoInicio), Number(nuevoFin), JSON.stringify(nuevosM));
-    }
-    if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
-    vals.push(id, firebase_uid);
-    const [r] = await db.execute(`UPDATE gastos_variables_base SET ${fields.join(', ')} WHERE id = ? AND firebase_uid = ?`, vals);
-    if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
-    const [[updated]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [id]);
-    res.json(updated);
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
-    _logInfo(`/user/gastos-variables-base/${id}`, `Variable base editada: "${updated.nombre}" $${Number(updated.monto_estimado).toFixed(2)}`, firebase_uid);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /user/gastos-variables-base/:id
-app.delete('/user/gastos-variables-base/:id', async (req, res) => {
-  const { id } = req.params;
-  const { firebase_uid } = req.query;
-  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
-  try {
-    const [r] = await db.execute(`UPDATE gastos_variables_base SET activo = 0 WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
-    if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
-    res.json({ success: true });
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
-    _logInfo(`/user/gastos-variables-base/${id}`, `Variable base eliminada (id=${id})`, firebase_uid);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /user/gastos-variables-base/bulk
-app.post('/user/gastos-variables-base/bulk', async (req, res) => {
-  const { firebase_uid, variables } = req.body;
-  if (!firebase_uid || !Array.isArray(variables))
-    return res.status(400).json({ error: 'firebase_uid y variables[] requeridos' });
-  try {
-    const ids = [];
-    for (const v of variables) {
-      const [r] = await db.execute(
-        `INSERT INTO gastos_variables_base (firebase_uid, nombre, categoria, monto_estimado, frecuencia, activo)
-         VALUES (?, ?, ?, ?, 'mensual', 1)`,
-        [firebase_uid, v.nombre, v.categoria, Number(v.monto_estimado)]
-      );
-      ids.push(r.insertId);
-    }
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
-    res.status(201).json({ ids, count: ids.length });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// Módulo Gastos Variables Base movido a routes/gastos_variables_base.js (montado al inicio de
+// este archivo). Los endpoints de comparativa/patrimonio/objetivos/consejero-ia/subcategorias
+// debajo NO pertenecen a este módulo (a pesar de estar bajo el mismo header histórico) — quedan
+// en server.js como dominios propios para una tanda futura.
 
 // GET /user/comparativa?firebase_uid=&anio=&mes=
 // Tendencia 12 meses + comparativa vs mes anterior

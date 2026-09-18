@@ -24,10 +24,11 @@ test('lib/logger expone _logError, _logInfo y LOG_SECRET', () => {
   assert.equal(typeof _logInfo, 'function');
 });
 
-test('lib/calendario_helpers expone calcularFechasEvento y generarEventosCalendario', () => {
-  const { calcularFechasEvento, generarEventosCalendario } = require('../lib/calendario_helpers');
+test('lib/calendario_helpers expone calcularFechasEvento, generarEventosCalendario y generarEventosPerfilGasto', () => {
+  const { calcularFechasEvento, generarEventosCalendario, generarEventosPerfilGasto } = require('../lib/calendario_helpers');
   assert.equal(typeof calcularFechasEvento, 'function');
   assert.equal(typeof generarEventosCalendario, 'function');
+  assert.equal(typeof generarEventosPerfilGasto, 'function');
   // calcularFechasEvento no toca la BD — verificable en el smoke test
   assert.deepEqual(calcularFechasEvento('unico', 15, '2026-06-10'), ['2026-06-10']);
 });
@@ -54,6 +55,7 @@ for (const modulo of [
   'logs', 'ahorros', 'calendario', 'gustitos',
   'expense_definitions', 'timeline', 'quincena', 'alertas', 'eventos', 'deudas',
   'presupuestos', 'gastos', 'movimientos', 'sobres',
+  'ingresos_extra', 'gastos_globales', 'gastos_variables_base',
 ]) {
   test(`routes/${modulo} exporta un Express Router`, () => {
     const router = require(`../routes/${modulo}`);

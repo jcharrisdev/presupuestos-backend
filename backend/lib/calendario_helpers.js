@@ -72,4 +72,34 @@ async function generarEventosCalendario(gastoId, firebaseUid) {
   return insertados;
 }
 
-module.exports = { calcularFechasEvento, generarEventosCalendario };
+/**
+ * Genera eventos de calendario para un gasto del perfil (gasto fijo o gasto
+ * global) con recordatorio. Si diaPago2 está definido, genera un segundo
+ * evento por mes (quincenas).
+ */
+async function generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, diaPago, diaPago2) {
+  const today = new Date();
+  let generados = 0;
+  const dias = [diaPago, diaPago2].filter(Boolean);
+  for (const diaNum of dias) {
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const diasEnMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const dia = Math.min(diaNum, diasEnMes);
+      const fecha = new Date(d.getFullYear(), d.getMonth(), dia);
+      const fechaStr = fecha.toISOString().split('T')[0];
+      const estado = fecha < today ? 'vencido' : 'pendiente';
+      await db.execute(
+        `INSERT INTO calendario_eventos
+           (firebase_uid, user_gasto_fijo_id, titulo, tipo, fecha_evento,
+            monto_esperado, estado, notificacion_activa, dias_anticipacion)
+         VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 2)`,
+        [firebase_uid, ugfId, titulo, fechaStr, monto, estado]
+      );
+      generados++;
+    }
+  }
+  return generados;
+}
+
+module.exports = { calcularFechasEvento, generarEventosCalendario, generarEventosPerfilGasto };
