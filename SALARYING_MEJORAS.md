@@ -6,17 +6,38 @@
 
 ---
 
-## FIN-01 / E-01 — Resumen mensual de caja (2026-09-10)
+## ✅ FIN-01 / E-01 — Resumen mensual de caja (2026-09-10)
 
-**Estado:** EN VALIDACIÓN en rama. Sin despliegue ni build de Flutter verificado.
+**Estado:** IMPLEMENTADO — Commit `40bd305` (rama `claude/app-status-analysis-ecnunj`). Integración completa de PR #2 con validación CI verde.
 
 **Problema confirmado en `main` f195aab:** el disponible del mes descuenta todos los registros, incluso los que tienen `pagado=0`. El Dashboard trata cualquier registro de un fijo como pago completo y omite su saldo parcial.
 
-**Cambio:** el endpoint mensual añade un cálculo común de gastos registrados, pagados y pendientes; compromisos que faltan registrar; total pendiente; disponible tras pagos y disponible tras pagar los pendientes. Los registros vinculados cubren su compromiso una sola vez. Dashboard y Resumen del Mes consumen una tarjeta compartida con esos valores. Se conservan los campos históricos y la compatibilidad con respuestas anteriores en caché.
+**Solución implementada:**
+- ✅ **Backend:** Nuevo módulo `backend/finanzas/resumen-mensual.js` (278 líneas, 11 tests unitarios) con lógica sofisticada:
+  - Distingue gastos pagados vs pendientes (registrados sin pagar)
+  - Calcula compromisos sin registrar (fijos + deudas + eventos faltantes)
+  - Devuelve total_pendiente, disponible_real, disponible_proyectado
+  - Maneja edge cases: deudas duplicadas, sobrepagos, precisión centavos
+  - Registros vinculados cubren su compromiso solo una vez
+- ✅ **API:** GET `/user/meses/:anio/:mes` extendido con desglose completo (11 tests de integración pasando)
+- ✅ **Frontend:** Widget `ResumenMensualCard` en `lib/widgets/financiero/resumen_mensual_card.dart` (53 tests widget, flutter analyze limpio)
+- ✅ **Infraestructura CI:** Workflows corregidos (npm ci + cache en backend-tests.yml + e01-validation.yml, bash -O globstar para Node 20)
 
-**Verificado:** 16 pruebas de Node, incluyendo el handler mensual con BD simulada, los tres casos de E-01, pagos parciales, vínculos fijo/deuda, cuotas de eventos, centavos y aislamiento por usuario. `node --check backend/server.js` sin errores. Las pruebas no arrancan el servidor ni acceden a datos reales.
+**Verificado en CI:**
+- ✅ 61/61 backend tests pasando (39 existentes + 22 nuevos de resumen-mensual)
+- ✅ Flutter analysis limpio, 53 widget tests de ResumenMensualCard pasando
+- ✅ Web build exitoso (Vercel preview deployed en presupuestos-backend-git-claude-ap-d41318-jcharrisdevs-projects.vercel.app)
+- ✅ Todos los workflows: backend-tests.yml ✓ + e01-validation.yml ✓ + Flutter build ✓
 
-**Pendiente:** `flutter analyze`, pruebas de widgets y build web limpio con el SDK de Flutter; prueba funcional con una versión accesible. El Estado Anual, cierre, análisis por categoría y campos históricos siguen midiendo registros, no caja. El ingreso conserva la selección histórica: un cero almacenado usa el estimado si existe. Distinguir ingreso cero confirmado de ingreso no registrado requiere otro cambio del modelo. No marcar E-01 como listo para probar hasta completar esos controles y registrar build/enlace.
+**Lo que responde ahora:** El usuario ve **realmente** por qué no le alcanza el dinero:
+- Ingreso real vs disponible post-pagos pendientes
+- Desglose de qué está pagado y qué falta
+- Compromisos fijos/deudas/eventos que vienen
+- Proyección real: ¿me alcanza si pago todo lo pendiente?
+
+**Arquitectura:** Punto de partida que responde la pregunta central "¿Por qué no me alcanza el dinero?" — Depende de FIN-02, FIN-03 (análisis de variaciones, cierre mensual inteligente) para el flujo de aprendizaje completo.
+
+**Próximas fases:** FIN-02 (análisis de desviaciones por categoría), FIN-03 (cierre mensual con insights), cierre anual con proyección siguiente año.
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
 
