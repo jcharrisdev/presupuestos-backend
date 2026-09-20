@@ -62,7 +62,22 @@ class RegistrosService {
   }
 
   static Future<void> marcarPagado(String uid, int id, bool pagado) async {
-    await ApiClient.patch('/registros/$id/pagar', {'firebase_uid': uid, 'pagado': pagado ? 1 : 0});
+    final res = await ApiClient.patch(
+      '/registros/$id/pagar',
+      {'firebase_uid': uid, 'pagado': pagado ? 1 : 0},
+    );
+    if (res.statusCode != 200) {
+      var mensaje = 'No se pudo actualizar el estado del gasto';
+      try {
+        final body = jsonDecode(res.body);
+        if (body is Map<String, dynamic> && body['error'] is String) {
+          mensaje = body['error'] as String;
+        }
+      } catch (_) {
+        // El servidor puede responder HTML o texto si el proxy falla.
+      }
+      throw Exception(mensaje);
+    }
   }
 
   static Future<Map<String, dynamic>> convertirAVariable(String uid, int id, {String frecuencia = 'mensual'}) async {
