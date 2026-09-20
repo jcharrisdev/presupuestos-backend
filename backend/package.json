@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "bash -c 'node --test test/**/*.test.js'"
+    "test": "bash -O globstar -c 'node --test test/**/*.test.js'"
   },
   "keywords": [],
   "author": "",
