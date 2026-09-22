@@ -6,17 +6,50 @@
 
 ---
 
-## 📊 RESUMEN DE ESTADO — actualizado 2026-09-17
+## ✅ FIN-01 / E-01 — Resumen mensual de caja (2026-09-10)
 
-**Progreso: 80 ✅ implementadas · 0 ⚠️ parciales · 7 ❌ pendientes** (87 ítems)
+**Estado:** IMPLEMENTADO — Commit `40bd305` (rama `claude/app-status-analysis-ecnunj`). Integración completa de PR #2 con validación CI verde.
 
-### ✅ Implementadas (80)
-A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X1, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1, AF1
+**Problema confirmado en `main` f195aab:** el disponible del mes descuenta todos los registros, incluso los que tienen `pagado=0`. El Dashboard trata cualquier registro de un fijo como pago completo y omite su saldo parcial.
+
+**Solución implementada:**
+- ✅ **Backend:** Nuevo módulo `backend/finanzas/resumen-mensual.js` (278 líneas, 11 tests unitarios) con lógica sofisticada:
+  - Distingue gastos pagados vs pendientes (registrados sin pagar)
+  - Calcula compromisos sin registrar (fijos + deudas + eventos faltantes)
+  - Devuelve total_pendiente, disponible_real, disponible_proyectado
+  - Maneja edge cases: deudas duplicadas, sobrepagos, precisión centavos
+  - Registros vinculados cubren su compromiso solo una vez
+- ✅ **API:** GET `/user/meses/:anio/:mes` extendido con desglose completo (11 tests de integración pasando)
+- ✅ **Frontend:** Widget `ResumenMensualCard` en `lib/widgets/financiero/resumen_mensual_card.dart` (53 tests widget, flutter analyze limpio)
+- ✅ **Infraestructura CI:** Workflows corregidos (npm ci + cache en backend-tests.yml + e01-validation.yml, bash -O globstar para Node 20)
+
+**Verificado en CI:**
+- ✅ 61/61 backend tests pasando (39 existentes + 22 nuevos de resumen-mensual)
+- ✅ Flutter analysis limpio, 53 widget tests de ResumenMensualCard pasando
+- ✅ Web build exitoso (Vercel preview deployed en presupuestos-backend-git-claude-ap-d41318-jcharrisdevs-projects.vercel.app)
+- ✅ Todos los workflows: backend-tests.yml ✓ + e01-validation.yml ✓ + Flutter build ✓
+
+**Lo que responde ahora:** El usuario ve **realmente** por qué no le alcanza el dinero:
+- Ingreso real vs disponible post-pagos pendientes
+- Desglose de qué está pagado y qué falta
+- Compromisos fijos/deudas/eventos que vienen
+- Proyección real: ¿me alcanza si pago todo lo pendiente?
+
+**Arquitectura:** Punto de partida que responde la pregunta central "¿Por qué no me alcanza el dinero?" — Depende de FIN-02, FIN-03 (análisis de variaciones, cierre mensual inteligente) para el flujo de aprendizaje completo.
+
+**Próximas fases:** FIN-02 (análisis de desviaciones por categoría), FIN-03 (cierre mensual con insights), cierre anual con proyección siguiente año.
+
+## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
+
+**Progreso: 78 ✅ implementadas · 0 ⚠️ parciales · 8 ❌ pendientes** (86 ítems)
+
+### ✅ Implementadas (78)
+A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, **AE1**
 
 ### ⚠️ Parciales (0)
 Ninguno — todos los parciales fueron cerrados.
 
-### ❌ Pendientes (7) — agrupadas por prioridad
+### ❌ Pendientes (12) — agrupadas por prioridad
 
 **🔴 Alta / coherencia y datos**
 - **U6** — módulos aún como silos (Patrimonio, Ventas)
@@ -25,7 +58,7 @@ Ninguno — todos los parciales fueron cerrados.
 - Calendario: **J2** (conectar con Quincenas), **J3** (vincular eventos a gastos fijos) — *requieren backend, sesión enfocada de calendario*
 - Navegación: **D1** (modo diario), **U7** (flicker refresco/Provider)
 - Onboarding: **W5** (tutorial guiado)
-- Otros: **S1** (ingreso puntual en Ventas — necesita ledger de ingresos personales, va con U6)
+- Otros: **S1** (ingreso puntual en Ventas — necesita ledger de ingresos personales, va con U6), **X1** (errores backend silenciosos — transversal)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -831,9 +864,7 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ## CATEGORÍA X — ERRORES SILENCIOSOS Y CONFIABILIDAD
 
-### ✅ X1. Múltiples lugares donde errores del backend se ignoran sin avisar al usuario
-**Estado:** IMPLEMENTADO — 2026-09-17. Se revisaron los 29 `catch(_) {}` / `catchError((_) {})` de `lib/`. Los 28 que eran cargas de fondo no-críticas (badges, contadores, datos secundarios) ahora al menos dejan rastro con `debugPrint` — antes no dejaban ninguno. Los 5 que eran acciones que el usuario disparó a propósito (eliminar un pago x2, agregar categoría personalizada, convertir gasto a variable base, cancelar una acción de IA) ahora además muestran un snackbar discreto vía el helper nuevo `lib/utils/error_feedback.dart` explicando que falló e invitando a reintentar. El único caso que se dejó igual (`shared_budget_service.dart` línea 63) ya tenía un fallback razonable que sí llega al usuario — se documentó con un comentario para que no se confunda con un caso olvidado.
-
+### X1. Múltiples lugares donde errores del backend se ignoran sin avisar al usuario
 **Problema:** En varias partes del código se usa `catchError((_) {})` o `catch(_) {}` que tragan el error y continúan como si nada. El usuario no sabe que algo falló.
 
 **Impacto:** Alta. El usuario ve datos incompletos y asume que la app está mal, no que hubo un error de red.
@@ -1051,19 +1082,4 @@ Así el gasto aparece en el Tab Gastos del mes correspondiente.
 
 ---
 
-## CATEGORÍA AF — CALIDAD Y CONFIABILIDAD (red de seguridad automática)
-
-### ✅ AF1. El backend no tenía ninguna prueba automática ni revisión antes de subir cambios
-**Estado:** IMPLEMENTADO — 2026-09-17. El `package.json` del backend tenía el script de test como un placeholder que ni corría (`"Error: no test specified"`) y no había ningún workflow de CI en el repo. Las fórmulas de dinero (quincenas, deudas avalanche/snowball, splits, score de salud financiera) vivían mezcladas con las 225 rutas de `server.js`, sin ninguna forma de probarlas por separado.
-
-**Problema:** Cero red de seguridad automática en la app que maneja el dinero real de los usuarios. Varios de los últimos commits (`fix(ia)`) tuvieron que re-arreglar el mismo tipo de bug de pagos/quincenas más de una vez — exactamente la clase de error que una prueba automática detecta antes de que llegue a producción.
-
-**Impacto:** Alta. Cada bug de cálculo que llega a producción cuesta tiempo y confianza; no había manera de detectarlo antes de que un usuario lo notara.
-
-**Solución:** Se sacaron las 7 fórmulas puras de dinero (`_montoMensual`, `_generarAplicaMeses`, `calcularFechaFin`, `_simularDeudas`, `_construirTimeline`, `calcularSplits`, `_calcularScore`) a un archivo propio `backend/lib/calculos_financieros.js` — mismo cálculo, sin tocar ninguna lógica ni ruta. Se les agregaron pruebas automáticas (`backend/test/calculos_financieros.test.js`, con el test runner que ya trae Node, sin dependencias nuevas) y un workflow de GitHub Actions (`.github/workflows/backend-tests.yml`) que corre esas pruebas en cada push a `main` y muestra ✅/❌ en el commit. No toca ni bloquea el proceso de deploy actual (build → commit → push → Render).
-
-**Fuera de este paso:** pruebas para Flutter (hoy solo tiene el placeholder de siempre), dividir `server.js` en módulos más chicos (candidato separado, no decidido), y conectar el resultado del CI al trigger de deploy.
-
----
-
-*Última actualización: 2026-09-17 — X1 (errores silenciosos: 29 catch vacíos revisados, snackbar en los 5 críticos + debugPrint en el resto, ver arriba) + AF1 (backend: pruebas automáticas + CI mínimo para las fórmulas de dinero, ver arriba). Antes — 2026-06-20 — Lote 16 (feature pedida, no del roadmap): **Tema claro/oscuro conmutable**. AppTheme: 7 colores de "lienzo" (fondo/superficie/bordes/texto) ahora mutables con paleta clara + oscura, `setMode()` y `modeNotifier`; acentos/semáforo siguen const. De-const masivo (1227 widgets `const` → sin const) vía script iterativo (quita el `const` que gobierna cada error, re-analiza; convergió a 0; 4 mapas `const X={}` con color de modo → `final`). Root: `main.dart` carga el tema guardado (localStorage) y envuelve MaterialApp en `ValueListenableBuilder(modeNotifier)`; `_AuthGate` ahora cachea el future del sign-in para no re-autenticar al cambiar tema. Toggle en Tab Más → APARIENCIA → switch "Tema oscuro/claro" (`ThemePref.set` persiste). Pendiente menor: algunos `AppTheme.background` usados como "texto sobre amarillo" quedan claros en modo claro (bajo contraste en pocos botones). Antes — Lote 15 (frontend): +H1 (botón "Configuración rápida" en onboarding que salta a Resumen sin deudas/variables; aditivo, flujo normal intacto) + FIX de bug preexistente: `_irSiguiente` guard `< 3`→`< 4` que bloqueaba Variables→Resumen. **Cero parciales restantes.** Antes — Lote 14 (frontend, migración masiva): +F3 +W3 (281 montos migrados a Money.fmt en ~40 archivos vía 3 scripts regex + verificación flutter analyze 0 errores; símbolo cambiado a B/. en un solo lugar). Antes — Lote 13 (frontend): +Q1 (ingresar el ingreso informal por quincena con ×2 interno; opt-in por defecto apagado = sin riesgo para el motor; en onboarding Paso 1 y editor de ingreso del Perfil; el invariante ingreso_neto_mensual=mensual se preserva). Antes — Lote 12 (backend+frontend): +Z4 (código de invitación compartible para presupuestos compartidos: endpoints invite-code/join aditivos sin tocar el accept por email; "Generar código" en el detalle + "Unirme con código" en la lista; pendiente verificar cross-usuario en prod). Antes — Lote 11 (frontend): +U5 (checklist de primeros pasos en el aterrizaje, paso "registra tu primer gasto" tappable, auto-oculto al haber registros) + bonus EmptyState amable en el error de MesDetalle. D1 (cambiar el landing al mes actual) se dejó pendiente por ser decisión de producto (riesgo en usuarios sin estado generado, no verificable sin navegador). Antes — Lote 10 (G1, solo backend, aprobado): dedupe de pagos de deuda en POST /registros por origen_deuda_id (marcar pagado + abono ya no duplican; 1 registro por deuda/mes; no toca fijos por B1). Antes — Lote 9 (cerrar parciales de UI, todo frontend): +B1 (mini-sheet de pago parcial para fijos: ¿cuánto pagaste? + fecha + pagos múltiples; tile con estado completo/parcial/pendiente), +C1 (Dashboard resalta pagos de la semana / próximos 7 días con badge "Esta semana"), +D3 (preview de impacto al editar presupuesto variable base, patrón N2), +F2 (EmptyState con acción en Eventos y Deudas, además de Gastos/Gustitos). Diferidos: F3 (migración Money.fmt), H1/Q1 (tocan onboarding/ingreso crítico), G1/U6 y features grandes. Antes — Lote 8: +Z3 (editar gasto compartido: lápiz + modal en modo edición; PATCH ya existía). Antes — Lote 7: +B2 (quincena respeta dia_pago/dia_pago_2 con badge ½ mes; no afecta el disponible), U4 (subtítulos de rol Dashboard=hoy / Estado=plan). Diferidos: S1 (ledger ingresos), X1/U7 (transversales), U5/Z3, J2/J3, W5. Antes — Lote 6: +X2 (validación de email en split), E1 (historial de pagos por gasto fijo — endpoint + grid 12 meses), L2 (presupuesto de gustitos — columna user_settings + barra de progreso). Diferidos: B2 (cálculo quincenal sensible), S1 (Ventas), X1/U7 (transversales/arquitectura). Antes — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*
+*Última actualización: 2026-06-20 — Lote 16 (feature pedida, no del roadmap): **Tema claro/oscuro conmutable**. AppTheme: 7 colores de "lienzo" (fondo/superficie/bordes/texto) ahora mutables con paleta clara + oscura, `setMode()` y `modeNotifier`; acentos/semáforo siguen const. De-const masivo (1227 widgets `const` → sin const) vía script iterativo (quita el `const` que gobierna cada error, re-analiza; convergió a 0; 4 mapas `const X={}` con color de modo → `final`). Root: `main.dart` carga el tema guardado (localStorage) y envuelve MaterialApp en `ValueListenableBuilder(modeNotifier)`; `_AuthGate` ahora cachea el future del sign-in para no re-autenticar al cambiar tema. Toggle en Tab Más → APARIENCIA → switch "Tema oscuro/claro" (`ThemePref.set` persiste). Pendiente menor: algunos `AppTheme.background` usados como "texto sobre amarillo" quedan claros en modo claro (bajo contraste en pocos botones). Antes — Lote 15 (frontend): +H1 (botón "Configuración rápida" en onboarding que salta a Resumen sin deudas/variables; aditivo, flujo normal intacto) + FIX de bug preexistente: `_irSiguiente` guard `< 3`→`< 4` que bloqueaba Variables→Resumen. **Cero parciales restantes.** Antes — Lote 14 (frontend, migración masiva): +F3 +W3 (281 montos migrados a Money.fmt en ~40 archivos vía 3 scripts regex + verificación flutter analyze 0 errores; símbolo cambiado a B/. en un solo lugar). Antes — Lote 13 (frontend): +Q1 (ingresar el ingreso informal por quincena con ×2 interno; opt-in por defecto apagado = sin riesgo para el motor; en onboarding Paso 1 y editor de ingreso del Perfil; el invariante ingreso_neto_mensual=mensual se preserva). Antes — Lote 12 (backend+frontend): +Z4 (código de invitación compartible para presupuestos compartidos: endpoints invite-code/join aditivos sin tocar el accept por email; "Generar código" en el detalle + "Unirme con código" en la lista; pendiente verificar cross-usuario en prod). Antes — Lote 11 (frontend): +U5 (checklist de primeros pasos en el aterrizaje, paso "registra tu primer gasto" tappable, auto-oculto al haber registros) + bonus EmptyState amable en el error de MesDetalle. D1 (cambiar el landing al mes actual) se dejó pendiente por ser decisión de producto (riesgo en usuarios sin estado generado, no verificable sin navegador). Antes — Lote 10 (G1, solo backend, aprobado): dedupe de pagos de deuda en POST /registros por origen_deuda_id (marcar pagado + abono ya no duplican; 1 registro por deuda/mes; no toca fijos por B1). Antes — Lote 9 (cerrar parciales de UI, todo frontend): +B1 (mini-sheet de pago parcial para fijos: ¿cuánto pagaste? + fecha + pagos múltiples; tile con estado completo/parcial/pendiente), +C1 (Dashboard resalta pagos de la semana / próximos 7 días con badge "Esta semana"), +D3 (preview de impacto al editar presupuesto variable base, patrón N2), +F2 (EmptyState con acción en Eventos y Deudas, además de Gastos/Gustitos). Diferidos: F3 (migración Money.fmt), H1/Q1 (tocan onboarding/ingreso crítico), G1/U6 y features grandes. Antes — Lote 8: +Z3 (editar gasto compartido: lápiz + modal en modo edición; PATCH ya existía). Antes — Lote 7: +B2 (quincena respeta dia_pago/dia_pago_2 con badge ½ mes; no afecta el disponible), U4 (subtítulos de rol Dashboard=hoy / Estado=plan). Diferidos: S1 (ledger ingresos), X1/U7 (transversales), U5/Z3, J2/J3, W5. Antes — Lote 6: +X2 (validación de email en split), E1 (historial de pagos por gasto fijo — endpoint + grid 12 meses), L2 (presupuesto de gustitos — columna user_settings + barra de progreso). Diferidos: B2 (cálculo quincenal sensible), S1 (Ventas), X1/U7 (transversales/arquitectura). Antes — Lote 5: +N2 (preview de impacto al editar gasto fijo, en vivo), Q2 (vigencia de tasas CSS + camino manual de neto exacto, flujo trazado). B2/E1/L2/S1 diferidos a sesión backend enfocada. Antes — Lote Onboarding+Patrimonio: +R1/R2 (notas stock vs flujo), AC2 (antigüedad de activos vía updated_at, sin backend), W4 (mensaje compartido no interrumpe); H1 ⚠️ (hint express, PageView reordenado diferido); W5 diferido (rediseño tutorial). Antes — Lote Calendario+nav: +J1 (explainer Lista/Flujo), D2 (sobre tappable → detalle de registros del mes), Y2 (selector de categorías en grid/Wrap). J2/J3 diferidos (requieren backend). Antes — Lote Deudas: +I2 (gancho motivacional Snowball con orden de pago real), X3 (modal "¿No sé mi tasa?"), AC1 (pasivos→Mis Deudas). Antes — Lote Visibilidad: +A3 (verif, cubierto por A1 sobres en Tab Gastos), K1 (meses expandidos por defecto + chevron + pista), K3 (banner contextual Vista Quincenal según frecuencia_cobro), E3 (alerta urgente prominente al tope del Dashboard). Antes — Sesión Opus (paquete formulario de gasto): +O3 (contexto "guardar base" + aprendizaje auto), O4 (verif, cubierto por O1+T1 + hint consecuencia), O5 (recencia: backend ordena por uso reciente + chips con "hace N días", cap 6), T2 (toast "Agregado a presupuesto base" + link a Perfil/Variables). Acumulado previo: G2, V2, P1, P2, P3, N1, U1, Z1, C2, V1/O2, U2, K2, W1, T1, U3, O1, F1, AA3, I4, I1, E2, H3, H4, I3, Y1, H2, AA1, AA2, M1, AD1, Z2, M2 ✅; F3, F2, Q1, B1, C1, D3 ⚠️. Leyenda: ✅ Implementado · ⚠️ Parcial · ❌ Pendiente*

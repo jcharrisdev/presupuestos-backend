@@ -7,6 +7,7 @@ process.env.MYSQLUSER = process.env.MYSQLUSER || 'test';
 process.env.MYSQLPASSWORD = process.env.MYSQLPASSWORD || 'test';
 process.env.MYSQLDATABASE = process.env.MYSQLDATABASE || 'test';
 process.env.MYSQLPORT = process.env.MYSQLPORT || '3306';
+process.env.LOG_SECRET = process.env.LOG_SECRET || 'test_secret_key';
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');

@@ -3,7 +3,7 @@
  */
 const { db } = require('./db');
 
-const LOG_SECRET = 'salarying_logs_2025';
+const LOG_SECRET = process.env.LOG_SECRET;
 
 async function _logError(ruta, error, uid = '-', reqBody = null) {
   try {

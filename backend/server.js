@@ -25,6 +25,7 @@ const express = require('express');
 const cors    = require('cors');
 const cron    = require('node-cron');
 const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+const { calcularResumenMensual } = require('./finanzas/resumen-mensual');
 const {
   _montoMensual,
   _generarAplicaMeses,
@@ -33,7 +34,8 @@ const {
   _calcularScore,
 } = require('./lib/calculos_financieros');
 const { pool, db } = require('./lib/db');
-const { LOG_SECRET, _logError, _logInfo } = require('./lib/logger');
+const { _logError, _logInfo } = require('./lib/logger');
+const LOG_SECRET = process.env.LOG_SECRET;
 const { calcularFechasEvento, generarEventosCalendario, generarEventosPerfilGasto: _generarEventosPerfilGasto } = require('./lib/calendario_helpers');
 const { _actualizarTotalesMes, _generarAlertasMes, _recalcularEstimadosAnio } = require('./lib/mes_helpers');
 const { getPeriodoActivo, crearPrimerPeriodo, crearNuevoPeriodo } = require('./lib/periodo_helpers');
@@ -839,6 +841,41 @@ app.get('/', (req, res) => res.json({
   version: '4.0'  // Nuevo modelo financiero anual
 }));
 
+// =============================================================================
+// SISTEMA DE LOGGING — Endpoints de acceso y limpieza de server_logs
+// =============================================================================
+
+// GET /logs — devuelve los últimos errores del servidor (protegido por secret)
+app.get('/logs', async (req, res) => {
+  const { secret, limit = 50, nivel, uid, desde } = req.query;
+  if (!LOG_SECRET || secret !== LOG_SECRET)
+    return res.status(401).json({ error: 'Acceso denegado' });
+  try {
+    let sql = `SELECT id, nivel, ruta, firebase_uid, mensaje, stack, req_body, created_at
+               FROM server_logs WHERE 1=1`;
+    const params = [];
+    if (nivel) { sql += ` AND nivel = ?`; params.push(nivel); }
+    if (uid)   { sql += ` AND firebase_uid LIKE ?`; params.push(`%${uid}%`); }
+    if (desde) { sql += ` AND created_at >= ?`; params.push(desde); }
+    // LIMIT inlined — MySQL 5.6 + mysql2 no acepta BigInt/Number en prepared LIMIT
+    const limitInt = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    sql += ` ORDER BY created_at DESC LIMIT ${limitInt}`;
+    const [rows] = await db.execute(sql, params);
+    const [[countRow]] = await db.execute(`SELECT COUNT(*) AS total FROM server_logs`);
+    const total = Number(countRow.total);
+    res.json({ total, mostrados: rows.length, logs: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /logs — limpia los logs (protegido por secret)
+app.delete('/logs', async (req, res) => {
+  const { secret } = req.query;
+  if (!LOG_SECRET || secret !== LOG_SECRET) return res.status(401).json({ error: 'Acceso denegado' });
+  try {
+    await db.execute(`DELETE FROM server_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`);
+    res.json({ ok: true, mensaje: 'Logs de más de 7 días eliminados' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // =============================================================================
 // MÓDULO: PERFIL FINANCIERO DEL USUARIO
@@ -7143,9 +7180,12 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado. Genera el estado anual primero.' });
 
     const [registros] = await db.execute(
-      `SELECT rg.*, s.nombre AS subcategoria_nombre
+      `SELECT rg.*, s.nombre AS subcategoria_nombre,
+              eg.evento_id AS origen_evento_presupuesto_id
        FROM registros_gasto rg
        LEFT JOIN subcategorias s ON s.id = rg.subcategoria_id
+       LEFT JOIN eventos_gastos eg
+         ON eg.id = rg.origen_evento_id AND eg.firebase_uid = rg.firebase_uid
        WHERE rg.mes_id = ? AND rg.firebase_uid = ?
        ORDER BY rg.fecha DESC, rg.created_at DESC`,
       [mesRow.id, firebase_uid]
@@ -7221,7 +7261,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
 
     // Gastos fijos del perfil para este mes (para mostrar compromisos)
     const [gastosFijosPerfil] = await db.execute(
-      `SELECT id, descripcion, monto_mensual, tipo, dia_pago, dia_pago_2, frecuencia
+      `SELECT id, descripcion, monto_mensual, tipo, dia_pago, dia_pago_2, frecuencia, categoria, deuda_id
        FROM user_gastos_fijos WHERE firebase_uid = ? AND activo = 1`,
       [firebase_uid]
     );
@@ -7238,6 +7278,14 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       [firebase_uid, anio, mes, mes]
     );
     const totalEventosMes = eventosDelMes.reduce((s, e) => s + Number(e.cuota_mensual), 0);
+
+    const resumenMensual = calcularResumenMensual({
+      ingreso: ingresoReal,
+      registros,
+      gastosFijos: gastosFijosPerfil,
+      deudas: deudasDelMes,
+      eventos: eventosDelMes,
+    });
 
     const hormigaRegistros = registros.filter(r => r.es_hormiga == 1);
     const hormigaTotal = hormigaRegistros.reduce((s, r) => s + Number(r.monto), 0);
@@ -7295,6 +7343,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         // AA2 — la cuota mensual de eventos reduce el disponible estimado del mes
         remanente_estimado:  parseFloat((Number(mesRow.ingreso_estimado) - totalFijosEstimado - Number(mesRow.variables_estimados) - totalEventosMes).toFixed(2)),
         ingreso_real:        parseFloat(ingresoReal.toFixed(2)),
+        ingreso_es_estimado: Number(mesRow.ingreso_real) === 0 || mesRow.ingreso_real == null,
         ingreso_base:        Number(mesRow.ingreso_estimado),
         ingresos_extra_total: parseFloat(totalIngresosExtra.toFixed(2)),
         fijos_reales:        parseFloat(fijosReales.toFixed(2)),
@@ -7304,6 +7353,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
         presupuesto_sano:    remanenteReal >= 0,
         hormiga_count:       hormigaRegistros.length,
         hormiga_total:       parseFloat(hormigaTotal.toFixed(2)),
+        ...resumenMensual,
       },
       ingresos_extra: ingresosExtra,
       gastos_por_fuente: gastosPorFuente,
@@ -7567,13 +7617,19 @@ app.patch('/registros/:id/pagar', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid, pagado } = req.body;
   if (!firebase_uid || pagado === undefined) return res.status(400).json({ error: 'firebase_uid y pagado requeridos' });
+
+  let pagadoNormalizado;
+  if (pagado === true || pagado === 1 || pagado === '1') pagadoNormalizado = 1;
+  else if (pagado === false || pagado === 0 || pagado === '0') pagadoNormalizado = 0;
+  else return res.status(400).json({ error: 'pagado debe ser 0 o 1' });
+
   try {
     const [r] = await db.execute(
       `UPDATE registros_gasto SET pagado = ? WHERE id = ? AND firebase_uid = ?`,
-      [pagado ? 1 : 0, id, firebase_uid]
+      [pagadoNormalizado, id, firebase_uid]
     );
     if (!r.affectedRows) return res.status(404).json({ error: 'Registro no encontrado' });
-    res.json({ success: true, pagado: pagado ? 1 : 0 });
+    res.json({ success: true, pagado: pagadoNormalizado });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
