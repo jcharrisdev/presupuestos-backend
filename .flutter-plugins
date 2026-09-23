@@ -1,14 +1,14 @@
 # This is a generated file; do not edit or check into version control.
-flutter_local_notifications=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\flutter_local_notifications-17.2.4\\
-flutter_local_notifications_linux=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\flutter_local_notifications_linux-4.0.1\\
-google_sign_in=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\google_sign_in-6.3.0\\
-google_sign_in_android=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\google_sign_in_android-6.2.1\\
-google_sign_in_ios=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\google_sign_in_ios-5.9.0\\
-google_sign_in_web=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\google_sign_in_web-0.12.4+4\\
-mobile_scanner=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\mobile_scanner-5.2.3\\
-path_provider=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\path_provider-2.1.5\\
-path_provider_android=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\path_provider_android-2.2.19\\
-path_provider_foundation=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\path_provider_foundation-2.4.2\\
-path_provider_linux=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\path_provider_linux-2.2.1\\
-path_provider_windows=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\path_provider_windows-2.3.0\\
-printing=C:\\Users\\Ulises\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\printing-5.14.3\\
+flutter_local_notifications=/root/.pub-cache/hosted/pub.dev/flutter_local_notifications-17.2.4/
+flutter_local_notifications_linux=/root/.pub-cache/hosted/pub.dev/flutter_local_notifications_linux-4.0.1/
+google_sign_in=/root/.pub-cache/hosted/pub.dev/google_sign_in-6.3.0/
+google_sign_in_android=/root/.pub-cache/hosted/pub.dev/google_sign_in_android-6.2.1/
+google_sign_in_ios=/root/.pub-cache/hosted/pub.dev/google_sign_in_ios-5.9.0/
+google_sign_in_web=/root/.pub-cache/hosted/pub.dev/google_sign_in_web-0.12.4+4/
+mobile_scanner=/root/.pub-cache/hosted/pub.dev/mobile_scanner-5.2.3/
+path_provider=/root/.pub-cache/hosted/pub.dev/path_provider-2.1.5/
+path_provider_android=/root/.pub-cache/hosted/pub.dev/path_provider_android-2.2.19/
+path_provider_foundation=/root/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.2/
+path_provider_linux=/root/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+path_provider_windows=/root/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+printing=/root/.pub-cache/hosted/pub.dev/printing-5.14.3/
