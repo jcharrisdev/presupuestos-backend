@@ -2,7 +2,7 @@
 
 > Este archivo es la fuente de verdad para trabajar en Salarying.
 > Léelo completo antes de tocar cualquier código.
-> Última actualización: 2026-09-17
+> Última actualización: 2026-09-24
 
 ---
 
@@ -38,6 +38,18 @@ Nada en Salarying existe aislado. Cada módulo alimenta al siguiente.
 | Auth | Firebase (`firebase_uid` = email Google del usuario) |
 | Web hosting | Flutter web build — archivos en `build/web/` servidos por el backend en Render |
 | Email | Brevo API (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL` en env vars de Render) |
+
+## URLs de producción (fuente de verdad)
+
+| Recurso | URL |
+|---------|-----|
+| **App web (sitio oficial de pruebas)** | `https://presupuestos-backend.vercel.app/` — el usuario prueba SIEMPRE aquí |
+| Backend real (Render, `srv-d5kjem9r0fns73bfs23g`) | `https://presupuestos-backend-h3l6.onrender.com` |
+
+**`lib/services/api_client.dart` → `baseUrl` DEBE apuntar siempre a `presupuestos-backend-h3l6.onrender.com`.**
+Existen dominios de Render viejos (ej. `presupuestos-backend-backend-pr-2.onrender.com`, servidores de preview de PRs cerrados) que responden pero NO tienen las rutas actuales — si `baseUrl` apunta a uno de esos, la app falla con "Failed to fetch" o 404 aunque el deploy esté bien. Verificar siempre con `curl` antes de asumir una URL.
+
+Vercel redespliega automáticamente `presupuestos-backend.vercel.app` al detectar push a `main` (toma el `build/web/` commiteado). Por eso todo fix de UI/API requiere el flujo completo: código fuente → `flutter build web` → commit `build/web/` → push a `main`. Sin ese build recompilado, Vercel sigue sirviendo el JS viejo con la URL/bug anteriores aunque el código fuente ya esté corregido.
 
 ---
 
