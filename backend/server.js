@@ -7735,6 +7735,68 @@ app.post('/registros/:id/convertir-a-variable', async (req, res) => {
 // (las alertas en sí viven en routes/alertas.js y lib/mes_helpers.js)
 // =============================================================================
 
+// FIN-04: sugerencias de presupuesto para el año siguiente, con el mismo
+// guardrail de coherencia que FIN-03 (nunca subir el límite de una categoría
+// flexible solo porque gastó de más). Reusa calcularSugerenciasPresupuesto
+// tratando el último mes con datos del año como "actual" y el resto de
+// meses del mismo año como histórico — así el patrón exige consistencia
+// mes a mes, no solo un promedio anual que un mes atípico puede distorsionar.
+async function _calcularSugerenciasAnuales(firebase_uid, anio) {
+  const [porMesCat] = await db.execute(
+    `SELECT mes, categoria, SUM(monto) AS total FROM registros_gasto
+     WHERE firebase_uid = ? AND anio = ? GROUP BY mes, categoria`,
+    [firebase_uid, anio]
+  );
+  const mesesConDatos = [...new Set(porMesCat.map(f => f.mes))].sort((a, b) => b - a);
+  if (mesesConDatos.length === 0) return [];
+
+  const [varBase] = await db.execute(
+    `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+  );
+  const presupuestadoPorCat = {};
+  const itemsVariablesPorCategoria = {};
+  for (const g of varBase) {
+    presupuestadoPorCat[g.categoria] = (presupuestadoPorCat[g.categoria] || 0) + _montoMensual(g);
+    (itemsVariablesPorCategoria[g.categoria] ??= []).push(
+      { id: g.id, nombre: g.nombre, monto_estimado: Number(g.monto_estimado) });
+  }
+  const [fijosCat] = await db.execute(
+    `SELECT descripcion, monto_mensual, categoria FROM user_gastos_fijos
+     WHERE firebase_uid = ? AND activo = 1 AND categoria IS NOT NULL AND categoria != ''`,
+    [firebase_uid]
+  );
+  const fijoPorCategoria = {};
+  for (const f of fijosCat) {
+    presupuestadoPorCat[f.categoria] = (presupuestadoPorCat[f.categoria] || 0) + Number(f.monto_mensual);
+    fijoPorCategoria[f.categoria] = (fijoPorCategoria[f.categoria] || 0) + Number(f.monto_mensual);
+  }
+
+  const porMes = new Map(mesesConDatos.map(m => [m, {}]));
+  for (const fila of porMesCat) porMes.get(fila.mes)[fila.categoria] = Number(fila.total);
+  const categoriasSet = new Set(porMesCat.map(f => f.categoria));
+  const [ultimoMes, ...mesesHistoricos] = mesesConDatos;
+
+  const categoriasActual = [...categoriasSet].map(categoria => {
+    const total = porMes.get(ultimoMes)[categoria] || 0;
+    const presup = presupuestadoPorCat[categoria] || 0;
+    const desv = total - presup;
+    return {
+      categoria, presupuestado: parseFloat(presup.toFixed(2)),
+      total_gastado: parseFloat(total.toFixed(2)),
+      desviacion: parseFloat(desv.toFixed(2)),
+      pct_desviacion: presup > 0 ? parseFloat((desv / presup * 100).toFixed(1)) : null,
+    };
+  });
+  const historicoPorCategoria = {};
+  for (const categoria of categoriasSet) {
+    historicoPorCategoria[categoria] = mesesHistoricos.map(m => porMes.get(m)[categoria] || 0);
+  }
+
+  return calcularSugerenciasPresupuesto({
+    categoriasActual, historicoPorCategoria, itemsVariablesPorCategoria, fijoPorCategoria,
+  });
+}
+
 // GET /user/proyeccion-siguiente-anio/:anio?firebase_uid=
 // Usa el comportamiento real del año actual para proponer el presupuesto del siguiente.
 app.get('/user/proyeccion-siguiente-anio/:anio', async (req, res) => {
@@ -7742,51 +7804,14 @@ app.get('/user/proyeccion-siguiente-anio/:anio', async (req, res) => {
   const { firebase_uid } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
-    // Promedio real por categoría durante el año
-    const [analisis] = await db.execute(
-      `SELECT categoria,
-              AVG(CASE WHEN tipo='variable' THEN monto ELSE 0 END)          AS avg_variable,
-              AVG(CASE WHEN tipo='no_presupuestado' THEN monto ELSE 0 END)  AS avg_no_presup,
-              SUM(monto)                                                      AS total_anual,
-              COUNT(DISTINCT mes)                                             AS meses_presentes
-       FROM registros_gasto
-       WHERE firebase_uid = ? AND anio = ?
-       GROUP BY categoria ORDER BY total_anual DESC`,
-      [firebase_uid, anio]
-    );
-
-    const [varBase] = await db.execute(
-      `SELECT categoria, SUM(monto_estimado) AS presupuestado_mensual
-       FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1 GROUP BY categoria`,
-      [firebase_uid]
-    );
-    const presupActual = {};
-    for (const g of varBase) presupActual[g.categoria] = Number(g.presupuestado_mensual);
-
-    const recomendaciones = analisis.map(a => {
-      const avgReal    = Number(a.avg_variable) + Number(a.avg_no_presup);
-      const presup     = presupActual[a.categoria] || 0;
-      const diferencia = parseFloat((avgReal - presup).toFixed(2));
-      return {
-        categoria: a.categoria,
-        presupuesto_actual: parseFloat(presup.toFixed(2)),
-        promedio_real_mensual: parseFloat(avgReal.toFixed(2)),
-        promedio_no_presupuestado: parseFloat(Number(a.avg_no_presup).toFixed(2)),
-        diferencia,
-        recomendacion: diferencia > 5
-          ? `Aumentar presupuesto de ${a.categoria} en $${diferencia.toFixed(2)}/mes`
-          : diferencia < -20
-            ? `Podrías reducir presupuesto de ${a.categoria} en $${Math.abs(diferencia).toFixed(2)}/mes`
-            : 'Presupuesto adecuado',
-        accion: diferencia > 5 ? 'aumentar' : diferencia < -20 ? 'reducir' : 'mantener',
-      };
-    });
-
+    const sugerencias_presupuesto = await _calcularSugerenciasAnuales(firebase_uid, anio);
     res.json({
       anio_analizado: Number(anio),
       anio_proyectado: Number(anio) + 1,
-      recomendaciones,
-      resumen: `Basado en tu comportamiento real de ${anio}, se sugieren ${recomendaciones.filter(r => r.accion !== 'mantener').length} ajustes al presupuesto.`,
+      sugerencias_presupuesto,
+      resumen: sugerencias_presupuesto.length > 0
+        ? `Basado en tu comportamiento real de ${anio}, se sugieren ${sugerencias_presupuesto.length} ajustes al presupuesto.`
+        : `Tu presupuesto de ${anio} se mantuvo alineado con lo real — sin ajustes sugeridos para ${Number(anio) + 1}.`,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -7877,7 +7902,7 @@ app.post('/user/cerrar-anio/:anio', async (req, res) => {
     }
     const remanenteReal = parseFloat((ingresoTotal - fijosTotal - variablesTotal - noPresTotal).toFixed(2));
 
-    // Análisis de categorías del año (para recomendaciones)
+    // Análisis de categorías del año (snapshot histórico, se guarda tal cual)
     const [analisis] = await db.execute(
       `SELECT categoria,
               SUM(CASE WHEN tipo='variable'          THEN monto ELSE 0 END) AS total_variable,
@@ -7890,36 +7915,10 @@ app.post('/user/cerrar-anio/:anio', async (req, res) => {
       [firebase_uid, anio]
     );
 
-    const [varBase] = await db.execute(
-      `SELECT categoria, SUM(monto_estimado) AS presupuestado_mensual
-       FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1 GROUP BY categoria`,
-      [firebase_uid]
-    );
-    const presupActual = {};
-    for (const g of varBase) presupActual[g.categoria] = Number(g.presupuestado_mensual);
-
-    const recomendaciones = analisis.map(a => {
-      const promedioVariable  = Number(a.total_variable)  / Number(a.meses_presentes);
-      const promedioNoPresup  = Number(a.total_no_presup) / Number(a.meses_presentes);
-      const avgReal    = promedioVariable + promedioNoPresup;
-      const presup     = presupActual[a.categoria] || 0;
-      const diferencia = parseFloat((avgReal - presup).toFixed(2));
-      return {
-        categoria:                a.categoria,
-        presupuesto_actual:       parseFloat(presup.toFixed(2)),
-        promedio_real_mensual:    parseFloat(avgReal.toFixed(2)),
-        promedio_no_presupuestado: parseFloat(promedioNoPresup.toFixed(2)),
-        total_anual:              parseFloat(Number(a.total_anual).toFixed(2)),
-        meses_presentes:          Number(a.meses_presentes),
-        diferencia,
-        recomendacion: diferencia > 5
-          ? `Aumentar presupuesto de ${a.categoria} en $${diferencia.toFixed(2)}/mes`
-          : diferencia < -20
-            ? `Podrías reducir presupuesto de ${a.categoria} en $${Math.abs(diferencia).toFixed(2)}/mes`
-            : 'Presupuesto adecuado',
-        accion: diferencia > 5 ? 'aumentar' : diferencia < -20 ? 'reducir' : 'mantener',
-      };
-    });
+    // FIN-04: sugerencias de presupuesto para el año siguiente, con el mismo
+    // guardrail de coherencia que FIN-03 (nunca subir el límite de una
+    // categoría flexible solo porque gastó de más).
+    const recomendaciones = await _calcularSugerenciasAnuales(firebase_uid, anio);
 
     // Snapshot en cierres_anuales
     await db.execute(
@@ -7953,8 +7952,10 @@ app.post('/user/cerrar-anio/:anio', async (req, res) => {
         no_presupuestados_total: parseFloat(noPresTotal.toFixed(2)),
         remanente_real:          remanenteReal,
       },
-      recomendaciones,
-      mensaje: `Cierre ${anio} completado. ${recomendaciones.filter(r => r.accion !== 'mantener').length} ajustes sugeridos para ${Number(anio) + 1}.`,
+      sugerencias_presupuesto: recomendaciones,
+      mensaje: recomendaciones.length > 0
+        ? `Cierre ${anio} completado. ${recomendaciones.length} ajuste(s) sugeridos para ${Number(anio) + 1}.`
+        : `Cierre ${anio} completado. Tu presupuesto se mantuvo alineado con lo real.`,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
