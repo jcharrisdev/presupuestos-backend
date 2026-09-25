@@ -216,7 +216,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
                         anio: widget.anio,
                         mes: widget.mes,
                       ),
-                      _TabAnalisis(data: _data!, uid: widget.firebaseUid),
+                      _TabAnalisis(data: _data!, uid: widget.firebaseUid, anio: widget.anio, mes: widget.mes),
                     ],
                   ),
                 ),
@@ -3219,7 +3219,9 @@ class _QuincenaCardState extends State<_QuincenaCard> {
 class _TabAnalisis extends StatefulWidget {
   final Map<String, dynamic> data;
   final String uid;
-  const _TabAnalisis({required this.data, required this.uid});
+  final int anio;
+  final int mes;
+  const _TabAnalisis({required this.data, required this.uid, required this.anio, required this.mes});
 
   @override
   State<_TabAnalisis> createState() => _TabAnalisisState();
@@ -3228,16 +3230,28 @@ class _TabAnalisis extends StatefulWidget {
 class _TabAnalisisState extends State<_TabAnalisis> {
   List<dynamic> _recomendaciones = [];
   bool _loadingRec = true;
+  Map<String, dynamic>? _variaciones;
+  bool _loadingVariaciones = true;
 
   @override
   void initState() {
     super.initState();
     _cargarRecomendaciones();
+    _cargarVariaciones();
   }
 
   Future<void> _cargarRecomendaciones() async {
     final data = await ProductosCatalogoService.getAnalisisVsPresupuesto(widget.uid);
     if (mounted) setState(() { _recomendaciones = data; _loadingRec = false; });
+  }
+
+  Future<void> _cargarVariaciones() async {
+    try {
+      final data = await EstadoAnualService.getAnalisisVariaciones(widget.uid, widget.anio, widget.mes);
+      if (mounted) setState(() { _variaciones = data; _loadingVariaciones = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingVariaciones = false);
+    }
   }
 
   double _d(dynamic v) => v == null ? 0.0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0);
@@ -3253,9 +3267,35 @@ class _TabAnalisisState extends State<_TabAnalisis> {
       return db.compareTo(da);
     });
 
+    final insights = (_variaciones?['insights'] as List? ?? []).cast<Map<String, dynamic>>();
+    final rankingExceso = (_variaciones?['ranking_exceso'] as List? ?? []).cast<Map<String, dynamic>>();
+    final rankingAhorro = (_variaciones?['ranking_ahorro'] as List? ?? []).cast<Map<String, dynamic>>();
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── FIN-02: por qué me desvié este mes ─────────────────────────
+        if (_loadingVariaciones)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: LinearProgressIndicator(minHeight: 2, color: AppTheme.primary),
+          ),
+        if (!_loadingVariaciones && insights.isNotEmpty) ...[
+          Text('POR QUÉ TE DESVIASTE', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ...insights.map((i) => _InsightCard(insight: i)),
+          const SizedBox(height: 16),
+        ],
+        if (!_loadingVariaciones && (rankingExceso.isNotEmpty || rankingAhorro.isNotEmpty)) ...[
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: _RankingColumn(
+              titulo: 'MÁS TE EXCEDISTE', items: rankingExceso, color: AppTheme.danger)),
+            const SizedBox(width: 12),
+            Expanded(child: _RankingColumn(
+              titulo: 'MÁS AHORRASTE', items: rankingAhorro, color: AppTheme.success)),
+          ]),
+          const SizedBox(height: 20),
+        ],
         // ── Recomendaciones de aprendizaje ─────────────────────────────
         if (!_loadingRec && conRec.isNotEmpty) ...[
           Text('RECOMENDACIONES', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
@@ -3278,6 +3318,75 @@ class _TabAnalisisState extends State<_TabAnalisis> {
           ...sorted.map((c) => _CategoriaCard(cat: c)),
       ],
     );
+  }
+}
+
+// ── FIN-02: insight automático de desviación (alza, variabilidad, ahorro) ──
+class _InsightCard extends StatelessWidget {
+  final Map<String, dynamic> insight;
+  const _InsightCard({required this.insight});
+
+  @override
+  Widget build(BuildContext context) {
+    final tipo = insight['tipo'] as String? ?? '';
+    final (icon, color) = switch (tipo) {
+      'alza_vs_mes_anterior' => (Icons.trending_up, AppTheme.warning),
+      'variabilidad' => (Icons.show_chart, AppTheme.info),
+      'oportunidad_ahorro' => (Icons.savings_outlined, AppTheme.success),
+      _ => (Icons.lightbulb_outline, AppTheme.textMuted),
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(insight['mensaje'] as String? ?? '',
+            style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.3))),
+      ]),
+    );
+  }
+}
+
+// ── FIN-02: ranking de categorías por mayor exceso o mayor ahorro ─────────
+class _RankingColumn extends StatelessWidget {
+  final String titulo;
+  final List<Map<String, dynamic>> items;
+  final Color color;
+  const _RankingColumn({required this.titulo, required this.items, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(titulo, style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.6, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text('—', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(titulo, style: TextStyle(color: AppTheme.textMuted, fontSize: 10, letterSpacing: 0.6, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      ...items.map((c) {
+        final rawCat = c['categoria'] as String? ?? '';
+        final nombre = rawCat.isNotEmpty ? '${rawCat[0].toUpperCase()}${rawCat.substring(1)}' : rawCat;
+        final desv = double.tryParse(c['desviacion'].toString()) ?? 0.0;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(children: [
+            Expanded(child: Text(nombre, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+            Text('${desv > 0 ? '+' : ''}${Money.fmt(desv)}',
+                style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ]),
+        );
+      }),
+    ]);
   }
 }
 

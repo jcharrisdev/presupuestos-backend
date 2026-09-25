@@ -42,6 +42,23 @@ class EstadoAnualService {
     }
   }
 
+  // FIN-02: desglose por categoría (presupuestado vs real) + comparación con
+  // meses anteriores + insights automáticos.
+  static Future<Map<String, dynamic>> getAnalisisVariaciones(String uid, int anio, int mes) async {
+    final cacheKey = '${uid}_analisis_variaciones_${anio}_$mes';
+    try {
+      final res = await ApiClient.get('/user/meses/$anio/$mes/analisis-variaciones?firebase_uid=$uid');
+      if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      await CacheService.set(cacheKey, data);
+      return data;
+    } catch (e) {
+      final cached = CacheService.get(cacheKey, maxAge: const Duration(hours: 24));
+      if (cached != null) return Map<String, dynamic>.from(cached as Map);
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> cerrarMes(String uid, int anio, int mes) async {
     final res = await ApiClient.post('/user/cerrar-mes-financiero/$anio/$mes', {'firebase_uid': uid});
     if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');

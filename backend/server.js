@@ -26,6 +26,7 @@ const cors    = require('cors');
 const cron    = require('node-cron');
 const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 const { calcularResumenMensual } = require('./finanzas/resumen-mensual');
+const { calcularAnalisisCategorias, calcularVariaciones } = require('./finanzas/analisis-variaciones');
 const {
   _montoMensual,
   _generarAplicaMeses,
@@ -7201,14 +7202,6 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
     const ingresoReal  = Number(mesRow.ingreso_real) || Number(mesRow.ingreso_estimado);
     const remanenteReal = ingresoReal - fijosReales - variablesReales - noPresReales;
 
-    // Análisis por categoría
-    const porCategoria = {};
-    for (const r of registros) {
-      if (!porCategoria[r.categoria]) porCategoria[r.categoria] = { categoria: r.categoria, fijo: 0, variable: 0, no_presupuestado: 0, total: 0 };
-      porCategoria[r.categoria][r.tipo === 'no_presupuestado' ? 'no_presupuestado' : r.tipo] += Number(r.monto);
-      porCategoria[r.categoria].total += Number(r.monto);
-    }
-
     // Deudas activas del usuario para este mes — su pago mínimo es un compromiso fijo
     const [deudasActivas] = await db.execute(
       `SELECT d.id, d.nombre, d.tipo, d.es_letra, d.cuota_fija, d.pago_minimo,
@@ -7245,19 +7238,7 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       presupuestadoPorCat[f.categoria] = (presupuestadoPorCat[f.categoria] || 0) + Number(f.monto_mensual);
     }
 
-    const analisisCategorias = Object.entries(porCategoria).map(([cat, datos]) => {
-      const presup = presupuestadoPorCat[cat] || 0;
-      const desv   = datos.total - presup;
-      return {
-        categoria: cat,
-        presupuestado: parseFloat(presup.toFixed(2)),
-        gastado_variable: parseFloat(datos.variable.toFixed(2)),
-        gastado_no_presup: parseFloat(datos.no_presupuestado.toFixed(2)),
-        total_gastado: parseFloat(datos.total.toFixed(2)),
-        desviacion: parseFloat(desv.toFixed(2)),
-        pct_desviacion: presup > 0 ? parseFloat((desv / presup * 100).toFixed(1)) : null,
-      };
-    });
+    const analisisCategorias = calcularAnalisisCategorias(registros, presupuestadoPorCat);
 
     // Gastos fijos del perfil para este mes (para mostrar compromisos)
     const [gastosFijosPerfil] = await db.execute(
@@ -7359,6 +7340,85 @@ app.get('/user/meses/:anio/:mes', async (req, res) => {
       gastos_por_fuente: gastosPorFuente,
       registros,
       analisis_categorias: analisisCategorias,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /user/meses/:anio/:mes/analisis-variaciones?firebase_uid=
+// FIN-02: por qué el usuario se desvió del presupuesto, categoría por categoría.
+// Reutiliza el mismo cálculo presupuestado-vs-real que analisis_categorias del
+// mes (ver V2) y lo enriquece con la comparación contra los últimos meses.
+const ANALISIS_VARIACIONES_MESES_HISTORICO = 3;
+app.get('/user/meses/:anio/:mes/analisis-variaciones', async (req, res) => {
+  const { anio, mes } = req.params;
+  const { firebase_uid } = req.query;
+  if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
+  try {
+    const [[mesRow]] = await db.execute(
+      `SELECT id FROM meses_financieros WHERE firebase_uid = ? AND anio = ? AND mes = ?`,
+      [firebase_uid, anio, mes]
+    );
+    if (!mesRow) return res.status(404).json({ error: 'Mes no encontrado. Genera el estado anual primero.' });
+
+    const [registros] = await db.execute(
+      `SELECT categoria, tipo, monto FROM registros_gasto WHERE mes_id = ? AND firebase_uid = ?`,
+      [mesRow.id, firebase_uid]
+    );
+
+    const [varBase] = await db.execute(
+      `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
+    );
+    const presupuestadoPorCat = {};
+    for (const g of varBase) {
+      if (g.aplica_meses) {
+        const mesesArr = typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses;
+        if (!mesesArr.includes(Number(mes))) continue;
+      }
+      presupuestadoPorCat[g.categoria] = (presupuestadoPorCat[g.categoria] || 0) + _montoMensual(g);
+    }
+    const [fijosCat] = await db.execute(
+      `SELECT descripcion, monto_mensual, categoria FROM user_gastos_fijos
+       WHERE firebase_uid = ? AND activo = 1 AND categoria IS NOT NULL AND categoria != ''`,
+      [firebase_uid]
+    );
+    for (const f of fijosCat) {
+      presupuestadoPorCat[f.categoria] = (presupuestadoPorCat[f.categoria] || 0) + Number(f.monto_mensual);
+    }
+    const categoriasActual = calcularAnalisisCategorias(registros, presupuestadoPorCat);
+
+    // Últimos N meses anteriores con estado generado, para comparar tendencia.
+    const [mesesAnteriores] = await db.execute(
+      `SELECT id, anio, mes FROM meses_financieros
+       WHERE firebase_uid = ? AND (anio < ? OR (anio = ? AND mes < ?))
+       ORDER BY anio DESC, mes DESC LIMIT ${parseInt(ANALISIS_VARIACIONES_MESES_HISTORICO)}`,
+      [firebase_uid, anio, anio, mes]
+    );
+    const historicoPorCategoria = {};
+    if (mesesAnteriores.length > 0) {
+      const idsOrdenados = mesesAnteriores.map(m => m.id);
+      const placeholders = idsOrdenados.map(() => '?').join(',');
+      const [totalesHistoricos] = await db.execute(
+        `SELECT mes_id, categoria, SUM(monto) AS total
+         FROM registros_gasto WHERE firebase_uid = ? AND mes_id IN (${placeholders})
+         GROUP BY mes_id, categoria`,
+        [firebase_uid, ...idsOrdenados]
+      );
+      const porMes = new Map(idsOrdenados.map(id => [id, {}]));
+      for (const fila of totalesHistoricos) porMes.get(fila.mes_id)[fila.categoria] = Number(fila.total);
+      const categorias = new Set([...categoriasActual.map(c => c.categoria), ...totalesHistoricos.map(f => f.categoria)]);
+      for (const cat of categorias) {
+        historicoPorCategoria[cat] = idsOrdenados.map(id => porMes.get(id)[cat] || 0);
+      }
+    }
+
+    const { categorias, ranking_exceso, ranking_ahorro, insights } = calcularVariaciones({
+      categoriasActual, historicoPorCategoria,
+    });
+
+    res.json({
+      mes: Number(mes), anio: Number(anio),
+      meses_comparados: mesesAnteriores.map(m => ({ anio: m.anio, mes: m.mes })),
+      categorias, ranking_exceso, ranking_ahorro, insights,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
