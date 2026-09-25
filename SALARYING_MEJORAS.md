@@ -61,6 +61,32 @@
 
 **Próxima fase:** FIN-03 (cierre mensual con insights).
 
+---
+
+## ✅ FIN-03 / E-03 — Cierre mensual con aprendizaje (2026-09-25)
+
+**Estado:** IMPLEMENTADO — rama `claude/app-status-analysis-ecnunj`. Cierra el flujo FIN-01→FIN-02→FIN-03: disponible real → por qué me desvié → qué hago distinto el próximo mes.
+
+**Validado con el asesor financiero del proyecto antes de codear** (ver skill `asesor-financiero-salarying`): veredicto ⚠️ coherente con ajustes — el riesgo real era sugerir subir el límite de una categoría **flexible** (ocio, gustitos) cuando gasta de más, lo que normalizaría el sobregasto en vez de corregirlo. La solución distingue por tipo de categoría (ver abajo).
+
+**Solución implementada:**
+- ✅ **Backend:** Nuevo módulo `backend/finanzas/cierre-mes-insights.js` (puro, sin BD, 11 tests unitarios):
+  - `clasificarCategoria` — mapeo estático esencial/flexible (ocio, ropa, deportes, tecnología, otro = flexible; el resto = esencial), mismo criterio que ya usa la clasificación 50/30/20 del proyecto.
+  - `detectarDesviacionConsistente` — requiere el mes actual + 2 meses anteriores (mínimo 3 puntos) con desviación >15% en la **misma dirección**; un solo mes atípico no dispara nada.
+  - `calcularSugerenciasPresupuesto` — matriz de decisión: exceso en esencial → sugiere subir (el presupuesto original probablemente estaba mal calibrado); ahorro en cualquier categoría → sugiere bajar (libera dinero real); **exceso en flexible → nunca sugiere subir** (el guardrail del asesor). Presupuesto sugerido = promedio de los últimos 3 meses, redondeado a $5. Categorías con componente fijo mezclado se omiten (no se sabe cuánto es ajustable).
+- ✅ **API:** el endpoint de FIN-02 (`GET /user/meses/:anio/:mes/analisis-variaciones`) ahora también devuelve `sugerencias_presupuesto`, cada una con sus `items` de `gastos_variables_base` para que el frontend prorratee el ajuste (6 tests nuevos de integración).
+- ✅ **Frontend (`CierreMesSheet`):**
+  1. El insight del paso "Resumen" ahora usa los insights ricos de FIN-02 (alza vs mes anterior, variabilidad, oportunidad de ahorro) en vez del cálculo simple de un solo mes; si el motor nuevo no cargó, cae al cálculo anterior como respaldo.
+  2. Nueva sección "Presupuesto para el próximo mes": una tarjeta por sugerencia con el monto actual → sugerido y los botones "Ajustar" / "No, gracias". Nunca se auto-aplica — "Ajustar" llama `GastosVariablesService.editar` sobre cada item afectado (prorrateado por el mismo factor de cambio), preparando el mes siguiente con el aprendizaje real.
+
+**Verificado localmente:**
+- ✅ 88/88 tests de backend pasando (75 previos + 11 unitarios + 2 de integración de cierre-mes-insights)
+- ✅ `flutter analyze` sin errores nuevos (solo infos de estilo preexistentes)
+
+**Lo que responde ahora:** FIN-01 dice cuánto hay disponible, FIN-02 dice por qué se desvió, y FIN-03 cierra el ciclo dejando el presupuesto del próximo mes más realista — sin nunca decidir por el usuario ni empujarlo a gastar más en lo discrecional.
+
+**Próxima fase:** cierre anual con proyección al siguiente año.
+
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
 
 **Progreso: 78 ✅ implementadas · 0 ⚠️ parciales · 8 ❌ pendientes** (86 ítems)

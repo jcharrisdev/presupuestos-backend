@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { calcularAnalisisCategorias, calcularVariaciones } = require('../finanzas/analisis-variaciones');
+const { calcularSugerenciasPresupuesto } = require('../finanzas/cierre-mes-insights');
 
 // Ejecuta el handler real con una BD en memoria, igual que resumen-mensual-endpoint.test.js:
 // no se importa server.js completo para evitar migraciones/cron/conexiones externas.
@@ -44,7 +45,7 @@ function crearEndpoint({ mesId = 7, registros = [], varBase = [], fijosCat = [],
   };
   vm.runInNewContext(source.slice(start, end), {
     app: { get(route, callback) { handler = callback; } }, db,
-    calcularAnalisisCategorias, calcularVariaciones,
+    calcularAnalisisCategorias, calcularVariaciones, calcularSugerenciasPresupuesto,
     _montoMensual: g => Number(g.monto_mensual),
     parseInt, ANALISIS_VARIACIONES_MESES_HISTORICO: 3,
   });
@@ -112,4 +113,41 @@ test('FIN-02: con meses anteriores, calcula variación vs mes pasado e insight d
   assert.equal(ocio.variacion_vs_mes_anterior, 70);
   assert.equal(ocio.pct_variacion_vs_mes_anterior, 46.7);
   assert.ok(body.insights.some(i => i.tipo === 'alza_vs_mes_anterior' && i.categoria === 'ocio'));
+});
+
+test('FIN-03: exceso consistente en categoría esencial devuelve sugerencia de subir presupuesto con sus items', async () => {
+  const registros = [{ categoria: 'alimentacion', tipo: 'variable', monto: '400.00' }];
+  const varBase = [{
+    id: 10, nombre: 'Supermercado', categoria: 'alimentacion',
+    monto_estimado: '300.00', monto_mensual: '300.00', aplica_meses: null,
+  }];
+  const mesesAnteriores = [{ id: 6, anio: 2026, mes: 8 }, { id: 5, anio: 2026, mes: 7 }];
+  const historicosPorMes = [
+    { mes_id: 6, categoria: 'alimentacion', total: '390.00' },
+    { mes_id: 5, categoria: 'alimentacion', total: '410.00' },
+  ];
+  const api = crearEndpoint({ registros, varBase, mesesAnteriores, historicosPorMes });
+  const { status, body } = await api.get();
+
+  assert.equal(status, 200, JSON.stringify(body));
+  assert.equal(body.sugerencias_presupuesto.length, 1);
+  const sug = body.sugerencias_presupuesto[0];
+  assert.equal(sug.categoria, 'alimentacion');
+  assert.equal(sug.clasificacion, 'esencial');
+  assert.equal(sug.direccion, 'subir');
+  assert.equal(sug.presupuesto_actual, 300);
+  assert.deepEqual(sug.items, [{ id: 10, nombre: 'Supermercado', monto_estimado: 300 }]);
+});
+
+test('FIN-03: sin patrón consistente (solo el mes actual), no hay sugerencias', async () => {
+  const registros = [{ categoria: 'alimentacion', tipo: 'variable', monto: '400.00' }];
+  const varBase = [{
+    id: 10, nombre: 'Supermercado', categoria: 'alimentacion',
+    monto_estimado: '300.00', monto_mensual: '300.00', aplica_meses: null,
+  }];
+  const api = crearEndpoint({ registros, varBase });
+  const { status, body } = await api.get();
+
+  assert.equal(status, 200, JSON.stringify(body));
+  assert.deepEqual(body.sugerencias_presupuesto, []);
 });

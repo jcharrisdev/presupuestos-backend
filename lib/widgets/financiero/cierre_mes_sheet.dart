@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../services/estado_anual_service.dart';
 import '../../services/registros_service.dart';
+import '../../services/gastos_variables_service.dart';
 import '../../utils/money.dart';
 
 /// Wizard de cierre mensual.
@@ -34,6 +35,14 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
   bool _cerrando = false;
   late List<Map<String, dynamic>> _pendientes;
 
+  // FIN-03: motor rico de FIN-02 (insights + sugerencias de ajuste de
+  // presupuesto). Si falla o sigue cargando, el resumen usa el insight
+  // simple de siempre como respaldo — nunca deja al usuario sin nada.
+  Map<String, dynamic>? _variaciones;
+  final Set<String> _sugerenciasAplicando = {};
+  final Set<String> _sugerenciasAplicadas = {};
+  final Set<String> _sugerenciasDescartadas = {};
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +50,46 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
     _pendientes = registros.where((r) => r['pagado'] == 0 || r['pagado'] == false).toList();
     // Si no hay pendientes ni alertas, saltar directo a confirmar
     if (_pendientes.isEmpty && widget.alertas.isEmpty) _paso = 3;
+    _cargarVariaciones();
+  }
+
+  Future<void> _cargarVariaciones() async {
+    try {
+      final data = await EstadoAnualService.getAnalisisVariaciones(
+        widget.firebaseUid, widget.anio, widget.mes);
+      if (mounted) setState(() => _variaciones = data);
+    } catch (_) {
+      // Sin conexión al motor nuevo: el resumen sigue con el insight simple.
+    }
+  }
+
+  Future<void> _aplicarSugerencia(Map<String, dynamic> sug) async {
+    final categoria = sug['categoria'] as String;
+    final actual = _d(sug['presupuesto_actual']);
+    final sugerido = _d(sug['presupuesto_sugerido']);
+    if (actual <= 0) return;
+    final factor = sugerido / actual;
+    setState(() => _sugerenciasAplicando.add(categoria));
+    try {
+      final items = (sug['items'] as List? ?? []).cast<Map<String, dynamic>>();
+      for (final item in items) {
+        final nuevoMonto = _d(item['monto_estimado']) * factor;
+        await GastosVariablesService.editar(
+          widget.firebaseUid, item['id'] as int,
+          {'monto_estimado': double.parse(nuevoMonto.toStringAsFixed(2))},
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _sugerenciasAplicando.remove(categoria);
+        _sugerenciasAplicadas.add(categoria);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sugerenciasAplicando.remove(categoria));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo ajustar: $e'), backgroundColor: AppTheme.danger));
+    }
   }
 
   double _d(dynamic v) => double.tryParse(v?.toString() ?? '0') ?? 0.0;
@@ -199,6 +248,9 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
         ),
         // P3 — explicar POR QUÉ gastó de más, no solo el número
         ..._buildInsightDesviacion(remEst, remReal),
+        // FIN-03 — si algún patrón se repite mes a mes, ofrecer ajustar el
+        // presupuesto para el próximo mes (nunca se auto-aplica).
+        ..._buildSugerenciasPresupuesto(),
         const SizedBox(height: 20),
         _botonSiguiente(
           label: _pendientes.isEmpty && widget.alertas.isEmpty ? 'Ir a confirmar' : 'Siguiente',
@@ -208,8 +260,19 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
     );
   }
 
-  /// P3 — bajo la tabla: si gastó más de lo planeado, decir en qué categorías.
+  /// P3/FIN-03 — bajo la tabla: por qué gastó más o menos de lo planeado.
+  /// Usa los insights ricos de FIN-02 (alza vs mes anterior, variabilidad,
+  /// oportunidad de ahorro) cuando ya cargaron; si no, cae al cálculo simple
+  /// de siempre para no dejar la pantalla sin nada mientras carga o si falla.
   List<Widget> _buildInsightDesviacion(double remEst, double remReal) {
+    final insightsRicos = (_variaciones?['insights'] as List? ?? []).cast<Map<String, dynamic>>();
+    if (insightsRicos.isNotEmpty) {
+      return [
+        const SizedBox(height: 12),
+        ...insightsRicos.map((i) => _insightRicoBox(i)),
+      ];
+    }
+
     final cats = (widget.data['analisis_categorias'] as List? ?? [])
         .cast<Map<String, dynamic>>()
         .where((c) => _d(c['desviacion']) > 0.5)
@@ -246,6 +309,123 @@ class _CierreMesSheetState extends State<CierreMesSheet> {
         ]),
       ),
     ];
+  }
+
+  Widget _insightRicoBox(Map<String, dynamic> insight) {
+    final tipo = insight['tipo'] as String? ?? '';
+    final (icon, color) = switch (tipo) {
+      'alza_vs_mes_anterior' => (Icons.trending_up, AppTheme.warning),
+      'variabilidad' => (Icons.show_chart, AppTheme.info),
+      'oportunidad_ahorro' => (Icons.savings_outlined, AppTheme.success),
+      _ => (Icons.lightbulb_outline, AppTheme.warning),
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(children: [
+        Icon(icon, color: color, size: 15),
+        const SizedBox(width: 8),
+        Expanded(child: Text(insight['mensaje'] as String? ?? '',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3))),
+      ]),
+    );
+  }
+
+  /// FIN-03 — si una categoría se desvió de forma consistente (no solo este
+  /// mes), ofrecer ajustar su presupuesto para el mes siguiente. Nunca se
+  /// auto-aplica: el usuario decide con "Ajustar" o "No, gracias".
+  List<Widget> _buildSugerenciasPresupuesto() {
+    final sugerencias = (_variaciones?['sugerencias_presupuesto'] as List? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((s) => !_sugerenciasDescartadas.contains(s['categoria']))
+        .toList();
+    if (sugerencias.isEmpty) return [];
+    return [
+      const SizedBox(height: 12),
+      Text('PRESUPUESTO PARA EL PRÓXIMO MES',
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.6)),
+      const SizedBox(height: 8),
+      ...sugerencias.map((s) => _sugerenciaCard(s)),
+    ];
+  }
+
+  Widget _sugerenciaCard(Map<String, dynamic> sug) {
+    final categoria = sug['categoria'] as String;
+    final nombre = categoria.isNotEmpty ? '${categoria[0].toUpperCase()}${categoria.substring(1)}' : categoria;
+    final subir = sug['direccion'] == 'subir';
+    final color = subir ? AppTheme.warning : AppTheme.success;
+    final actual = _d(sug['presupuesto_actual']);
+    final sugerido = _d(sug['presupuesto_sugerido']);
+    final aplicando = _sugerenciasAplicando.contains(categoria);
+    final aplicada = _sugerenciasAplicadas.contains(categoria);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(subir ? Icons.trending_up : Icons.trending_down, color: color, size: 15),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Ajustar presupuesto de $nombre',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600))),
+        ]),
+        const SizedBox(height: 4),
+        Text(sug['razon'] as String? ?? '',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text(Money.fmt(actual), style: TextStyle(
+              color: AppTheme.textMuted, fontSize: 13, decoration: TextDecoration.lineThrough)),
+          const SizedBox(width: 6),
+          Icon(Icons.arrow_forward, size: 12, color: AppTheme.textMuted),
+          const SizedBox(width: 6),
+          Text(Money.fmt(sugerido),
+              style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 10),
+        if (aplicada)
+          Row(children: [
+            const Icon(Icons.check_circle, color: AppTheme.success, size: 14),
+            const SizedBox(width: 6),
+            Text('Ajustado para el próximo mes',
+                style: TextStyle(color: AppTheme.success, fontSize: 12)),
+          ])
+        else
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              onPressed: aplicando ? null : () => setState(() => _sugerenciasDescartadas.add(categoria)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textSecondary,
+                side: BorderSide(color: AppTheme.border),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              child: const Text('No, gracias', style: TextStyle(fontSize: 12)),
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: ElevatedButton(
+              onPressed: aplicando ? null : () => _aplicarSugerencia(sug),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color, foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              child: aplicando
+                  ? const SizedBox(width: 14, height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Text('Ajustar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            )),
+          ]),
+      ]),
+    );
   }
 
   // ─── PASO 1: PENDIENTES ──────────────────────────────────────────────────────

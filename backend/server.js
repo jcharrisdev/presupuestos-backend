@@ -27,6 +27,7 @@ const cron    = require('node-cron');
 const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 const { calcularResumenMensual } = require('./finanzas/resumen-mensual');
 const { calcularAnalisisCategorias, calcularVariaciones } = require('./finanzas/analisis-variaciones');
+const { calcularSugerenciasPresupuesto } = require('./finanzas/cierre-mes-insights');
 const {
   _montoMensual,
   _generarAplicaMeses,
@@ -7369,20 +7370,25 @@ app.get('/user/meses/:anio/:mes/analisis-variaciones', async (req, res) => {
       `SELECT * FROM gastos_variables_base WHERE firebase_uid = ? AND activo = 1`, [firebase_uid]
     );
     const presupuestadoPorCat = {};
+    const itemsVariablesPorCategoria = {};
     for (const g of varBase) {
       if (g.aplica_meses) {
         const mesesArr = typeof g.aplica_meses === 'string' ? JSON.parse(g.aplica_meses) : g.aplica_meses;
         if (!mesesArr.includes(Number(mes))) continue;
       }
       presupuestadoPorCat[g.categoria] = (presupuestadoPorCat[g.categoria] || 0) + _montoMensual(g);
+      (itemsVariablesPorCategoria[g.categoria] ??= []).push(
+        { id: g.id, nombre: g.nombre, monto_estimado: Number(g.monto_estimado) });
     }
     const [fijosCat] = await db.execute(
       `SELECT descripcion, monto_mensual, categoria FROM user_gastos_fijos
        WHERE firebase_uid = ? AND activo = 1 AND categoria IS NOT NULL AND categoria != ''`,
       [firebase_uid]
     );
+    const fijoPorCategoria = {};
     for (const f of fijosCat) {
       presupuestadoPorCat[f.categoria] = (presupuestadoPorCat[f.categoria] || 0) + Number(f.monto_mensual);
+      fijoPorCategoria[f.categoria] = (fijoPorCategoria[f.categoria] || 0) + Number(f.monto_mensual);
     }
     const categoriasActual = calcularAnalisisCategorias(registros, presupuestadoPorCat);
 
@@ -7414,11 +7420,16 @@ app.get('/user/meses/:anio/:mes/analisis-variaciones', async (req, res) => {
     const { categorias, ranking_exceso, ranking_ahorro, insights } = calcularVariaciones({
       categoriasActual, historicoPorCategoria,
     });
+    // FIN-03: si una categoría se desvió de forma consistente (no solo este mes),
+    // sugerir ajustar su presupuesto variable base para el mes siguiente.
+    const sugerencias_presupuesto = calcularSugerenciasPresupuesto({
+      categoriasActual, historicoPorCategoria, itemsVariablesPorCategoria, fijoPorCategoria,
+    });
 
     res.json({
       mes: Number(mes), anio: Number(anio),
       meses_comparados: mesesAnteriores.map(m => ({ anio: m.anio, mes: m.mes })),
-      categorias, ranking_exceso, ranking_ahorro, insights,
+      categorias, ranking_exceso, ranking_ahorro, insights, sugerencias_presupuesto,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
