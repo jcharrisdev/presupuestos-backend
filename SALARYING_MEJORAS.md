@@ -37,7 +37,29 @@
 
 **Arquitectura:** Punto de partida que responde la pregunta central "¿Por qué no me alcanza el dinero?" — Depende de FIN-02, FIN-03 (análisis de variaciones, cierre mensual inteligente) para el flujo de aprendizaje completo.
 
-**Próximas fases:** FIN-02 (análisis de desviaciones por categoría), FIN-03 (cierre mensual con insights), cierre anual con proyección siguiente año.
+**Próximas fases:** FIN-03 (cierre mensual con insights), cierre anual con proyección siguiente año.
+
+---
+
+## ✅ FIN-02 / E-02 — Análisis de desviaciones por categoría (2026-09-25)
+
+**Estado:** IMPLEMENTADO — rama `claude/app-status-analysis-ecnunj`. Continuación natural de FIN-01: FIN-01 responde "¿cuánto tengo disponible?", FIN-02 responde "¿por qué me desvié?".
+
+**Solución implementada:**
+- ✅ **Backend:** Nuevo módulo `backend/finanzas/analisis-variaciones.js` (puro, sin BD, 9 tests unitarios):
+  - `calcularAnalisisCategorias` extrae y reutiliza el agrupado presupuestado-vs-real que ya usaba `GET /user/meses/:anio/:mes` (evita el riesgo de V2 — dos criterios distintos de "cuánto gastó" una categoría)
+  - `calcularVariaciones` compara cada categoría contra el mes anterior (monto y % de variación), calcula variabilidad (coeficiente de variación) contra los últimos meses, arma ranking de mayor exceso / mayor ahorro (solo categorías con presupuesto > 0), y genera insights automáticos con 3 reglas: alza fuerte vs mes pasado (+30% y +$10 absolutos), variabilidad que destaca claramente sobre el resto (≥1.5x la segunda), y oportunidad de ahorro replicable (categoría con mayor ahorro absoluto vs su presupuesto)
+- ✅ **API:** Nuevo endpoint `GET /user/meses/:anio/:mes/analisis-variaciones?firebase_uid=` — trae los últimos 3 meses anteriores con estado generado y calcula la comparación (4 tests de integración con BD mockeada, mismo patrón `vm.runInNewContext` que FIN-01)
+- ✅ **Frontend:** Tab Análisis de `mes_detalle_screen.dart` ahora carga `EstadoAnualService.getAnalisisVariaciones` y muestra, arriba de las tarjetas de categoría existentes: sección "POR QUÉ TE DESVIASTE" con los insights automáticos (`_InsightCard`) y dos columnas "MÁS TE EXCEDISTE" / "MÁS AHORRASTE" (`_RankingColumn`). No se tocó el desglose por categoría ya existente (`_CategoriaCard`), solo se agregó valor arriba.
+
+**Verificado localmente:**
+- ✅ 74/74 tests de backend pasando (61 previos + 9 unitarios + 4 de integración de analisis-variaciones)
+- ✅ `flutter analyze` sin errores nuevos (solo infos de estilo preexistentes en el resto del archivo)
+- ✅ Widget tests existentes (`resumen_mensual_card_test.dart`) siguen pasando tras el cambio en `estado_anual_service.dart`
+
+**Lo que responde ahora:** Además de "cuánto tengo disponible" (FIN-01), el usuario ve **por qué** se desvió: qué categoría subió fuerte vs el mes pasado, cuál es irregular mes a mes, y en cuál replicar el ahorro liberaría más dinero — sin necesidad de leer una tabla de números por su cuenta.
+
+**Próxima fase:** FIN-03 (cierre mensual con insights).
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
 

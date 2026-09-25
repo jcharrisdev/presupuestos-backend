@@ -6,12 +6,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { calcularResumenMensual } = require('../finanzas/resumen-mensual');
+const { calcularAnalisisCategorias } = require('../finanzas/analisis-variaciones');
 
 // Ejecuta el handler real con una BD en memoria. No importa server.js:
 // importar el monolito arrancaría migraciones, cron y conexiones externas.
 const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 const start = source.indexOf("app.get('/user/meses/:anio/:mes',");
-const end = source.indexOf('// PATCH /user/estado-anual/:anio/recalcular', start);
+const end = source.indexOf('// GET /user/meses/:anio/:mes/analisis-variaciones', start);
 assert.ok(start >= 0 && end > start, 'No se encontró el handler mensual');
 
 function crearEndpoint({ mes = { id: 7, ingreso_estimado: '1000.00', ingreso_real: '1000.00', variables_estimados: '0.00' }, registros = [], fijos = [], deudas = [], eventos = [] } = {}) {
@@ -46,7 +47,7 @@ function crearEndpoint({ mes = { id: 7, ingreso_estimado: '1000.00', ingreso_rea
     },
   };
   vm.runInNewContext(source.slice(start, end), {
-    app: { get(route, callback) { handler = callback; } }, db, calcularResumenMensual,
+    app: { get(route, callback) { handler = callback; } }, db, calcularResumenMensual, calcularAnalisisCategorias,
     _montoMensual: g => Number(g.monto_mensual),
   });
   return {
