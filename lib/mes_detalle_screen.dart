@@ -3240,6 +3240,18 @@ class _TabAnalisisState extends State<_TabAnalisis> {
     _cargarVariaciones();
   }
 
+  @override
+  void didUpdateWidget(_TabAnalisis oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // El padre recarga el mes (agregar/editar/borrar un gasto) y pasa un nuevo
+    // `data`, pero este State se conserva (mismo tipo, sin key): sin esto, los
+    // insights y rankings quedarían con los datos del gasto anterior aunque
+    // las tarjetas de categoría abajo ya muestren el mes actualizado.
+    if (oldWidget.data != widget.data) {
+      _cargarVariaciones();
+    }
+  }
+
   Future<void> _cargarRecomendaciones() async {
     final data = await ProductosCatalogoService.getAnalisisVsPresupuesto(widget.uid);
     if (mounted) setState(() { _recomendaciones = data; _loadingRec = false; });

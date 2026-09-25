@@ -26,6 +26,15 @@ test('FIN-02: agrupa registros por categoría y calcula desviación vs presupues
   assert.equal(ocio.pct_desviacion, 46.7);
 });
 
+test('FIN-02: una categoría presupuestada sin ningún gasto este mes aparece como ahorro del 100%', () => {
+  const cats = calcularAnalisisCategorias([registro('comida', 'variable', '280.00')], { comida: 300, utilities: 100 });
+  const utilities = cats.find(c => c.categoria === 'utilities');
+  assert.ok(utilities, 'utilities debe aparecer aunque no tenga registros');
+  assert.equal(utilities.total_gastado, 0);
+  assert.equal(utilities.desviacion, -100);
+  assert.equal(utilities.pct_desviacion, -100);
+});
+
 test('FIN-02: sin presupuesto asignado, pct_desviacion es null (no se puede dividir por cero)', () => {
   const cats = calcularAnalisisCategorias([registro('transporte', 'no_presupuestado', '40.00')], {});
   assert.equal(cats[0].pct_desviacion, null);

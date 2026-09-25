@@ -6,6 +6,11 @@
 
 function calcularAnalisisCategorias(registros, presupuestadoPorCat = {}) {
   const porCategoria = {};
+  // Una categoría presupuestada con $0 gastado este mes es el mayor ahorro
+  // posible (100%): debe seguir apareciendo, no solo las que tienen registros.
+  for (const cat of Object.keys(presupuestadoPorCat)) {
+    porCategoria[cat] = { categoria: cat, fijo: 0, variable: 0, no_presupuestado: 0, total: 0 };
+  }
   for (const r of registros) {
     const cat = r.categoria;
     if (!porCategoria[cat]) {
