@@ -28,6 +28,8 @@ import 'theme/app_theme.dart';
 import 'services/api_client.dart';
 import 'services/notification_service.dart';
 import 'utils/money.dart';
+import 'perfil_financiero_screen.dart';
+import 'deudas/deudas_screen.dart';
 
 /// Pantalla de calendario de pagos y cobros con tabs Calendario / Lista.
 class CalendarioScreen extends StatefulWidget {
@@ -388,6 +390,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                       colorEvento: _colorEvento(e),
                       onPagar: () => _marcarPagado(e),
                       onEliminar: () => _eliminarEvento(e),
+                      firebaseUid: widget.firebaseUid,
                     )),
                   ],
                 ),
@@ -453,6 +456,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                     onPagar: () => _marcarPagado(eventos[i]),
                     onEliminar: () => _eliminarEvento(eventos[i]),
                     showDate: true,
+                    firebaseUid: widget.firebaseUid,
                   ),
                 ),
         ),
@@ -644,13 +648,26 @@ class _EventoCard extends StatelessWidget {
   final Color colorEvento;
   final VoidCallback onPagar, onEliminar;
   final bool showDate;
+  final String firebaseUid;
   const _EventoCard({
     required this.evento,
     required this.colorEvento,
     required this.onPagar,
     required this.onEliminar,
+    required this.firebaseUid,
     this.showDate = false,
   });
+
+  /// J3 — el vínculo hacia el gasto fijo/deuda que generó este evento ya
+  /// existe en BD, esto solo lo hace visible y navegable.
+  void _irAlOrigen(BuildContext context) {
+    final esFijo = evento['user_gasto_fijo_id'] != null;
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => esFijo
+          ? PerfilFinancieroScreen(firebaseUid: firebaseUid, initialTab: 1)
+          : DeudasScreen(firebaseUid: firebaseUid),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -731,6 +748,22 @@ class _EventoCard extends StatelessWidget {
               Text(fechaStr, style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
             ],
           ]),
+          if (evento['fijo_nombre'] != null || evento['deuda_nombre'] != null) ...[
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () => _irAlOrigen(context),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.link, size: 11, color: AppTheme.textMuted),
+                const SizedBox(width: 3),
+                Flexible(child: Text(
+                  'Vinculado a: ${evento['fijo_nombre'] ?? evento['deuda_nombre']}'
+                  '${evento['fijo_nombre'] != null ? ' · gasto fijo' : ' · deuda'}',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, decoration: TextDecoration.underline),
+                  overflow: TextOverflow.ellipsis,
+                )),
+              ]),
+            ),
+          ],
         ])),
 
         // Monto y botones de acción

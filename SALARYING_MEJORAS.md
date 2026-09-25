@@ -105,18 +105,18 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 79 ✅ implementadas · 1 ⚠️ parcial · 6 ❌ pendientes** (86 ítems)
+**Progreso: 80 ✅ implementadas · 2 ⚠️ parciales · 4 ❌ pendientes** (86 ítems)
 
-### ✅ Implementadas (79)
-A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, **S1**, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
+### ✅ Implementadas (80)
+A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
-### ⚠️ Parciales (1)
+### ⚠️ Parciales (2)
 - **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
+- **J2** — el vínculo evento↔origen ya es visible (J3), pero Calendario y Tab Quincenas siguen siendo dos motores de cálculo independientes (Quincenas incluye gastos variables y reparto 50/50; Calendario no). Unificarlos de verdad queda diferido: mayor riesgo, toca el motor de quincenas ya validado.
 
-### ❌ Pendientes (6) — agrupadas por prioridad
+### ❌ Pendientes (4) — agrupadas por prioridad
 
 **🟠 Media / valor de uso**
-- Calendario: **J2** (conectar con Quincenas), **J3** (vincular eventos a gastos fijos) — *requieren backend, sesión enfocada de calendario*
 - Navegación: **D1** (modo diario), **U7** (flicker refresco/Provider)
 - Onboarding: **W5** (tutorial guiado)
 - Otros: **X1** (errores backend silenciosos — transversal)
@@ -489,12 +489,16 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### J3. Crear un evento en el calendario no sugiere los compromisos existentes
-**Problema:** Cuando el usuario crea un evento en el calendario (ej: "Pago renta día 1"), no hay sugerencia de "¿Quieres vincular esto a tu gasto fijo Renta?" La desconexión es total entre gastos fijos del perfil y eventos del calendario.
+### ✅ J3. Crear un evento en el calendario no sugiere los compromisos existentes
+**Estado:** IMPLEMENTADO (2026-09-25, alcance replanteado) — rama `claude/app-status-analysis-ecnunj`. Auditado antes de codear: la app **ya no tiene ningún flujo de "crear evento manual"** — todo `calendario_eventos` se auto-genera al crear/editar un gasto fijo, deuda, o venta a plazo, y el vínculo (`user_gasto_fijo_id`, `deuda_id`) **ya se creaba automáticamente**, pero era completamente invisible para el usuario. El problema real de J3 no era "falta un selector al crear el evento" — era que el vínculo existente nunca se mostraba.
 
-**Impacto:** Media.
+**Solución implementada:**
+- ✅ **Backend:** `GET /calendario/eventos` (`backend/routes/calendario.js`) ahora hace `LEFT JOIN` con `user_gastos_fijos` y `deudas` para traer `fijo_nombre`/`deuda_nombre` del compromiso vinculado (3 tests de integración).
+- ✅ **Frontend:** `_EventoCard` en `lib/calendario.dart` muestra "🔗 Vinculado a: [nombre] · gasto fijo/deuda" cuando el evento tiene origen, tappable → navega a `PerfilFinancieroScreen` (Tab Fijos) o `DeudasScreen` según corresponda.
 
-**Solución:** Al crear un evento, ofrecer la opción "Vincular a un gasto fijo o deuda" con un selector de los gastos ya registrados. Esto permite que el calendario muestre automáticamente los compromisos del perfil sin que el usuario los cree dos veces.
+**Problema (ya resuelto):** Cuando el usuario veía un evento en el calendario (ej: "Pago renta día 1"), no había forma de saber que ese evento venía de su gasto fijo "Renta" ni de llegar a editarlo desde ahí.
+
+**J2 queda pendiente** (alcance grande, diferido a propósito): unificar de verdad el Calendario y el Tab Quincenas requeriría expandir `calendario_eventos` para cubrir también `gastos_variables_base` con su lógica de reparto 50/50, y reescribir el Tab Quincenas para leer de ahí — mayor riesgo, toca el motor de quincenas ya validado (B1/B2/B3).
 
 ---
 
