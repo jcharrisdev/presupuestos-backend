@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/estado_anual_service.dart';
+import 'services/gastos_variables_service.dart';
 import 'utils/money.dart';
 
 class CierreAnioScreen extends StatefulWidget {
@@ -23,6 +24,39 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
   bool _cerrado = false;
   String? _error;
   Map<String, dynamic>? _resultado;
+
+  final Set<String> _sugerenciasAplicando = {};
+  final Set<String> _sugerenciasAplicadas = {};
+  final Set<String> _sugerenciasDescartadas = {};
+
+  Future<void> _aplicarSugerencia(Map<String, dynamic> sug) async {
+    final categoria = sug['categoria'] as String;
+    final actual = _d(sug['presupuesto_actual']);
+    final sugerido = _d(sug['presupuesto_sugerido']);
+    if (actual <= 0) return;
+    final factor = sugerido / actual;
+    setState(() => _sugerenciasAplicando.add(categoria));
+    try {
+      final items = (sug['items'] as List? ?? []).cast<Map<String, dynamic>>();
+      for (final item in items) {
+        final nuevoMonto = _d(item['monto_estimado']) * factor;
+        await GastosVariablesService.editar(
+          widget.firebaseUid, item['id'] as int,
+          {'monto_estimado': double.parse(nuevoMonto.toStringAsFixed(2))},
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _sugerenciasAplicando.remove(categoria);
+        _sugerenciasAplicadas.add(categoria);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sugerenciasAplicando.remove(categoria));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo ajustar: $e'), backgroundColor: AppTheme.danger));
+    }
+  }
 
   @override
   void initState() {
@@ -126,9 +160,10 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
 
   Widget _buildContent() {
     final r = _resultado!;
-    final recomendaciones = (r['recomendaciones'] as List? ?? []).cast<Map<String, dynamic>>();
-    final ajustes = recomendaciones.where((x) => x['accion'] != 'mantener').toList();
-    final mantener = recomendaciones.where((x) => x['accion'] == 'mantener').toList();
+    final sugerencias = (r['sugerencias_presupuesto'] as List? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((s) => !_sugerenciasDescartadas.contains(s['categoria']))
+        .toList();
 
     // Si ya fue cerrado, mostrar el resumen anual
     final resumenAnual = r['resumen_anual'] as Map<String, dynamic>?;
@@ -142,7 +177,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
           if (_cerrado)
             _bannerCerrado()
           else
-            _bannerPrevio(recomendaciones.length, ajustes.length),
+            _bannerPrevio(sugerencias.length),
 
           const SizedBox(height: 16),
 
@@ -154,30 +189,12 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
             const SizedBox(height: 20),
           ],
 
-          // Recomendaciones con ajuste
-          if (ajustes.isNotEmpty) ...[
-            _seccion('AJUSTES SUGERIDOS PARA ${widget.anio + 1}'),
+          // Sugerencias de ajuste (nunca se auto-aplican)
+          if (sugerencias.isNotEmpty) ...[
+            _seccion('PRESUPUESTO SUGERIDO PARA ${widget.anio + 1}'),
             const SizedBox(height: 8),
-            ...ajustes.map((rec) => _recCard(rec)),
+            ...sugerencias.map((sug) => _sugerenciaCard(sug)),
             const SizedBox(height: 16),
-          ],
-
-          // Sin cambios
-          if (mantener.isNotEmpty) ...[
-            _seccion('SIN CAMBIOS (${mantener.length} categorías)'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: mantener.map((rec) => Chip(
-                label: Text(rec['categoria'] as String? ?? '',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                backgroundColor: AppTheme.surfaceAlt,
-                side: BorderSide(color: AppTheme.border),
-                padding: EdgeInsets.zero,
-              )).toList(),
-            ),
-            const SizedBox(height: 20),
           ],
 
           // Nota del resumen
@@ -281,7 +298,7 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
     ),
   );
 
-  Widget _bannerPrevio(int total, int ajustes) => Container(
+  Widget _bannerPrevio(int ajustes) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: AppTheme.surfaceAlt,
@@ -299,7 +316,9 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
               Text('Análisis del año ${widget.anio}',
                   style: TextStyle(
                       color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
-              Text('$total categorías analizadas · $ajustes con ajuste sugerido',
+              Text(ajustes > 0
+                  ? '$ajustes categoría(s) con ajuste de presupuesto sugerido'
+                  : 'Tu presupuesto se mantuvo alineado con lo real',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
             ],
           ),
@@ -350,13 +369,17 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
     ),
   );
 
-  Widget _recCard(Map<String, dynamic> rec) {
-    final accion = rec['accion'] as String? ?? '';
-    final color  = accion == 'aumentar' ? AppTheme.danger : AppTheme.success;
-    final icon   = accion == 'aumentar' ? Icons.trending_up : Icons.trending_down;
-    final presup = _d(rec['presupuesto_actual']);
-    final avg    = _d(rec['promedio_real_mensual']);
-    final noPresupMes = _d(rec['promedio_no_presupuestado']);
+  /// FIN-04 — mismo patrón visual que _sugerenciaCard de CierreMesSheet:
+  /// nunca se auto-aplica, el usuario decide con Ajustar / No, gracias.
+  Widget _sugerenciaCard(Map<String, dynamic> sug) {
+    final categoria = sug['categoria'] as String? ?? '';
+    final nombre = categoria.isNotEmpty ? '${categoria[0].toUpperCase()}${categoria.substring(1)}' : categoria;
+    final subir = sug['direccion'] == 'subir';
+    final color = subir ? AppTheme.warning : AppTheme.success;
+    final actual = _d(sug['presupuesto_actual']);
+    final sugerido = _d(sug['presupuesto_sugerido']);
+    final aplicando = _sugerenciasAplicando.contains(categoria);
+    final aplicada = _sugerenciasAplicadas.contains(categoria);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -371,43 +394,64 @@ class _CierreAnioScreenState extends State<CierreAnioScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 16),
+              Icon(subir ? Icons.trending_up : Icons.trending_down, color: color, size: 16),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(rec['categoria'] as String? ?? '',
+                child: Text('Ajustar presupuesto de $nombre',
                     style: TextStyle(
                         color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(rec['recomendacion'] as String? ?? '',
-              style: TextStyle(color: color, fontSize: 12)),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              _chip('Presup. actual ${Money.fmt0(presup)}/mes', AppTheme.textMuted),
+          Text(sug['razon'] as String? ?? '',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Text(Money.fmt(actual), style: TextStyle(
+                color: AppTheme.textMuted, fontSize: 13, decoration: TextDecoration.lineThrough)),
+            const SizedBox(width: 6),
+            Icon(Icons.arrow_forward, size: 12, color: AppTheme.textMuted),
+            const SizedBox(width: 6),
+            Text(Money.fmt(sugerido),
+                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 10),
+          if (aplicada)
+            Row(children: [
+              const Icon(Icons.check_circle, color: AppTheme.success, size: 14),
               const SizedBox(width: 6),
-              _chip('Promedio real ${Money.fmt0(avg)}/mes', color),
-              if (noPresupMes > 0) ...[
-                const SizedBox(width: 6),
-                _chip('No presup. ${Money.fmt0(noPresupMes)}', AppTheme.warning),
-              ],
-            ],
-          ),
+              Text('Ajustado para ${widget.anio + 1}',
+                  style: TextStyle(color: AppTheme.success, fontSize: 12)),
+            ])
+          else
+            Row(children: [
+              Expanded(child: OutlinedButton(
+                onPressed: aplicando ? null : () => setState(() => _sugerenciasDescartadas.add(categoria)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.textSecondary,
+                  side: BorderSide(color: AppTheme.border),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                child: const Text('No, gracias', style: TextStyle(fontSize: 12)),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: ElevatedButton(
+                onPressed: aplicando ? null : () => _aplicarSugerencia(sug),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color, foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                child: aplicando
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Text('Ajustar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              )),
+            ]),
         ],
       ),
     );
   }
-
-  Widget _chip(String texto, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.12),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(texto, style: TextStyle(color: color, fontSize: 10)),
-  );
 
   Widget _seccion(String t) => Text(t,
       style: TextStyle(color: AppTheme.textMuted, fontSize: 11, letterSpacing: 0.8));

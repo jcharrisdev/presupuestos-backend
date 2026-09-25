@@ -87,6 +87,22 @@
 
 **Próxima fase:** cierre anual con proyección al siguiente año.
 
+---
+
+## ✅ FIN-04 — Cierre anual con el mismo guardrail de coherencia (2026-09-25)
+
+**Estado:** IMPLEMENTADO — rama `claude/app-status-analysis-ecnunj`. Ya existía backend (`/proyeccion-siguiente-anio`, `/cerrar-anio`) y una pantalla completa (`CierreAnioScreen`) conectada desde el Estado Anual, pero con el mismo problema que se corrigió en FIN-03: la recomendación usaba una regla genérica (`diferencia > $5 → "aumentar"`) sin distinguir esencial/flexible, y era puramente informativa (sin botón para aplicarla).
+
+**Solución implementada:**
+- ✅ **Backend:** nueva función `_calcularSugerenciasAnuales(firebase_uid, anio)` que reutiliza `calcularSugerenciasPresupuesto` de FIN-03 tal cual (sin modificarla) tratando el último mes con datos del año como "actual" y el resto de meses del mismo año como histórico — así el patrón exige consistencia mes a mes, igual que a nivel mensual, en vez de solo comparar un promedio anual que un mes atípico podría distorsionar. Ambos endpoints (`GET /user/proyeccion-siguiente-anio/:anio` y `POST /user/cerrar-anio/:anio`) ahora devuelven `sugerencias_presupuesto` (mismo shape que FIN-03, con `items` de `gastos_variables_base`) en vez del campo `recomendaciones` con la regla vieja.
+- ✅ **Frontend (`CierreAnioScreen`):** reemplazado `_recCard` (solo informativo) por `_sugerenciaCard`, mismo patrón visual y de comportamiento que `CierreMesSheet` de FIN-03 — Ajustar/No gracias por sugerencia, nunca se auto-aplica.
+
+**Verificado localmente:**
+- ✅ 93/93 tests de backend pasando (88 previos + 5 de integración de cierre-anio, mismo patrón `vm.runInNewContext`)
+- ✅ `flutter analyze` sin errores nuevos
+
+**Lo que responde ahora:** el cierre anual ya no puede sugerir "sube tu límite de Ocio" solo porque el año se gastó de más ahí — aplica el mismo criterio validado por el asesor financiero que ya protege el cierre mensual.
+
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
 
 **Progreso: 78 ✅ implementadas · 0 ⚠️ parciales · 8 ❌ pendientes** (86 ítems)
