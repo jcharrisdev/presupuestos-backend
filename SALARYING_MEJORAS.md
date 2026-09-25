@@ -103,26 +103,23 @@
 
 **Lo que responde ahora:** el cierre anual ya no puede sugerir "sube tu límite de Ocio" solo porque el año se gastó de más ahí — aplica el mismo criterio validado por el asesor financiero que ya protege el cierre mensual.
 
-## 📊 RESUMEN DE ESTADO — actualizado 2026-06-20
+## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 78 ✅ implementadas · 0 ⚠️ parciales · 8 ❌ pendientes** (86 ítems)
+**Progreso: 79 ✅ implementadas · 1 ⚠️ parcial · 6 ❌ pendientes** (86 ítems)
 
-### ✅ Implementadas (78)
-A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, **AE1**
+### ✅ Implementadas (79)
+A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, **S1**, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
-### ⚠️ Parciales (0)
-Ninguno — todos los parciales fueron cerrados.
+### ⚠️ Parciales (1)
+- **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
 
-### ❌ Pendientes (12) — agrupadas por prioridad
-
-**🔴 Alta / coherencia y datos**
-- **U6** — módulos aún como silos (Patrimonio, Ventas)
+### ❌ Pendientes (6) — agrupadas por prioridad
 
 **🟠 Media / valor de uso**
 - Calendario: **J2** (conectar con Quincenas), **J3** (vincular eventos a gastos fijos) — *requieren backend, sesión enfocada de calendario*
 - Navegación: **D1** (modo diario), **U7** (flicker refresco/Provider)
 - Onboarding: **W5** (tutorial guiado)
-- Otros: **S1** (ingreso puntual en Ventas — necesita ledger de ingresos personales, va con U6), **X1** (errores backend silenciosos — transversal)
+- Otros: **X1** (errores backend silenciosos — transversal)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -734,12 +731,10 @@ La app multiplica internamente. Nunca pedir "bruto" — pedir "lo que te llega a
 
 ## CATEGORÍA S — VENTAS / INGRESOS EXTRAS
 
-### S1. El módulo "Ventas" confunde al usuario que solo quiere registrar un ingreso extra
-**Problema:** La landing de Ventas tiene dos opciones: "Venta de productos" y "Servicios". Para alguien que hizo un trabajo extra o vendió algo usado, estas opciones suenan a "tengo un negocio formal". El flujo interno (catálogo, inventario, utilidad neta) es excesivo para el caso de uso más común.
+### ✅ S1. El módulo "Ventas" confunde al usuario que solo quiere registrar un ingreso extra
+**Estado:** IMPLEMENTADO (2026-09-25, junto con U6-Ventas) — rama `claude/app-status-analysis-ecnunj`. Nueva tercera opción en `VentasLandingScreen`: "Ingreso puntual" abre `IngresoPuntualSheet` (monto, descripción, fecha — sin catálogo ni inventario), que reutiliza el endpoint y servicio ya existentes de Ingresos Extra (`IngresoExtraService.crear` → `POST /user/ingresos-extra` → `registros_ingreso` + recálculo automático de `ingreso_real` del mes). **Cero cambios de backend**: el mecanismo ya estaba probado en producción para el módulo Ingresos Extra, solo se agregó un segundo punto de entrada de UI. Esto también resuelve la mitad de U6 que tenía mayor impacto (el dinero cobrado en Ventas quedaba 100% aislado del ingreso real del mes) para el caso de uso más común, sin tocar el módulo grande de Ventas/Servicios (~5,000 líneas).
 
-**Impacto:** Media.
-
-**Solución:** Agregar una tercera opción visible y simple: "Ingreso puntual (venta, trabajo, regalo)" que solo pide monto, descripción y fecha. Sin inventario ni catálogo.
+**Problema (ya resuelto):** La landing de Ventas tenía dos opciones: "Venta de productos" y "Servicios". Para alguien que hizo un trabajo extra o vendió algo usado, estas opciones sonaban a "tengo un negocio formal". El flujo interno (catálogo, inventario, utilidad neta) era excesivo para el caso de uso más común, y ese dinero nunca se sumaba al ingreso real del mes.
 
 ---
 
@@ -829,16 +824,18 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### U6. Módulos completamente desconectados del presupuesto personal
-**Problema:** Los siguientes módulos existen como silos sin impacto visible en el presupuesto:
-- **Compartido**: Los gastos compartidos no reducen el disponible personal
-- **Patrimonio**: Los activos/pasivos no se actualizan desde gastos
-- **Ventas**: Los ingresos por ventas no se suman al ingreso mensual
-- **Facturas QR**: Las facturas escaneadas sin asignar no aparecen como pendientes en ningún resumen
+### ⚠️ U6. Módulos completamente desconectados del presupuesto personal
+**Estado:** PARCIAL (2026-09-25) — auditado a fondo antes de codear (investigación completa de Patrimonio y Ventas). Resultado real por módulo:
+- ✅ **Compartido** — ya resuelto (Z1): los pagos confirmados crean `registros_gasto`.
+- ✅ **Facturas QR** — ya resuelto (M2): badge de pendientes por asignar en HomeShell.
+- ✅ **Patrimonio → Pasivos** — verificado: **ya estaba bien conectado**, no era un silo real. `GET /user/patrimonio` calcula el patrimonio neto en vivo usando `deudas.monto_pendiente` (backend/server.js:6591-6608), no una réplica manual. Lo que faltaba era solo la comunicación (ya cubierta por R1/AC1).
+- ✅ **Ventas → Ingreso real** (caso más común) — resuelto vía S1: nueva opción "Ingreso puntual" en la landing de Ventas.
+- ❌ **Patrimonio → Activos ↔ gastos** — sigue sin conexión (sugerir crear un activo desde un gasto grande). Sin ningún gancho existente; es una feature nueva completa que necesita diseño de producto propio antes de codear.
+- ❌ **Ventas → cobros reales** — los cobros de las divisiones grandes (`PUT /cobros/:id/cobrar` en Venta de productos, `POST /jobs/:id/customer-payments` en Servicios) siguen sin tocar `registros_ingreso`. El patrón a reusar ya está identificado (mismo mecanismo de Ingresos Extra), pero conectar los ~5,000 líneas del módulo completo se dejó fuera de este alcance por decisión explícita del usuario — S1 cubre el caso de uso más común con mucho menos riesgo.
 
-**Impacto:** Alta. El usuario ve módulos que no conectan con su situación financiera real.
+**Problema original:** Los siguientes módulos existían como silos sin impacto visible en el presupuesto: Compartido, Patrimonio, Ventas, Facturas QR.
 
-**Solución:** Para cada módulo, definir explícitamente cómo afecta el estado financiero y hacer esa conexión visible. Mínimo: un texto "Este gasto se registró en tu mes de mayo ✓" o "Esta venta no afecta tu presupuesto personal".
+**Impacto:** Alta. El usuario veía módulos que no conectaban con su situación financiera real.
 
 ---
 
