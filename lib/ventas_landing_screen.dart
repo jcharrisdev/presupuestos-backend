@@ -2,10 +2,19 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'cobros_home.dart';
 import 'servicios/servicios_dashboard.dart';
+import 'widgets/ventas/ingreso_puntual_sheet.dart';
 
 class VentasLandingScreen extends StatelessWidget {
   final String firebaseUid;
   const VentasLandingScreen({Key? key, required this.firebaseUid}) : super(key: key);
+
+  Future<void> _abrirIngresoPuntual(BuildContext context) async {
+    final guardado = await IngresoPuntualSheet.show(context, firebaseUid);
+    if (guardado == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingreso registrado ✓ — ya suma a tu disponible de este mes')));
+    }
+  }
 
   void _showInfo(BuildContext context) {
     showDialog(
@@ -85,6 +94,14 @@ class VentasLandingScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(builder: (_) => ServiciosDashboard(firebaseUid: firebaseUid)),
                 ),
+              ),
+              const SizedBox(height: 16),
+              _DivisionCard(
+                icon: Icons.payments_outlined,
+                titulo: 'Ingreso puntual',
+                subtitulo: 'Vendiste algo suelto o hiciste un trabajo extra. Sin catálogo ni inventario.',
+                color: AppTheme.success,
+                onTap: () => _abrirIngresoPuntual(context),
               ),
             ],
           ),
