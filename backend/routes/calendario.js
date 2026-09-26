@@ -10,9 +10,15 @@ router.get('/calendario/eventos', async (req, res) => {
   const { firebase_uid, mes, anio } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
-    let sql = `SELECT ce.*, g.tipo AS gasto_tipo
+    // J3: el vínculo con el gasto fijo/deuda que generó el evento ya existe en
+    // BD (user_gasto_fijo_id, deuda_id) pero era invisible para el usuario —
+    // se trae el nombre para poder mostrarlo y enlazar de vuelta al origen.
+    let sql = `SELECT ce.*, g.tipo AS gasto_tipo,
+                      gf.descripcion AS fijo_nombre, d.nombre AS deuda_nombre
                FROM calendario_eventos ce
                LEFT JOIN gastos g ON ce.gasto_id = g.id
+               LEFT JOIN user_gastos_fijos gf ON ce.user_gasto_fijo_id = gf.id
+               LEFT JOIN deudas d ON ce.deuda_id = d.id
                WHERE ce.firebase_uid = ?`;
     const params = [firebase_uid];
     if (mes && anio) {
