@@ -31,6 +31,26 @@ import 'utils/money.dart';
 import 'perfil_financiero_screen.dart';
 import 'deudas/deudas_screen.dart';
 
+/// La fuente de verdad de "vencido" es la fecha comparada con hoy, no el
+/// campo `estado` en BD: nada lo actualiza automáticamente con el paso del
+/// tiempo, así que un evento pasado sin marcar pagado quedaba mostrando
+/// "En -Nd" en vez de vencido, con su punto/color/filtro sin activarse.
+bool _eventoVencido(Map<String, dynamic> evento) {
+  final estado = evento['estado'] as String? ?? 'pendiente';
+  if (estado == 'pagado' || estado == 'cobrado') return false;
+  if (estado == 'vencido') return true;
+  final fechaStr = evento['fecha_evento']?.toString();
+  if (fechaStr == null || fechaStr.length < 10) return false;
+  final parts = fechaStr.substring(0, 10).split('-');
+  if (parts.length != 3) return false;
+  try {
+    final f = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    final hoy = DateTime.now();
+    final hoyN = DateTime(hoy.year, hoy.month, hoy.day);
+    return f.isBefore(hoyN);
+  } catch (_) { return false; }
+}
+
 /// Pantalla de calendario de pagos y cobros con tabs Calendario / Lista.
 class CalendarioScreen extends StatefulWidget {
   final String firebaseUid;
@@ -153,6 +173,10 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
   /// Eventos filtrados según el estado seleccionado en la pestaña Lista.
   List<Map<String, dynamic>> get _eventosFiltrados {
     if (_filtro == 'todos') return _eventos;
+    if (_filtro == 'vencido') return _eventos.where(_eventoVencido).toList();
+    if (_filtro == 'pendiente') {
+      return _eventos.where((e) => e['estado'] == 'pendiente' && !_eventoVencido(e)).toList();
+    }
     return _eventos.where((e) => e['estado'] == _filtro).toList();
   }
 
@@ -166,7 +190,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
     final estado = e['estado'] as String? ?? 'pendiente';
     final tipo   = e['tipo']   as String? ?? 'pago';
     if (estado == 'pagado')  return AppTheme.success;
-    if (estado == 'vencido') return AppTheme.danger;
+    if (_eventoVencido(e))   return AppTheme.danger;
     return tipo == 'cobro' ? AppTheme.primary : AppTheme.colorFijo;
   }
 
@@ -557,7 +581,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
                 final estado = e['estado']?.toString() ?? 'pendiente';
                 Color estadoColor;
                 if (estado == 'pagado') estadoColor = AppTheme.success;
-                else if (estado == 'vencido') estadoColor = AppTheme.danger;
+                else if (_eventoVencido(e)) estadoColor = AppTheme.danger;
                 else estadoColor = AppTheme.primary;
                 return Container(
                   margin: const EdgeInsets.only(bottom: 6),
@@ -675,7 +699,6 @@ class _EventoCard extends StatelessWidget {
     final tipo    = evento['tipo']   as String? ?? 'pago';
     final monto   = double.tryParse(evento['monto_esperado']?.toString() ?? '0') ?? 0;
     final hecho   = estado == 'pagado' || estado == 'cobrado';
-    final vencido = estado == 'vencido';
 
     // Calcular días restantes manualmente (no usar DateTime.difference con timezone)
     final fechaStr = evento['fecha_evento']?.toString().substring(0, 10) ?? '';
@@ -691,6 +714,8 @@ class _EventoCard extends StatelessWidget {
         esHoy = diasRestantes == 0;
       }
     } catch (e) { debugPrint('[calendario] fecha de evento inválida "$fechaStr": $e'); }
+
+    final vencido = _eventoVencido(evento);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -741,7 +766,7 @@ class _EventoCard extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             // Badge de estado con color dinámico según urgencia
-            _badgeEstado(estado, diasRestantes, esHoy),
+            _badgeEstado(hecho, vencido, diasRestantes, esHoy),
             // Fecha opcional (vista Lista)
             if (showDate && fechaStr.isNotEmpty) ...[
               const SizedBox(width: 6),
@@ -811,18 +836,18 @@ class _EventoCard extends StatelessWidget {
   /// - Hoy → amarillo "Hoy"
   /// - ≤ 3 días → amarillo "En Nd"
   /// - > 3 días → gris "En Nd"
-  Widget _badgeEstado(String estado, int dias, bool esHoy) {
+  Widget _badgeEstado(bool hecho, bool vencido, int dias, bool esHoy) {
     String label; Color color;
-    switch (estado) {
-      case 'pagado':
-      case 'cobrado':
-        label = 'Listo';   color = AppTheme.success; break;
-      case 'vencido':
-        label = 'Vencido ${dias.abs()}d'; color = AppTheme.danger; break;
-      default:
-        if (esHoy)        { label = 'Hoy';        color = AppTheme.warning; }
-        else if (dias <= 3) { label = 'En ${dias}d'; color = AppTheme.warning; }
-        else               { label = 'En ${dias}d'; color = AppTheme.textMuted; }
+    if (hecho) {
+      label = 'Listo'; color = AppTheme.success;
+    } else if (vencido) {
+      label = 'Vencido ${dias.abs()}d'; color = AppTheme.danger;
+    } else if (esHoy) {
+      label = 'Hoy'; color = AppTheme.warning;
+    } else if (dias <= 3) {
+      label = 'En ${dias}d'; color = AppTheme.warning;
+    } else {
+      label = 'En ${dias}d'; color = AppTheme.textMuted;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
