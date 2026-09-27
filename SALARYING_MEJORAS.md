@@ -105,19 +105,19 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 80 ✅ implementadas · 2 ⚠️ parciales · 4 ❌ pendientes** (86 ítems)
+**Progreso: 81 ✅ implementadas · 2 ⚠️ parciales · 3 ❌ pendientes** (86 ítems)
 
-### ✅ Implementadas (80)
-A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
+### ✅ Implementadas (81)
+A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
 ### ⚠️ Parciales (2)
 - **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
 - **J2** — el vínculo evento↔origen ya es visible (J3), pero Calendario y Tab Quincenas siguen siendo dos motores de cálculo independientes (Quincenas incluye gastos variables y reparto 50/50; Calendario no). Unificarlos de verdad queda diferido: mayor riesgo, toca el motor de quincenas ya validado.
 
-### ❌ Pendientes (4) — agrupadas por prioridad
+### ❌ Pendientes (3) — agrupadas por prioridad
 
 **🟠 Media / valor de uso**
-- Navegación: **D1** (modo diario), **U7** (flicker refresco/Provider)
+- Navegación: **D1** (modo diario)
 - Onboarding: **W5** (tutorial guiado)
 - Otros: **X1** (errores backend silenciosos — transversal)
 
@@ -845,12 +845,12 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### U7. Refrescamiento de datos con flicker y pérdida de scroll
+### ✅ U7. Refrescamiento de datos con flicker y pérdida de scroll
 **Problema:** Casi todas las pantallas usan el patrón `.then((_) => _cargar())` cuando el usuario vuelve de una subpantalla. Esto recarga toda la pantalla, causa un flash visual, y resetea la posición del scroll. El usuario ve el contenido desaparecer y reaparecer cada vez que navega.
 
 **Impacto:** Media. Afecta la percepción de fluidez y velocidad de la app.
 
-**Solución:** A corto plazo: guardar y restaurar la posición del scroll después de `_cargar()`. A largo plazo: usar un sistema de estado reactivo (Provider) para que solo se actualicen los widgets que cambiaron.
+**Estado:** IMPLEMENTADO — Fix quirúrgico (sin Provider) en las pantallas donde `_cargar()` ponía `_loading=true` incondicionalmente y el `build()` reemplazaba todo el contenido por un spinner de pantalla completa cada vez que se refrescaba (volver de una subpantalla, agregar un ítem, una acción de IA). La causa raíz era que ese `_loading=true` no distinguía "primera carga" de "ya tengo datos, solo estoy refrescando" — ahora solo se activa el spinner cuando todavía no hay datos (`_data == null` o, en pantallas con listas, un flag `_cargado` que distingue "aún no cargó" de "cargó y quedó vacío"). Con eso, un refresh mantiene el contenido visible mientras llega la respuesta y lo sustituye en el mismo `setState` — sin blanking y sin perder el scroll, porque el widget de la lista nunca se desmonta. Pantallas corregidas: `dashboard_screen.dart`, `mes_detalle_screen.dart` (pantalla principal + Tab Quincenas), `patrimonio_screen.dart`, `perfil_financiero_screen.dart`, `estado_financiero_anual_screen.dart`, `produccion_detalle.dart`, `eventos/eventos_screen.dart`, `invoice_scanner/productos_catalogo_screen.dart`. Se dejó sin tocar el spinner de `_regenerar()` en Estado Financiero Anual (botón explícito "Recalcular" — ahí el spinner es la confirmación esperada de que algo está pasando, no un bug) y `categoria_selector.dart`/`ProductoHistorialScreen` (ya refrescan en silencio o no tienen reload-on-return). La migración completa a un sistema de estado reactivo (Provider) queda fuera de alcance — cambio arquitectónico grande que toca casi toda la app, diferido a propósito.
 
 ---
 

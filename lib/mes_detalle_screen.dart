@@ -82,7 +82,9 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
   }
 
   Future<void> _cargar() async {
-    setState(() { _loading = true; _error = null; });
+    // U7: el spinner de pantalla completa solo en la carga inicial — un
+    // refresh (volver de una subpantalla) no debe hacer parpadear la pantalla.
+    setState(() { if (_data == null) _loading = true; _error = null; });
     try {
       final data = await EstadoAnualService.getMes(widget.firebaseUid, widget.anio, widget.mes);
       if (!mounted) return;
@@ -2573,7 +2575,8 @@ class _TabQuincenasState extends State<_TabQuincenas> {
   void _onIaAction() => _cargar();
 
   Future<void> _cargar() async {
-    setState(() { _loading = true; _errorMsg = null; });
+    // U7: el spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (_q1 == null) _loading = true; _errorMsg = null; });
     try {
       final base = '/user/quincena/${widget.anio}/${widget.mes}';
       final r1 = await ApiClient.get('$base/1?firebase_uid=${widget.uid}');

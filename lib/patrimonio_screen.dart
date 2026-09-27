@@ -22,7 +22,8 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
   void initState() { super.initState(); _cargar(); }
 
   Future<void> _cargar() async {
-    setState(() => _loading = true);
+    // U7: spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (_data == null) _loading = true; });
     try {
       final r = await ApiClient.get('/user/patrimonio?firebase_uid=${widget.firebaseUid}');
       if (r.statusCode == 200 && mounted) {

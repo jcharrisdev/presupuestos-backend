@@ -18,6 +18,7 @@ class EventosScreen extends StatefulWidget {
 
 class _EventosScreenState extends State<EventosScreen> {
   bool _loading = true;
+  bool _cargado = false; // U7: distingue "aún no cargó" de "cargó y quedó vacío"
   String? _error;
   List<Map<String, dynamic>> _eventos = [];
 
@@ -31,13 +32,15 @@ class _EventosScreenState extends State<EventosScreen> {
   }
 
   Future<void> _cargar() async {
-    setState(() { _loading = true; _error = null; });
+    // U7: spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (!_cargado) _loading = true; _error = null; });
     try {
       final data = await EventosService.getEventos(widget.firebaseUid, widget.anio);
       if (!mounted) return;
       setState(() {
         _eventos = (data['eventos'] as List? ?? []).cast<Map<String, dynamic>>();
         _loading = false;
+        _cargado = true;
       });
     } catch (e) {
       if (!mounted) return;
