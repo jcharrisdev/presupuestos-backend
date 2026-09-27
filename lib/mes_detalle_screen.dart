@@ -838,7 +838,11 @@ class _TabGastosState extends State<_TabGastos> {
                         if (!sheetCtx.mounted) return;
                         Navigator.pop(sheetCtx);
                         widget.onChanged();
-                      } catch (_) {}
+                      } catch (e) {
+                        if (!sheetCtx.mounted) return;
+                        ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+                      }
                     },
                     icon: Icon(
                       estaPagado ? Icons.undo : Icons.check,
@@ -853,7 +857,11 @@ class _TabGastosState extends State<_TabGastos> {
                         if (!sheetCtx.mounted) return;
                         Navigator.pop(sheetCtx);
                         widget.onChanged();
-                      } catch (_) {}
+                      } catch (e) {
+                        if (!sheetCtx.mounted) return;
+                        ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+                      }
                     },
                     child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
                   ),
@@ -1589,8 +1597,11 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
           {'nombre': nombre, 'monto_estimado': monto});
       setState(() { _editando = false; _guardando = false; });
       widget.onChanged();
-    } catch (_) {
-      if (mounted) setState(() => _guardando = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
     }
   }
 
@@ -2162,11 +2173,18 @@ class _RegistroTile extends StatelessWidget {
               title: Text('Convertir a gasto variable base', style: TextStyle(color: AppTheme.textPrimary)),
               onTap: () async {
                 Navigator.pop(context);
-                await RegistrosService.convertirAVariable(uid, reg['id'] as int);
-                onChanged();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Agregado a tu presupuesto variable')));
+                try {
+                  await RegistrosService.convertirAVariable(uid, reg['id'] as int);
+                  onChanged();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Agregado a tu presupuesto variable')));
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+                  }
                 }
               },
             ),
@@ -2175,8 +2193,15 @@ class _RegistroTile extends StatelessWidget {
               title: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
               onTap: () async {
                 Navigator.pop(context);
-                await RegistrosService.eliminar(uid, reg['id'] as int);
-                onChanged();
+                try {
+                  await RegistrosService.eliminar(uid, reg['id'] as int);
+                  onChanged();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+                  }
+                }
               },
             ),
           ],
@@ -2886,7 +2911,11 @@ class _QuincenaCardState extends State<_QuincenaCard> {
                         if (!sheetCtx.mounted) return;
                         Navigator.pop(sheetCtx);
                         widget.onRefresh();
-                      } catch (_) {}
+                      } catch (e) {
+                        if (!sheetCtx.mounted) return;
+                        ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+                      }
                     },
                     child: Icon(Icons.delete_outline, color: AppTheme.danger, size: 16),
                   ),

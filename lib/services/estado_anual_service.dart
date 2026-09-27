@@ -87,7 +87,8 @@ class EstadoAnualService {
   }
 
   static Future<void> marcarAlertaLeida(String uid, int alertaId) async {
-    await ApiClient.patch('/user/alertas/$alertaId/leer', {'firebase_uid': uid});
+    final res = await ApiClient.patch('/user/alertas/$alertaId/leer', {'firebase_uid': uid});
+    if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
   }
 
   static Future<Map<String, dynamic>> getResumenAlertas(String uid, int anio) async {

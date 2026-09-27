@@ -200,16 +200,24 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
   /// 'pendiente','pagado','vencido' — 'cobrado' es inválido y causa error MySQL).
   /// Para eventos tipo 'cobro' también actualiza cobros_clientes con el monto real.
   Future<void> _marcarPagado(Map<String, dynamic> evento) async {
-    if (evento['tipo'] == 'cobro' && evento['cobro_id'] != null) {
-      final monto = evento['monto_esperado'];
-      if (monto != null) {
-        await ApiClient.put('/cobros/${evento['cobro_id']}/cobrar',
-            {'monto_cobrado': monto, 'firebase_uid': widget.firebaseUid});
+    try {
+      if (evento['tipo'] == 'cobro' && evento['cobro_id'] != null) {
+        final monto = evento['monto_esperado'];
+        if (monto != null) {
+          final resCobro = await ApiClient.put('/cobros/${evento['cobro_id']}/cobrar',
+              {'monto_cobrado': monto, 'firebase_uid': widget.firebaseUid});
+          if (resCobro.statusCode != 200) throw Exception('No se pudo registrar el cobro');
+        }
       }
+      final res = await ApiClient.put('/calendario/eventos/${evento['id']}/estado',
+          {'estado': 'pagado', 'firebase_uid': widget.firebaseUid});
+      if (res.statusCode != 200) throw Exception('No se pudo actualizar el evento');
+      _cargarEventos();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
     }
-    await ApiClient.put('/calendario/eventos/${evento['id']}/estado',
-        {'estado': 'pagado', 'firebase_uid': widget.firebaseUid});
-    _cargarEventos();
   }
 
   /// Elimina un evento tras preguntar si solo este o todos los futuros.
@@ -239,9 +247,16 @@ class _CalendarioScreenState extends State<CalendarioScreen> with SingleTickerPr
       ),
     );
     if (solo == null) return; // usuario canceló
-    await ApiClient.delete(
-        '/calendario/eventos/${evento['id']}?firebase_uid=${widget.firebaseUid}&solo_este=$solo');
-    _cargarEventos();
+    try {
+      final res = await ApiClient.delete(
+          '/calendario/eventos/${evento['id']}?firebase_uid=${widget.firebaseUid}&solo_este=$solo');
+      if (res.statusCode != 200) throw Exception('No se pudo eliminar el evento');
+      _cargarEventos();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+    }
   }
 
   @override
