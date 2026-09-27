@@ -500,6 +500,8 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 **J2 queda pendiente** (alcance grande, diferido a propósito): unificar de verdad el Calendario y el Tab Quincenas requeriría expandir `calendario_eventos` para cubrir también `gastos_variables_base` con su lógica de reparto 50/50, y reescribir el Tab Quincenas para leer de ahí — mayor riesgo, toca el motor de quincenas ya validado (B1/B2/B3).
 
+**Bug encontrado en QA de J3 (2026-09-26), corregido en el mismo lote:** el badge de estado mostraba "En -26d" en vez de "Vencido 26d" para eventos con fecha pasada que nadie marcó pagado — el campo `estado` en BD solo cambia manualmente (vía `PUT /calendario/eventos/:id/estado`), nada lo actualiza automáticamente con el paso del tiempo. Se agregó `_eventoVencido()` (función compartida en `lib/calendario.dart`) que calcula "vencido" comparando la fecha del evento contra hoy, no solo leyendo el campo estático de BD. Aplicado de forma consistente en los 4 lugares que antes solo miraban el campo crudo: el badge y el borde/fondo de `_EventoCard`, el punto de color de la vista mensual (`_colorEvento`), el filtro "Vencidos" de la vista Lista, y la vista Flujo.
+
 ---
 
 ## CATEGORÍA K — ESTADO FINANCIERO ANUAL
