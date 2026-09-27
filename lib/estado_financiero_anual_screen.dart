@@ -61,7 +61,8 @@ class _EstadoFinancieroAnualScreenState extends State<EstadoFinancieroAnualScree
   }
 
   Future<void> _cargar() async {
-    setState(() { _loading = true; _error = null; _sinPerfil = false; });
+    // U7: spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (_data == null) _loading = true; _error = null; _sinPerfil = false; });
     try {
       final data = await EstadoAnualService.getEstadoAnual(widget.firebaseUid, _anio);
       if (!(data['existe'] as bool)) {

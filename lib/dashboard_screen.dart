@@ -34,7 +34,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _cargar() async {
-    setState(() { _loading = true; _error = null; });
+    // U7: solo mostrar el spinner de pantalla completa en la carga inicial —
+    // un refresh (ej. al volver de una subpantalla) no debe hacer parpadear
+    // ni perder el scroll del contenido ya visible.
+    setState(() { if (_mes == null) _loading = true; _error = null; });
     try {
       // Mes actual
       final mes = await EstadoAnualService.getMes(

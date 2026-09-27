@@ -33434,8 +33434,9 @@ this.d=b
 this.a=c},
 O9:function O9(a){var _=this
 _.d=!0
-_.e=null
-_.f=a
+_.e=!1
+_.f=null
+_.r=a
 _.c=_.a=null},
 aR0:function aR0(a){this.a=a},
 aR1:function aR1(a,b){this.a=a
@@ -34018,8 +34019,9 @@ this.a=b},
 Q0:function Q0(a,b,c){var _=this
 _.d=a
 _.e=!0
-_.f=b
-_.r=c
+_.f=!1
+_.r=b
+_.w=c
 _.c=_.a=null},
 b1S:function b1S(a){this.a=a},
 b1T:function b1T(a,b){this.a=a
@@ -35606,6 +35608,7 @@ Q_:function Q_(a){var _=this
 _.d=a
 _.e=0
 _.f=!0
+_.r=!1
 _.c=_.a=null},
 b1d:function b1d(a){this.a=a},
 b1e:function b1e(a,b){this.a=a
@@ -118476,7 +118479,7 @@ s=A.a2(s==null?"0":s)
 return s==null?0:s}}
 A.aNx.prototype={
 $0(){var s=this.a
-s.x=!0
+if(s.e==null)s.x=!0
 s.y=null},
 $S:0}
 A.aNy.prototype={
@@ -120423,7 +120426,7 @@ case 1:return A.m(p.at(-1),r)}})
 return A.o($async$zB,r)}}
 A.aQk.prototype={
 $0(){var s=this.a
-s.f=!0
+if(s.e==null)s.f=!0
 s.r=null
 s.w=!1},
 $S:0}
@@ -121336,17 +121339,17 @@ return A.j(A.cP(B.ao,new A.aQW(q),p,!0,null,t.y),$async$DD)
 case 2:if(b===!0)q.qZ()
 return A.n(null,r)}})
 return A.o($async$DD,r)},
-aE3(){return J.TM(this.f,0,new A.aR4())},
-aE0(){return J.TM(this.f,0,new A.aR3())},
+aE3(){return J.TM(this.r,0,new A.aR4())},
+aE0(){return J.TM(this.r,0,new A.aR3())},
 A(a){var s,r,q=this,p=null,o=$.bt,n=$.R,m=A.c("Eventos "+q.a.d,p,p,p,p,A.d(p,p,$.w,p,p,p,p,p,p,p,p,16,p,p,p,p,p,!0,p,p,p,p,p,p,p,p),p,p,p)
 m=A.db(p,!0,n,p,0,new A.cn(p,p,p,p,p,$.u,p,p,p),m)
 n=A.WW(B.t,B.ed,B.Y,B.kl,p,!1,q.gWj())
 if(q.d)s=B.cz
-else{s=q.e
+else{s=q.f
 r=q.gaoO()
 s=s!=null?A.b9(A.F(A.a([B.uF,B.R,A.c(s,p,p,p,p,B.iy,B.aH,p,p),B.S,A.bv(!1,B.fS,p,p,p,p,p,p,r,p,p)],t.p),B.r,B.m,B.a9),p,p):A.ff(p,q.ajZ(),p,r)}return A.cH(m,o,s,p,n)},
 ajZ(){var s,r,q,p,o,n,m,l,k,j,i,h,g=this,f=null
-if(J.dm(g.f))return A.fB(A.a([new A.v7(B.nB,"Sin eventos presupuestados","Vacaciones, bodas, cumplea\xf1os...","Crear evento",g.gWj(),f)],t.p),f,B.B9,f,!1)
+if(J.dm(g.r))return A.fB(A.a([new A.v7(B.nB,"Sin eventos presupuestados","Vacaciones, bodas, cumplea\xf1os...","Crear evento",g.gWj(),f)],t.p),f,B.B9,f,!1)
 s=g.aE3()
 r=g.aE0()
 q=s>0?B.o.b5(r/s,0,1):0
@@ -121364,25 +121367,26 @@ k=A.t(4)
 if(q>0.9)l=B.D
 else l=q>0.7?B.V:B.t
 h=A.a([A.z(f,A.F(A.a([m,B.R,i,B.R,A.eJ(k,A.e6($.aE,f,l,8,q,f),B.bn),B.at,A.c(B.o.R(q*100,0)+"% del presupuesto total usado",f,f,f,f,A.d(f,f,$.D,f,f,f,f,f,f,f,f,11,f,f,f,f,f,!0,f,f,f,f,f,f,f,f),f,f,f)],h),B.G,B.m,B.n),B.u,f,f,new A.B(p,f,n,o,f,f,B.v),f,f,f,B.aP,f,f,f),B.S],h)
-B.h.t(h,J.dV(g.f,new A.aR_(g),t.m))
+B.h.t(h,J.dV(g.r,new A.aR_(g),t.m))
 h.push(B.k0)
 return A.fB(h,f,B.aP,f,!1)},
 MZ(a,b,c){var s=null
 return A.F(A.a([A.c(a,s,s,s,s,A.d(s,s,$.D,s,s,s,s,s,s,s,s,11,s,s,s,s,s,!0,s,s,s,s,s,s,s,s),s,s,s),B.at,A.c(b,s,s,s,s,A.d(s,s,c,s,s,s,s,s,s,s,s,15,s,s,B.C,s,s,!0,s,s,s,s,s,s,s,s),s,s,s)],t.p),B.G,B.m,B.n)}}
 A.aR0.prototype={
 $0(){var s=this.a
-s.d=!0
-s.e=null},
+if(!s.e)s.d=!0
+s.f=null},
 $S:0}
 A.aR1.prototype={
 $0(){var s=this.a,r=t.g.a(J.k(this.b,"eventos"))
 if(r==null)r=[]
-s.f=J.ch(r,t.P)
-s.d=!1},
+s.r=J.ch(r,t.P)
+s.d=!1
+s.e=!0},
 $S:0}
 A.aR2.prototype={
 $0(){var s=this.a
-s.e=J.K(this.b)
+s.f=J.K(this.b)
 s.d=!1},
 $S:0}
 A.aQW.prototype={
@@ -124179,7 +124183,7 @@ S(){return new A.Q0([],new A.aH(B.ah,$.as()),A.jP("#,##0.00","en_US"))}}
 A.Q0.prototype={
 a7(){this.aj()
 this.nq()},
-m(){var s=this.f
+m(){var s=this.r
 s.I$=$.as()
 s.N$=0
 this.am()},
@@ -124194,7 +124198,7 @@ case 2:p=c
 if(q.c!=null)q.p(new A.b1T(q,p))
 return A.n(null,r)}})
 return A.o($async$r8,r)},
-A(a){var s=this,r=null,q=$.bt,p=$.R,o=A.c("Mis Productos",r,r,r,r,A.d(r,r,$.w,r,r,r,r,r,r,r,r,r,r,r,r,r,r,!0,r,r,r,r,r,r,r,r),r,r,r),n=$.w,m=s.f,l=A.d(r,r,n,r,r,r,r,r,r,r,r,14,r,r,r,r,r,!0,r,r,r,r,r,r,r,r),k=A.d(r,r,$.D,r,r,r,r,r,r,r,r,r,r,r,r,r,r,!0,r,r,r,r,r,r,r,r),j=$.D,i=A.ag(B.Cd,j,r,18),h=$.aE,g=A.t(10)
+A(a){var s=this,r=null,q=$.bt,p=$.R,o=A.c("Mis Productos",r,r,r,r,A.d(r,r,$.w,r,r,r,r,r,r,r,r,r,r,r,r,r,r,!0,r,r,r,r,r,r,r,r),r,r,r),n=$.w,m=s.r,l=A.d(r,r,n,r,r,r,r,r,r,r,r,14,r,r,r,r,r,!0,r,r,r,r,r,r,r,r),k=A.d(r,r,$.D,r,r,r,r,r,r,r,r,r,r,r,r,r,r,!0,r,r,r,r,r,r,r,r),j=$.D,i=A.ag(B.Cd,j,r,18),h=$.aE,g=A.t(10)
 j=m.a.a.length!==0?A.bM(r,r,r,A.ag(B.BQ,j,r,16),r,r,new A.b1Y(s),r,r,r,r,r):r
 o=A.db(r,!0,p,new A.JA(new A.U(B.a7J,A.bf(!0,B.ae,!1,r,!0,B.E,r,A.bg(),m,r,r,r,r,r,2,A.cL(r,new A.cf(4,g,B.Q),r,B.cC,r,r,r,r,!0,r,r,r,r,r,r,h,!0,r,r,r,r,r,r,r,r,r,r,r,r,k,"Buscar producto...",r,r,r,r,r,!0,r,r,r,!0,r,i,r,r,r,r,r,r,j,r,r,r,r),B.B,!0,r,!0,r,!1,r,B.ag,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,new A.b1Z(s),r,r,r,!1,r,r,!1,r,!0,r,B.a2,r,r,B.af,B.ad,r,r,r,r,r,r,l,!0,B.a5,r,B.am,r,r,r,r),r),B.bfi,r),r,new A.cn(r,r,r,r,r,n,r,r,r),o)
 if(s.e)p=B.cz
@@ -124239,16 +124243,18 @@ q=s?"\u2191":"\u2193"
 A.dM(b)
 return A.C(A.a([A.c(q,p,p,p,p,A.d(p,p,r,p,p,p,p,p,p,p,p,14,p,p,B.C,p,p,!0,p,p,p,p,p,p,p,p),p,p,p),B.bfo,A.c(B.o.R(Math.abs(b),1)+"%",p,p,p,p,A.d(p,p,r,p,p,p,p,p,p,p,p,11,p,p,B.M,p,p,!0,p,p,p,p,p,p,p,p),p,p,p)],t.p),B.r,B.m,B.a9,p)}}
 A.b1S.prototype={
-$0(){return this.a.e=!0},
+$0(){var s=this.a
+if(!s.f)s.e=!0},
 $S:0}
 A.b1T.prototype={
 $0(){var s=this.a
 s.d=this.b
-s.e=!1},
+s.e=!1
+s.f=!0},
 $S:0}
 A.b1Y.prototype={
 $0(){var s=this.a
-s.f.kc(0,B.r4)
+s.r.kc(0,B.r4)
 s.nq()},
 $S:0}
 A.b1Z.prototype={
@@ -124278,7 +124284,7 @@ $1(a){var s=this.b,r=J.I(s)
 return new A.rv(A.b8(r.h(s,"id")),A.aM(r.h(s,"nombre")),this.a.a.c,null)},
 $S:287}
 A.b1V.prototype={
-$1(a){var s=this.a,r=s.f.a.a
+$1(a){var s=this.a,r=s.r.a.a
 return s.r8(r.length===0?null:r)},
 $S:27}
 A.rv.prototype={
@@ -124999,7 +125005,7 @@ return A.n(null,r)}})
 return A.o($async$FP,r)}}
 A.aXY.prototype={
 $0(){var s=this.a
-s.r=!0
+if(s.e==null)s.r=!0
 s.w=null},
 $S:0}
 A.aXZ.prototype={
@@ -126645,7 +126651,7 @@ o=b?"1\u201315":"16\u2013fin"
 return A.z(n,A.C(A.a([B.acF,B.ac,A.M(A.c("Est\xe1s en la "+p+" quincena (d\xedas "+o+").",n,n,n,n,B.rb,n,n,n),1)],t.p),B.r,B.m,B.n,n),B.u,n,n,new A.B(s,n,q,r,n,n,B.v),n,n,n,B.cD,n,n,n)}}
 A.baw.prototype={
 $0(){var s=this.a
-s.f=!0
+if(s.d==null)s.f=!0
 s.r=null},
 $S:0}
 A.bax.prototype={
@@ -128808,7 +128814,8 @@ case 5:q.pf()
 case 3:return A.n(null,r)}})
 return A.o($async$yG,r)}}
 A.b_T.prototype={
-$0(){return this.a.e=!0},
+$0(){var s=this.a
+if(s.d==null)s.e=!0},
 $S:0}
 A.b_U.prototype={
 $0(){var s=this.a,r=this.b
@@ -129247,7 +129254,8 @@ s=this.c
 s.toString
 A.cP(B.ao,new A.b0e(r,this,new A.aH(B.ah,q),new A.aH(B.ah,q)),s,!0,null,t.z)}}
 A.b0t.prototype={
-$0(){return this.a.at=!0},
+$0(){var s=this.a
+if(s.e==null)s.at=!0},
 $S:0}
 A.b0u.prototype={
 $0(){var s,r,q,p,o=this,n="total_mensual",m=o.b
@@ -130238,7 +130246,8 @@ r=A.b9(A.F(A.a([A.ag(B.hb,A.a0(89,r.l()>>>16&255,r.l()>>>8&255,r.l()&255),o,56),
 m=A.F(A.a([q,A.M(r,1)],m),B.r,B.m,B.n)}return A.cH(n,o,m,o,s)},
 EW(a){return a===B.o.K2(a)?B.z.j(B.o.a8(a)):B.o.R(a,2)}}
 A.b1d.prototype={
-$0(){return this.a.f=!0},
+$0(){var s=this.a
+if(!s.r)s.f=!0},
 $S:0}
 A.b1e.prototype={
 $0(){var s=this.a,r=this.b,q=J.I(r),p=q.h(r,"items")
@@ -130247,7 +130256,8 @@ r=q.h(r,"total_invertido")
 r=r==null?null:J.K(r)
 r=A.a2(r==null?"0":r)
 s.e=r==null?0:r
-s.f=!1},
+s.f=!1
+s.r=!0},
 $S:0}
 A.b1f.prototype={
 $0(){return this.a.f=!1},

@@ -36,6 +36,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
   List<dynamic> _items = [];
   double _total = 0;
   bool _loading = true;
+  bool _cargado = false; // U7: distingue "aún no cargó" de "cargó y quedó vacío"
 
   @override
   void initState() { super.initState(); _cargar(); }
@@ -44,7 +45,8 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
   ///
   /// La respuesta incluye `items` (array) y `total_invertido` (suma calculada).
   Future<void> _cargar() async {
-    setState(() => _loading = true);
+    // U7: spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (!_cargado) _loading = true; });
     try {
       final res = await ApiClient.get(
         '/produccion/${widget.presupuestoId}?firebase_uid=${widget.firebaseUid}',
@@ -55,6 +57,7 @@ class _ProduccionDetalleState extends State<ProduccionDetalle> {
           _items = data['items'] ?? [];
           _total = double.tryParse(data['total_invertido']?.toString() ?? '0') ?? 0;
           _loading = false;
+          _cargado = true;
         });
       } else {
         setState(() => _loading = false);

@@ -51,7 +51,8 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
   void dispose() { _tabs.dispose(); super.dispose(); }
 
   Future<void> _cargar() async {
-    setState(() => _loading = true);
+    // U7: spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (_income == null) _loading = true; });
     // Sincronizar deudas del perfil sin deuda_id antes de cargar
     await UserProfileService.syncDeudas(widget.firebaseUid);
     // Cargar cada fuente por separado para no fallar toda la pantalla si una falla

@@ -15,6 +15,7 @@ class ProductosCatalogoScreen extends StatefulWidget {
 class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
   List<dynamic> _productos = [];
   bool _loading = true;
+  bool _cargado = false; // U7: distingue "aún no cargó" de "cargó y quedó vacío"
   final _searchCtrl = TextEditingController();
   final _fmt = NumberFormat('#,##0.00', 'en_US');
 
@@ -31,9 +32,10 @@ class _ProductosCatalogoScreenState extends State<ProductosCatalogoScreen> {
   }
 
   Future<void> _cargar({String? q}) async {
-    setState(() => _loading = true);
+    // U7: spinner de pantalla completa solo en la carga inicial.
+    setState(() { if (!_cargado) _loading = true; });
     final data = await ProductosCatalogoService.getAll(widget.firebaseUid, q: q);
-    if (mounted) setState(() { _productos = data; _loading = false; });
+    if (mounted) setState(() { _productos = data; _loading = false; _cargado = true; });
   }
 
   double _d(dynamic v) => v == null ? 0.0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0);
