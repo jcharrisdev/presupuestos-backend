@@ -105,19 +105,18 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 82 ✅ implementadas · 2 ⚠️ parciales · 2 ❌ pendientes** (86 ítems)
+**Progreso: 83 ✅ implementadas · 2 ⚠️ parciales · 1 ❌ pendiente** (86 ítems)
 
-### ✅ Implementadas (82)
-A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
+### ✅ Implementadas (83)
+A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
 ### ⚠️ Parciales (2)
 - **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
 - **J2** — el vínculo evento↔origen ya es visible (J3), pero Calendario y Tab Quincenas siguen siendo dos motores de cálculo independientes (Quincenas incluye gastos variables y reparto 50/50; Calendario no). Unificarlos de verdad queda diferido: mayor riesgo, toca el motor de quincenas ya validado.
 
-### ❌ Pendientes (2) — agrupadas por prioridad
+### ❌ Pendiente (1)
 
 **🟠 Media / valor de uso**
-- Navegación: **D1** (modo diario)
 - Onboarding: **W5** (tutorial guiado)
 
 **📦 Features grandes de la visión (aún no empezadas)**
@@ -244,12 +243,16 @@ Los datos están disponibles: `user_income` + compromisos fijos con `dia_pago` e
 
 ## CATEGORÍA D — NAVEGACIÓN Y FLUJOS
 
-### D1. No está claro cuál es el flujo principal de uso diario
+### ✅ D1. No está claro cuál es el flujo principal de uso diario
 **Problema:** La app tiene: Home Shell → Estado Anual → Mes Detalle → 4 tabs. Para un usuario nuevo o casual, no es evidente qué hacer primero ni cuál es la pantalla de "trabajo diario".
 
 **Impacto:** Alta. Si el usuario no entiende el flujo en los primeros 2 minutos, abandona.
 
-**Solución:** Definir una pantalla de "modo diario" que sea el punto de entrada real:
+**Estado:** IMPLEMENTADO — En `home_shell.dart`, el Tab 0 (aterrizaje) ahora es `MesDetalleScreen` del mes actual con `initialTabIndex: 1` (Tab Gastos, no Resumen); el Tab "Estado" pasó a la posición 1. `MesDetalleScreen` ya tenía su propio FAB "Registrar gasto" siempre visible (por eso HomeShell nunca ponía uno propio ahí); el FAB "prestado" de HomeShell se movió a la condición `_idx == 1` para seguir cubriendo el Tab Estado (que no tiene FAB propio). El badge de alertas se movió junto con el destino "Mes actual" en la barra de navegación.
+
+Riesgo real identificado antes de codear (motivo por el que quedó pendiente en sesiones anteriores): el Tab Estado es hoy el único que auto-genera el estado financiero anual si no existe (ej. justo después de un cambio de año) — aterrizar directo en Mes Detalle sin ese chequeo dejaría a un usuario existente viendo un error "Mes no encontrado" en vez del auto-generado silencioso de siempre. Se corrigió agregando el mismo fallback a `mes_detalle_screen.dart`: si `_cargar()` falla con el error específico "Genera el estado anual primero", genera el estado del año y reintenta una vez (con guard contra recursión infinita) antes de mostrar el error. Usuarios nuevos no se ven afectados: el onboarding ya genera el estado anual al terminar.
+
+**Solución (original del roadmap):** Definir una pantalla de "modo diario" que sea el punto de entrada real:
 - Muestra el mes actual directamente (no el estado anual)
 - Tab activo por defecto: Gastos (no Resumen)
 - FAB visible siempre: "Registrar gasto"
