@@ -25,7 +25,8 @@ class GustitosService {
   }
 
   static Future<void> eliminar(int id, String uid) async {
-    await ApiClient.delete('/gustitos/$id?firebase_uid=$uid');
+    final res = await ApiClient.delete('/gustitos/$id?firebase_uid=$uid');
+    if (res.statusCode != 200) throw Exception('Error al eliminar Gustito');
   }
 
   static Future<Map<String, dynamic>> editar(int id, Map<String, dynamic> body) async {

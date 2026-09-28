@@ -135,11 +135,16 @@ class _DeudasScreenState extends State<DeudasScreen>
         ],
       ),
     );
-    if (ok == true) {
+    if (ok != true) return;
+    try {
       await DeudasService.archivar(id, widget.firebaseUid);
       _cargar();
       // Resetear caché de las otras tabs
       setState(() { _proyeccion = null; _simulador = null; _plan = null; });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
     }
   }
 

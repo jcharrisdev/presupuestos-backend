@@ -101,20 +101,37 @@ class AbonoDeudaSheet {
                 );
                 final hoy = DateTime.now();
                 final fecha = '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
-                await RegistrosService.crear(
-                  uid: firebaseUid,
-                  anio: hoy.year,
-                  mes: hoy.month,
-                  tipo: 'fijo',
-                  categoria: 'deudas',
-                  nombre: deuda['nombre'] as String? ?? 'Abono deuda',
-                  monto: monto,
-                  fecha: fecha,
-                  origenDeudaId: deuda['id'] as int,
-                  pagado: 1,
-                ).catchError((_) => <String, dynamic>{});
+                // X1: el abono ya quedó registrado en la deuda — si este segundo
+                // paso (crear el gasto del mes) falla, hay que avisar, porque
+                // si no el saldo de la deuda y el Estado Financiero quedan
+                // descuadrados sin que el usuario se entere.
+                var registroDelMesCreado = true;
+                try {
+                  await RegistrosService.crear(
+                    uid: firebaseUid,
+                    anio: hoy.year,
+                    mes: hoy.month,
+                    tipo: 'fijo',
+                    categoria: 'deudas',
+                    nombre: deuda['nombre'] as String? ?? 'Abono deuda',
+                    monto: monto,
+                    fecha: fecha,
+                    origenDeudaId: deuda['id'] as int,
+                    pagado: 1,
+                  );
+                } catch (_) {
+                  registroDelMesCreado = false;
+                }
                 Navigator.pop(ctx);
                 onAbonado();
+                if (!registroDelMesCreado) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Abono registrado, pero no se pudo agregar el gasto de este mes. Revisa el Estado Financiero y agrégalo manualmente si falta.'),
+                    backgroundColor: AppTheme.warning,
+                  ));
+                }
               } catch (e) {
                 setS(() => _guardando = false);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

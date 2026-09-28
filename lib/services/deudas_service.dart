@@ -29,7 +29,8 @@ class DeudasService {
   }
 
   static Future<void> archivar(int id, String uid) async {
-    await ApiClient.delete('/deudas/$id?firebase_uid=$uid');
+    final res = await ApiClient.delete('/deudas/$id?firebase_uid=$uid');
+    if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error al archivar la deuda');
   }
 
   static Future<Map<String, dynamic>> getProyeccion(String uid) async {

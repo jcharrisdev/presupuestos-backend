@@ -105,21 +105,20 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 81 ✅ implementadas · 2 ⚠️ parciales · 3 ❌ pendientes** (86 ítems)
+**Progreso: 82 ✅ implementadas · 2 ⚠️ parciales · 2 ❌ pendientes** (86 ítems)
 
-### ✅ Implementadas (81)
-A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
+### ✅ Implementadas (82)
+A1, A2, A3, B1, B2, B3, C1, C2, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
 ### ⚠️ Parciales (2)
 - **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
 - **J2** — el vínculo evento↔origen ya es visible (J3), pero Calendario y Tab Quincenas siguen siendo dos motores de cálculo independientes (Quincenas incluye gastos variables y reparto 50/50; Calendario no). Unificarlos de verdad queda diferido: mayor riesgo, toca el motor de quincenas ya validado.
 
-### ❌ Pendientes (3) — agrupadas por prioridad
+### ❌ Pendientes (2) — agrupadas por prioridad
 
 **🟠 Media / valor de uso**
 - Navegación: **D1** (modo diario)
 - Onboarding: **W5** (tutorial guiado)
-- Otros: **X1** (errores backend silenciosos — transversal)
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -931,12 +930,20 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ## CATEGORÍA X — ERRORES SILENCIOSOS Y CONFIABILIDAD
 
-### X1. Múltiples lugares donde errores del backend se ignoran sin avisar al usuario
+### ✅ X1. Múltiples lugares donde errores del backend se ignoran sin avisar al usuario
 **Problema:** En varias partes del código se usa `catchError((_) {})` o `catch(_) {}` que tragan el error y continúan como si nada. El usuario no sabe que algo falló.
 
 **Impacto:** Alta. El usuario ve datos incompletos y asume que la app está mal, no que hubo un error de red.
 
-**Solución:** Definir un estándar: si un error es no-crítico, mostrar un snackbar discreto. Si es crítico (no se pudo guardar), mostrar error y opción de reintentar. Nunca ignorar silenciosamente.
+**Estado:** IMPLEMENTADO — Auditoría completa (agente Explore) de catches silenciosos, separando lecturas de fondo no críticas (badges, contadores, comparativas — silencio correcto, no se tocaron) de acciones de escritura donde el usuario cree que algo se guardó/eliminó y no es cierto. Encontró algo más grave que catches silenciosos: **varios métodos de servicio nunca revisaban `res.statusCode`** (`ApiClient` nunca lanza por sí solo en un status no-2xx), así que ni siquiera había excepción que un `try/catch` pudiera atrapar — el método "tenía éxito" aunque el backend rechazara la operación. Fixes:
+- **Servicios corregidos** (agregado el chequeo de `statusCode` que ya usan sus hermanos en el mismo archivo): `RegistrosService.eliminar()`, `GustitosService.eliminar()`, `EstadoAnualService.marcarAlertaLeida()`, `DeudasService.archivar()`.
+- **UI sin ningún manejo de error, ahora con try/catch + SnackBar**: marcar pagado/eliminar evento en Calendario (`calendario.dart`), archivar deuda (`deudas_screen.dart`), eliminar objetivo de ahorro (`objetivos_screen.dart`), eliminar activo de Patrimonio (`patrimonio_screen.dart`), tres puntos de eliminar/marcar-pagado un registro dentro de `mes_detalle_screen.dart`, editar una línea de presupuesto variable (mismo archivo).
+- **Descuadre de datos evitado**: al confirmar un abono de deuda (`abono_deuda_sheet.dart`), la creación del gasto asociado del mes era 100% silenciosa (`.catchError((_) => {})`) — si fallaba, el saldo de la deuda bajaba pero el Estado Financiero no reflejaba el gasto, sin que el usuario se enterara. Ahora, si ese segundo paso falla, se avisa con un mensaje específico ("revisa el Estado Financiero y agrégalo manualmente si falta") sin bloquear la confirmación del abono (que sí tuvo éxito).
+- **Alertas**: `alertas_screen.dart` ahora muestra SnackBar si marcar una alerta (o "marcar todas") como leída falla.
+
+Quedan fuera de este alcance (confirmados como lecturas de fondo no críticas, silencio correcto por UX "sin fricción"): contadores de alertas, comparativas mensuales, metas de ahorro, categorías personalizadas, sync de deudas en segundo plano, etc. — fallar ahí no engaña al usuario sobre una acción que tomó, y forzar un snackbar por cada uno sería más ruido que ayuda.
+
+**Solución (original del roadmap):** Definir un estándar: si un error es no-crítico, mostrar un snackbar discreto. Si es crítico (no se pudo guardar), mostrar error y opción de reintentar. Nunca ignorar silenciosamente.
 
 ---
 

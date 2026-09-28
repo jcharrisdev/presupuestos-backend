@@ -115,9 +115,15 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
         ],
       ),
     );
-    if (ok == true) {
-      await ApiClient.delete('/user/objetivos/$id?firebase_uid=${widget.firebaseUid}');
+    if (ok != true) return;
+    try {
+      final res = await ApiClient.delete('/user/objetivos/$id?firebase_uid=${widget.firebaseUid}');
+      if (res.statusCode != 200) throw Exception('No se pudo eliminar el objetivo');
       _cargar();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
     }
   }
 }

@@ -58,7 +58,8 @@ class RegistrosService {
   }
 
   static Future<void> eliminar(String uid, int id) async {
-    await ApiClient.delete('/registros/$id?firebase_uid=$uid');
+    final res = await ApiClient.delete('/registros/$id?firebase_uid=$uid');
+    if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error');
   }
 
   static Future<void> marcarPagado(String uid, int id, bool pagado) async {

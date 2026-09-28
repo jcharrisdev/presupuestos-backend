@@ -52,18 +52,28 @@ class _AlertasScreenState extends State<AlertasScreen> {
       await EstadoAnualService.marcarAlertaLeida(widget.firebaseUid, alerta['id'] as int);
       if (!mounted) return;
       setState(() => alerta['leida'] = 1);
-    } catch (e) { debugPrint('[alertas_screen] no se pudo marcar leída: $e'); }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo marcar como leída. Intenta de nuevo.')));
+    }
   }
 
   Future<void> _marcarTodasLeidas() async {
     final noLeidas = _alertas.where((a) => a['leida'] == 0 || a['leida'] == false).toList();
+    var fallos = 0;
     for (final a in noLeidas) {
       try {
         await EstadoAnualService.marcarAlertaLeida(widget.firebaseUid, a['id'] as int);
         a['leida'] = 1;
-      } catch (e) { debugPrint('[alertas_screen] no se pudo marcar leída: $e'); }
+      } catch (e) { fallos++; }
     }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (fallos > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$fallos alerta(s) no se pudieron marcar como leídas.')));
+    }
   }
 
   List<Map<String, dynamic>> get _alertasFiltradas {
