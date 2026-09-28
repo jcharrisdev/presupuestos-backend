@@ -105,19 +105,16 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 83 ✅ implementadas · 2 ⚠️ parciales · 1 ❌ pendiente** (86 ítems)
+**Progreso: 84 ✅ implementadas · 2 ⚠️ parciales · 0 ❌ pendientes** (86 ítems)
 
-### ✅ Implementadas (83)
-A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
+### ✅ Implementadas (84)
+A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **W5**, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
 ### ⚠️ Parciales (2)
 - **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
 - **J2** — el vínculo evento↔origen ya es visible (J3), pero Calendario y Tab Quincenas siguen siendo dos motores de cálculo independientes (Quincenas incluye gastos variables y reparto 50/50; Calendario no). Unificarlos de verdad queda diferido: mayor riesgo, toca el motor de quincenas ya validado.
 
-### ❌ Pendiente (1)
-
-**🟠 Media / valor de uso**
-- Onboarding: **W5** (tutorial guiado)
+Todos los ítems de la lista original están ✅ o ⚠️ (con el resto diferido a propósito). Queda por delante:
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
@@ -922,12 +919,17 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 
 ---
 
-### W5. El tutorial explica features, no cómo usarlos
+### ✅ W5. El tutorial explica features, no cómo usarlos
 **Problema:** El tutorial muestra slides con títulos y bullets: "El Estado Financiero es tu panorama anual". Pero no dice: qué hacer primero, cómo navegar a él, ni qué significa cada número. Es una presentación de marketing, no una guía de uso.
 
 **Impacto:** Alta para usuarios nuevos sin experiencia financiera.
 
-**Solución:** Convertir el tutorial en un flujo guiado de 3 pasos con ejemplos reales: "Imagina que ganas $1,000 al mes. Así se ve tu estado financiero..." con números en pantalla que el usuario puede tocar.
+**Estado:** IMPLEMENTADO (alcance acotado) — Se descartó el rediseño completo a 3 pasos con ejemplo numérico interactivo ("imagina que ganas $1,000/mes...") propuesto originalmente: es contenido que explica cálculos financieros al usuario, así que hubiera requerido pasar primero por el asesor financiero del proyecto y construir widgets nuevos — se dejó fuera de alcance por decisión explícita, para otra sesión si se quiere el ejemplo interactivo completo. En su lugar, reescritura de contenido sobre el mismo formato de 6 slides ya construido (funciona bien, tiene botones de acción):
+- Cada slide ahora dice **dónde** está la función y **qué hacer primero**, no solo qué hace ("Empieza por aquí si es tu primera vez", "El botón + registra un gasto en segundos") en vez de descripciones de folleto.
+- Se corrigió el slide que había quedado desactualizado por **D1** (que se mergeó en esta misma sesión): antes decía que el Estado Financiero Anual es "tu pantalla principal" — ya no lo es. El slide se repropuso a "Tu día a día: Mes actual" (la pantalla de aterrizaje real post-D1), explicando el botón +, los sobres por categoría (verde/rojo), las alertas, y mencionando el tab Estado como el plan anual secundario. Su botón de acción ahora navega a `MesDetalleScreen` (Tab Gastos) en vez de `EstadoFinancieroAnualScreen`.
+- El resto de slides (Perfil, Compartido, Facturas QR, Ahorro/Deudas/Más) se reescribieron con el mismo criterio instructivo, sin cambiar su estructura, iconos ni navegación.
+
+**Solución (original del roadmap):** Convertir el tutorial en un flujo guiado de 3 pasos con ejemplos reales: "Imagina que ganas $1,000 al mes. Así se ve tu estado financiero..." con números en pantalla que el usuario puede tocar.
 
 ---
 
