@@ -45,6 +45,9 @@ class _DeudasScreenState extends State<DeudasScreen>
       if (!_tabs.indexIsChanging) _onTabChanged(_tabs.index);
     });
     _cargar();
+    // J2 — backfill idempotente: regenera eventos de calendario para deudas
+    // que existían antes del fix de "deudas sin fecha no aparecen nunca".
+    DeudasService.syncCalendario(widget.firebaseUid).catchError((_) {});
   }
 
   @override

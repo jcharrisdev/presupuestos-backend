@@ -41,25 +41,52 @@ router.post('/deudas/sync-calendario', async (req, res) => {
 async function _sincronizarEventosDeudas(firebase_uid) {
   const [deudas] = await db.execute(
     `SELECT id, nombre, fecha_proximo_pago, IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
-     FROM deudas WHERE firebase_uid = ? AND activa = 1 AND fecha_proximo_pago IS NOT NULL`,
+     FROM deudas WHERE firebase_uid = ? AND activa = 1`,
     [firebase_uid]);
+  const hoy = new Date();
   for (const d of deudas) {
     // Eliminar eventos pendientes/vencidos anteriores de esta deuda
     await db.execute(
       `DELETE FROM calendario_eventos WHERE firebase_uid = ? AND deuda_id = ? AND estado IN ('pendiente','vencido')`,
       [firebase_uid, d.id]).catch(() => {});
-    // Crear evento para los próximos 3 meses de pago
-    const base = new Date(d.fecha_proximo_pago);
-    for (let i = 0; i < 3; i++) {
-      const fecha = new Date(base);
-      fecha.setMonth(fecha.getMonth() + i);
-      const fechaStr = fecha.toISOString().slice(0, 10);
-      const estado = fecha < new Date() ? 'vencido' : 'pendiente';
-      await db.execute(
-        `INSERT INTO calendario_eventos (firebase_uid, deuda_id, titulo, tipo, fecha_evento, monto_esperado, estado, notificacion_activa, dias_anticipacion)
-         VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 3)`,
-        [firebase_uid, d.id, d.nombre, fechaStr, Number(d.cuota || 0), estado]
-      ).catch(() => {});
+
+    if (d.fecha_proximo_pago) {
+      // Fecha real conocida: un evento por mes con el monto completo.
+      const base = new Date(d.fecha_proximo_pago);
+      for (let i = 0; i < 3; i++) {
+        const fecha = new Date(base);
+        fecha.setMonth(fecha.getMonth() + i);
+        const fechaStr = fecha.toISOString().slice(0, 10);
+        const estado = fecha < hoy ? 'vencido' : 'pendiente';
+        await db.execute(
+          `INSERT INTO calendario_eventos (firebase_uid, deuda_id, titulo, tipo, fecha_evento, monto_esperado, estado, notificacion_activa, dias_anticipacion)
+           VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 3)`,
+          [firebase_uid, d.id, d.nombre, fechaStr, Number(d.cuota || 0), estado]
+        ).catch(() => {});
+      }
+    } else {
+      // Sin fecha real conocida: sin esto, la deuda nunca aparecía en el
+      // Calendario. Recordatorio por defecto en los días 15 y último día
+      // de cada mes (mismo criterio que ya usa Quincenas como fallback
+      // 50/50 cuando no hay fecha — quincena.js, _montoDeudaQuincena),
+      // con el monto partido a la mitad en cada uno para no duplicar el
+      // total. Se marca "(fecha estimada)" en el título: nunca se
+      // presenta como una fecha confirmada.
+      const montoMitad = Number(d.cuota || 0) / 2;
+      for (let i = 0; i < 3; i++) {
+        const base = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
+        const ultimoDia = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+        for (const dia of [15, ultimoDia]) {
+          const fecha = new Date(base.getFullYear(), base.getMonth(), dia);
+          const fechaStr = fecha.toISOString().slice(0, 10);
+          const estado = fecha < hoy ? 'vencido' : 'pendiente';
+          await db.execute(
+            `INSERT INTO calendario_eventos (firebase_uid, deuda_id, titulo, tipo, fecha_evento, monto_esperado, estado, notificacion_activa, dias_anticipacion)
+             VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 3)`,
+            [firebase_uid, d.id, `${d.nombre} (fecha estimada)`, fechaStr, montoMitad, estado]
+          ).catch(() => {});
+        }
+      }
     }
   }
 }
@@ -334,5 +361,9 @@ router.get('/deudas/plan', async (req, res) => {
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Expuesto para tests unitarios (router.stack no permite testear una
+// función fire-and-forget disparada dentro de un handler sin esperarla).
+router._sincronizarEventosDeudas = _sincronizarEventosDeudas;
 
 module.exports = router;
