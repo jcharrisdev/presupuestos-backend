@@ -81,6 +81,11 @@ async function generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, dia
   const today = new Date();
   let generados = 0;
   const dias = [diaPago, diaPago2].filter(Boolean);
+  // J2: si hay dos días de pago al mes, cada ocurrencia es la mitad del
+  // monto mensual — igual que ya calcula Tab Quincenas (_montoFijoQuincena
+  // en routes/quincena.js). Antes se insertaba el monto completo en cada
+  // una de las dos fechas, duplicando el total aparente en el Calendario.
+  const montoPorEvento = dias.length === 2 ? Number(monto) / 2 : Number(monto);
   for (const diaNum of dias) {
     for (let i = 0; i < 12; i++) {
       const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -94,7 +99,7 @@ async function generarEventosPerfilGasto(firebase_uid, ugfId, titulo, monto, dia
            (firebase_uid, user_gasto_fijo_id, titulo, tipo, fecha_evento,
             monto_esperado, estado, notificacion_activa, dias_anticipacion)
          VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 2)`,
-        [firebase_uid, ugfId, titulo, fechaStr, monto, estado]
+        [firebase_uid, ugfId, titulo, fechaStr, montoPorEvento, estado]
       );
       generados++;
     }
