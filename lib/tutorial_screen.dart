@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'theme/app_theme.dart';
-import 'estado_financiero_anual_screen.dart';
+import 'mes_detalle_screen.dart';
 import 'perfil_financiero_screen.dart';
 import 'shared_budgets_list_screen.dart';
 import 'invoice_scanner/invoice_history_screen.dart';
@@ -25,37 +25,42 @@ class _TutorialScreenState extends State<TutorialScreen> {
   final _ctrl = PageController();
   int _paso = 0;
 
+  static const _mesesLabel = [
+    '', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+    'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
+  ];
+
   static const _pasos = [
     _Paso(
       color:    AppTheme.primary,
       icon:     Icons.waving_hand_outlined,
       titulo:   '¡Bienvenido a Salarying!',
-      desc:     'Tu app de finanzas personales. En menos de 2 minutos verás todo lo que puedes hacer aquí.',
+      desc:     'Tu app de finanzas personales. Te mostramos paso a paso qué hacer primero — en menos de 2 minutos sabrás usarla.',
       puntos:   [],
       accion:   null,
     ),
     _Paso(
       color:    AppTheme.primary,
-      icon:     Icons.bar_chart_rounded,
-      titulo:   'Estado Financiero Anual',
-      desc:     'Tu pantalla principal. Muestra los 12 meses del año con cuánto ganas, gastas y te queda.',
+      icon:     Icons.calendar_today_outlined,
+      titulo:   'Tu día a día: Mes actual',
+      desc:     'Al abrir la app aterrizas aquí directo — es tu pantalla de trabajo diario, no un resumen.',
       puntos:   [
-        'Toca un mes para ver el detalle completo.',
-        'El mes actual se marca con "HOY".',
-        'Los meses en rojo significa que gastaste más de lo que entraste.',
-        'Puedes ver la vista quincenal, mensual o anual.',
+        'El botón + (abajo a la derecha) registra un gasto en segundos.',
+        'Cada categoría muestra cuánto llevas gastado de tu presupuesto: verde vas bien, rojo te pasaste.',
+        'Las alertas arriba te avisan si algo necesita tu atención ya.',
+        'El tab "Estado" (al lado) te muestra el plan completo del año.',
       ],
-      accion:   _Accion('Ver mi Estado Financiero', Icons.bar_chart_rounded),
+      accion:   _Accion('Ir a mi mes actual', Icons.calendar_today_outlined),
     ),
     _Paso(
       color:    AppTheme.success,
       icon:     Icons.account_circle_outlined,
       titulo:   'Mi Perfil Financiero',
-      desc:     'Aquí defines tu ingreso y todos tus gastos fijos mensuales. El sistema los proyecta automáticamente en tus 12 meses.',
+      desc:     'Aquí defines tu ingreso y tus gastos fijos — es la base de todos los cálculos. Empieza por aquí si es tu primera vez.',
       puntos:   [
-        'Actualiza tu ingreso si cambia.',
-        'Agrega o elimina gastos fijos cuando quieras.',
-        'Los cambios se reflejan en todos los meses futuros.',
+        'Ingresa tu ingreso mensual (o por quincena, la app lo convierte).',
+        'Agrega tus gastos fijos: renta, servicios, suscripciones.',
+        'Cualquier cambio se refleja automáticamente en los 12 meses del año.',
       ],
       accion:   _Accion('Ir a Mi Perfil', Icons.account_circle_outlined),
     ),
@@ -63,12 +68,11 @@ class _TutorialScreenState extends State<TutorialScreen> {
       color:    AppTheme.info,
       icon:     Icons.group_outlined,
       titulo:   'Presupuesto Compartido',
-      desc:     'Compartes apartamento, carro o gastos con alguien. Aquí defines quién paga qué y la app lleva el balance automáticamente.',
+      desc:     '¿Compartes gastos con alguien — pareja, roomie, familia? Aquí llevas la cuenta sin discusiones.',
       puntos:   [
-        'Crea un presupuesto e invita a los demás por email.',
-        'Cada persona ve solo lo que le toca pagar.',
-        'Puedes liquidar el balance con un toque.',
-        'Los pagos que hagas se registran en tu estado financiero.',
+        'Crea un presupuesto e invita por email o con un código.',
+        'Cada quien ve solo lo que le toca pagar según la regla que definan.',
+        'Marca "Ya pagué mi parte" con un toque — el balance se actualiza solo.',
       ],
       accion:   _Accion('Ver Presupuestos Compartidos', Icons.group_outlined),
     ),
@@ -76,24 +80,24 @@ class _TutorialScreenState extends State<TutorialScreen> {
       color:    AppTheme.warning,
       icon:     Icons.qr_code_scanner,
       titulo:   'Facturas QR',
-      desc:     'Escanea los códigos QR de los recibos DGI de Panamá. La app extrae los datos y los asigna a tu mes.',
+      desc:     '¿Compraste algo con factura DGI? Escanea el QR y ahórrate escribir el gasto a mano.',
       puntos:   [
-        'Escanea o sube imagen del recibo.',
-        'Vincula la factura a un gasto del mes (gasolina, supermercado, etc.).',
-        'Salarying aprende tus patrones y sugiere ajustes de presupuesto.',
+        'Apunta la cámara al QR del recibo — la app lee el monto y el comercio.',
+        'Elige a qué gasto del mes lo asignas (o créalo ahí mismo).',
+        'Con el tiempo, la app aprende tus patrones y sugiere ajustes de presupuesto.',
       ],
       accion:   _Accion('Ir a Facturas QR', Icons.qr_code_scanner),
     ),
     _Paso(
       color:    AppTheme.colorAhorro,
       icon:     Icons.savings_outlined,
-      titulo:   'Ahorro, Deudas y más',
-      desc:     'El menú principal tiene todo lo que necesitas para controlar tus finanzas.',
+      titulo:   'Y también tienes...',
+      desc:     'Todo lo demás está a un toque en el tab "Más".',
       puntos:   [
-        'Ahorro y Metas — define cuánto ahorrar y para qué.',
-        'Mis Deudas — lleva el control de tarjetas y préstamos.',
-        'Calendario — pagos y vencimientos por fecha.',
-        'Dashboard — resumen inteligente con score de salud financiera.',
+        'Ahorro y Metas — cuánto ahorrar y para qué, con barra de progreso.',
+        'Mis Deudas — control de tarjetas y préstamos, con estrategia de pago sugerida.',
+        'Calendario — todos tus pagos y vencimientos por fecha.',
+        'Asesor IA — pregúntale en lenguaje natural sobre tus finanzas.',
       ],
       accion:   _Accion('¡Empezar ahora!', Icons.rocket_launch_outlined),
     ),
@@ -118,7 +122,16 @@ class _TutorialScreenState extends State<TutorialScreen> {
     _cerrar();
     Widget? dest;
     switch (idx) {
-      case 1: dest = EstadoFinancieroAnualScreen(firebaseUid: widget.firebaseUid); break;
+      case 1:
+        final now = DateTime.now();
+        dest = MesDetalleScreen(
+          firebaseUid: widget.firebaseUid,
+          anio: now.year,
+          mes: now.month,
+          label: _mesesLabel[now.month],
+          initialTabIndex: 1,
+        );
+        break;
       case 2: dest = PerfilFinancieroScreen(firebaseUid: widget.firebaseUid); break;
       case 3: dest = SharedBudgetsListScreen(firebaseUid: widget.firebaseUid); break;
       case 4: dest = InvoiceHistoryScreen(firebaseUid: widget.firebaseUid); break;
