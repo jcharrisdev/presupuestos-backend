@@ -140,10 +140,10 @@ class _HomeShellState extends State<HomeShell> {
         mes: now.month,
       ),
     );
-    if (res == true && _initializedTabs.contains(1)) {
-      // Forzar recarga del tab Mes si está inicializado
-      setState(() { _initializedTabs.remove(1); });
-      Future.microtask(() => setState(() { _initializedTabs.add(1); }));
+    if (res == true && _initializedTabs.contains(0)) {
+      // Forzar recarga del tab Mes (idx 0) si está inicializado
+      setState(() { _initializedTabs.remove(0); });
+      Future.microtask(() => setState(() { _initializedTabs.add(0); }));
     }
   }
 
@@ -161,7 +161,17 @@ class _HomeShellState extends State<HomeShell> {
     final uid  = widget.firebaseUid;
     final now  = DateTime.now();
 
+    // D1 — modo diario: Mes Actual es el punto de entrada real (no el
+    // resumen anual), con el Tab Gastos activo por defecto (initialTabIndex
+    // 1) y su propio FAB "Registrar gasto" siempre visible.
     final List<Widget> screens = [
+      MesDetalleScreen(
+        firebaseUid: uid,
+        anio: now.year,
+        mes: now.month,
+        label: _mesesLabel[now.month],
+        initialTabIndex: 1,
+      ),
       EstadoFinancieroAnualScreen(
         firebaseUid: uid,
         periodoInicial: _periodo,
@@ -169,12 +179,6 @@ class _HomeShellState extends State<HomeShell> {
           setState(() => _periodo = p);
           UserSettingsService.setPeriodo(uid, p);
         },
-      ),
-      MesDetalleScreen(
-        firebaseUid: uid,
-        anio: now.year,
-        mes: now.month,
-        label: _mesesLabel[now.month],
       ),
       DeudasScreen(firebaseUid: uid),
       _MasTab(
@@ -196,7 +200,11 @@ class _HomeShellState extends State<HomeShell> {
         children: List.generate(screens.length, (i) =>
           _initializedTabs.contains(i) ? screens[i] : const SizedBox.shrink()),
       ),
-      floatingActionButton: (_idx == 0) ? FloatingActionButton(
+      // MesDetalleScreen (idx 0) ya tiene su propio FAB "Registrar gasto"
+      // (ver CLAUDE.md: HomeShell no debe solaparlo). El Tab Estado (idx 1)
+      // no tiene FAB propio, así que HomeShell le presta el de registro
+      // rápido para que siempre haya una forma de agregar un gasto.
+      floatingActionButton: (_idx == 1) ? FloatingActionButton(
         heroTag: 'fab_global',
         backgroundColor: AppTheme.primary,
         foregroundColor: AppTheme.background,
@@ -210,11 +218,6 @@ class _HomeShellState extends State<HomeShell> {
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (i) => setState(() { _idx = i; _initializedTabs.add(i); }),
         destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart_rounded),
-            label: 'Estado',
-          ),
           NavigationDestination(
             icon: Badge.count(
               count: _alertasCount,
@@ -229,6 +232,11 @@ class _HomeShellState extends State<HomeShell> {
               child: const Icon(Icons.calendar_today),
             ),
             label: 'Mes actual',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart_rounded),
+            label: 'Estado',
           ),
           NavigationDestination(
             icon: Icon(Icons.credit_card_outlined),

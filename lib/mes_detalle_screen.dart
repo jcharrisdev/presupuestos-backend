@@ -81,7 +81,7 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool reintentando = false}) async {
     // U7: el spinner de pantalla completa solo en la carga inicial — un
     // refresh (volver de una subpantalla) no debe hacer parpadear la pantalla.
     setState(() { if (_data == null) _loading = true; _error = null; });
@@ -100,6 +100,18 @@ class _MesDetalleScreenState extends State<MesDetalleScreen> with SingleTickerPr
         }
       } catch (_) {}
     } catch (e) {
+      // D1: el mes puede no existir todavía si el año no tiene estado
+      // financiero generado (ej. recién empezó el año) — antes esto solo se
+      // resolvía solo al pasar primero por el Tab Estado, que auto-genera.
+      // Ahora que Mes Actual puede ser la pantalla de aterrizaje, se genera
+      // aquí también y se reintenta una vez antes de mostrar el error.
+      if (!reintentando && e.toString().contains('Genera el estado anual primero')) {
+        try {
+          await EstadoAnualService.generarEstadoAnual(widget.firebaseUid, anio: widget.anio);
+          return _cargar(reintentando: true);
+        } catch (_) {}
+      }
+      if (!mounted) return;
       setState(() { _error = e.toString(); _loading = false; });
     }
   }
