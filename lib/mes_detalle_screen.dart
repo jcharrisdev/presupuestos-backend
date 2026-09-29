@@ -12,6 +12,7 @@ import 'services/gastos_variables_service.dart';
 import 'services/productos_catalogo_service.dart';
 import 'widgets/ayuda_sheet.dart';
 import 'widgets/financiero/agregar_gasto_sheet.dart';
+import 'widgets/financiero/alcance_edicion_dialog.dart';
 import 'widgets/financiero/categoria_selector.dart';
 import 'widgets/financiero/cierre_mes_sheet.dart';
 import 'widgets/financiero/resumen_mensual_card.dart';
@@ -911,7 +912,7 @@ class _TabGastosState extends State<_TabGastos> {
           ListTile(
             leading: const Icon(Icons.edit_outlined, color: AppTheme.primary),
             title: Text('Editar gasto fijo', style: TextStyle(color: AppTheme.textPrimary)),
-            subtitle: Text('Cambia nombre o monto para todos los meses',
+            subtitle: Text('Puedes elegir desde cuándo aplica el cambio',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             onTap: () {
               Navigator.pop(context);
@@ -929,39 +930,20 @@ class _TabGastosState extends State<_TabGastos> {
           ListTile(
             leading: const Icon(Icons.delete_outline, color: AppTheme.danger),
             title: const Text('Eliminar gasto fijo', style: TextStyle(color: AppTheme.danger)),
-            subtitle: Text('Se elimina de todos los meses',
+            subtitle: Text('Puedes elegir desde cuándo aplica',
                 style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             onTap: () async {
               Navigator.pop(context);
-              final confirmar = await showDialog<bool>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  backgroundColor: AppTheme.surface,
-                  title: Text('¿Eliminar gasto fijo?',
-                      style: TextStyle(color: AppTheme.textPrimary)),
-                  content: Text(
-                    'Se eliminará "${g['nombre']}" de todos los meses. Esta acción no se puede deshacer.',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancelar')),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmar == true) {
-                try {
-                  await ApiClient.delete(
-                      '/user/gastos-fijos/${g['id']}?firebase_uid=${widget.uid}');
-                  widget.onChanged();
-                } catch (e) {
-                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
-                }
+              final alcance = await preguntarAlcanceEdicion(
+                  context, esEliminar: true, nombreGasto: g['nombre'] as String?);
+              if (alcance == null) return;
+              try {
+                await ApiClient.delete(
+                    '/user/gastos-fijos/${g['id']}?firebase_uid=${widget.uid}&alcance=$alcance');
+                widget.onChanged();
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
               }
             },
           ),
@@ -1603,10 +1585,12 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
     if (monto == null || monto <= 0) return;
     final nombre = _nombreCtrl.text.trim();
     if (nombre.isEmpty) return;
+    final alcance = await preguntarAlcanceEdicion(context, esEliminar: false, nombreGasto: nombre);
+    if (alcance == null) return;
     setState(() => _guardando = true);
     try {
       await GastosVariablesService.editar(widget.uid, widget.g['id'] as int,
-          {'nombre': nombre, 'monto_estimado': monto});
+          {'nombre': nombre, 'monto_estimado': monto, 'alcance': alcance});
       setState(() { _editando = false; _guardando = false; });
       widget.onChanged();
     } catch (e) {
@@ -1618,25 +1602,11 @@ class _LineaVariableRowState extends State<_LineaVariableRow> {
   }
 
   Future<void> _eliminar() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: Text('¿Eliminar línea?',
-            style: TextStyle(color: AppTheme.textPrimary)),
-        content: Text('Se eliminará "${widget.g['nombre']}" del presupuesto.',
-            style: TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true),
-              child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger))),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    final alcance = await preguntarAlcanceEdicion(
+        context, esEliminar: true, nombreGasto: widget.g['nombre'] as String?);
+    if (alcance == null) return;
     try {
-      await GastosVariablesService.eliminar(widget.uid, widget.g['id'] as int);
+      await GastosVariablesService.eliminar(widget.uid, widget.g['id'] as int, alcance: alcance);
       widget.onChanged();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -1972,7 +1942,7 @@ class EditarGastoFijoSheet {
           Text('Editar gasto fijo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text('El cambio aplica a todos los meses',
+          Text('Podrás elegir desde cuándo aplica',
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
           const SizedBox(height: 20),
           TextField(
@@ -2032,12 +2002,16 @@ class EditarGastoFijoSheet {
                     const SnackBar(content: Text('Ingresa un nombre')));
                 return;
               }
+              final alcance = await preguntarAlcanceEdicion(
+                  ctx, esEliminar: false, nombreGasto: nuevoNombre);
+              if (alcance == null) return;
               setS(() => guardando = true);
               try {
                 await ApiClient.put('/user/gastos-fijos/$id', {
                   'firebase_uid': firebaseUid,
                   'descripcion':  nuevoNombre,
                   'monto_mensual': nuevoMonto,
+                  'alcance': alcance,
                 });
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);

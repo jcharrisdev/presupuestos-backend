@@ -1106,7 +1106,8 @@ app.post('/user/gastos-fijos/bulk', async (req, res) => {
 app.put('/user/gastos-fijos/:id', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid, descripcion, monto_mensual, tipo, clasificacion, es_deuda,
-    activo, subcategoria, notas, frecuencia, dia_pago, dia_pago_2, recordatorio } = req.body;
+    activo, subcategoria, notas, frecuencia, dia_pago, dia_pago_2, recordatorio,
+    alcance = 'desde_aqui' } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[existing]] = await db.execute(
@@ -1183,7 +1184,7 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
        WHERE ugf.id = ?`, [id]
     );
     res.json(updated);
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear(), { soloDesdeAqui: alcance !== 'todos' }).catch(() => {});
     _logInfo(`/user/gastos-fijos/${id}`, `Gasto fijo editado: "${updated.descripcion}" $${Number(updated.monto_mensual).toFixed(2)}/mes`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1192,7 +1193,7 @@ app.put('/user/gastos-fijos/:id', async (req, res) => {
 // Archiva la deuda vinculada (si existe) y elimina eventos pendientes del calendario
 app.delete('/user/gastos-fijos/:id', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid } = req.query;
+  const { firebase_uid, alcance = 'desde_aqui' } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [[ugf]] = await db.execute(
@@ -1209,7 +1210,7 @@ app.delete('/user/gastos-fijos/:id', async (req, res) => {
       `DELETE FROM user_gastos_fijos WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]
     );
     res.json({ success: true });
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear(), { soloDesdeAqui: alcance !== 'todos' }).catch(() => {});
     _logInfo(`/user/gastos-fijos/${id}`, `Gasto fijo eliminado (id=${id})`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

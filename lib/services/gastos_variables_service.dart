@@ -51,8 +51,8 @@ class GastosVariablesService {
     return jsonDecode(res.body);
   }
 
-  static Future<void> eliminar(String uid, int id) async {
-    await ApiClient.delete('/user/gastos-variables-base/$id?firebase_uid=$uid');
+  static Future<void> eliminar(String uid, int id, {String alcance = 'desde_aqui'}) async {
+    await ApiClient.delete('/user/gastos-variables-base/$id?firebase_uid=$uid&alcance=$alcance');
   }
 
   static Future<List<dynamic>> getSubcategorias(String uid, {String? categoria}) async {

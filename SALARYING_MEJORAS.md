@@ -103,6 +103,26 @@
 
 **Lo que responde ahora:** el cierre anual ya no puede sugerir "sube tu límite de Ocio" solo porque el año se gastó de más ahí — aplica el mismo criterio validado por el asesor financiero que ya protege el cierre mensual.
 
+---
+
+## ✅ FIN-05 — Eliminación/edición controlada de gastos recurrentes (2026-09-29)
+
+**Estado:** IMPLEMENTADO — rama `claude/app-status-analysis-ecnunj`.
+
+**Problema confirmado:** editar o eliminar un gasto fijo (`user_gastos_fijos`) o variable base (`gastos_variables_base`) recalculaba el estimado de los 12 meses del año (`_recalcularEstimadosAnio`) sin distinguir meses cerrados de meses activos/futuros. Si en octubre subías el alquiler de $500 a $600, enero-septiembre (ya cerrados, con análisis de desviación FIN-02 ya calculado) también cambiaban a $600 retroactivamente — corrompiendo el análisis histórico, porque el presupuesto contra el que ya se comparó ese mes deja de ser el que existía en ese momento. Igual al eliminar: el estimado de meses pasados caía a $0 al instante, borrando el rastro de que el gasto sí estuvo presupuestado.
+
+Diseño validado con el skill `asesor-financiero-salarying`: se descartó construir "solo este mes" como mecanismo nuevo (sobreingeniería — ya se resuelve registrando el gasto real de ese mes, que ya tiene prioridad sobre el estimado). Quedaron solo 2 alcances: **"Desde ahora"** (default, recomendado, un toque) y **"Todos los meses"** (secundario, con una segunda confirmación explícita que advierte que reescribe el historial — nunca queda como opción muda).
+
+**Solución implementada:**
+- ✅ **Backend:** `_recalcularEstimadosAnio(firebase_uid, anio, { soloDesdeAqui })` (`backend/lib/mes_helpers.js`) — con `soloDesdeAqui: true` salta los meses con `estado = 'cerrado'` al reescribir `fijos_estimados`/`variables_estimados`, dejando su historial intacto. Nuevo parámetro `alcance` (`'desde_aqui'` default | `'todos'`) en `PUT`/`DELETE /user/gastos-fijos/:id` y `PUT`/`DELETE /user/gastos-variables-base/:id`, que se traduce 1:1 a `soloDesdeAqui`.
+- ✅ **Frontend:** nuevo diálogo compartido `preguntarAlcanceEdicion()` (`lib/widgets/financiero/alcance_edicion_dialog.dart`) — un toque para "Desde ahora", segunda confirmación explícita solo si se elige "Todos los meses". Conectado en los 6 puntos donde se edita/elimina un fijo o variable base: `mes_detalle_screen.dart` (menú de gasto fijo, `EditarGastoFijoSheet`, `_LineaVariableRowState` de variable base) y `perfil_financiero_screen.dart` (`_eliminarGasto`, `_GastoFormSheet`, eliminar variable base). Los servicios (`UserProfileService.actualizarGastoFijo/eliminarGastoFijo`, `GastosVariablesService.eliminar`) ahora aceptan `alcance`.
+
+**Verificado localmente:**
+- ✅ 111/111 tests de backend pasando (108 previos + 3 nuevos de `_recalcularEstimadosAnio` con/sin `soloDesdeAqui`)
+- ✅ `flutter analyze` sin issues nuevos atribuibles al cambio (694 vs 694 baseline)
+
+**Lo que responde ahora:** tu análisis de desviación de un mes cerrado ya no cambia por algo que ajustaste hoy — y corregir un error de captura de todo el año sigue siendo posible, pero pidiendo confirmación explícita en vez de ser el comportamiento silencioso por default.
+
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-29
 
 **Progreso: 85 ✅ implementadas · 1 ⚠️ parcial · 0 ❌ pendientes** (86 ítems)
@@ -116,7 +136,6 @@ A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, 
 Todos los ítems de la lista original están ✅ o ⚠️ (con el resto diferido a propósito). Queda por delante:
 
 **📦 Features grandes de la visión (aún no empezadas)**
-- Eliminación/edición controlada de gastos recurrentes (este mes / desde aquí / todos)
 - Base de datos de productos y precios (historial: "el arroz subió 10%")
 - Notificaciones push
 - Metas de ahorro completas con barra de progreso

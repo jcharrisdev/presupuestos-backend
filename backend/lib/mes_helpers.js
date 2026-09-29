@@ -258,7 +258,11 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
 // Recalcula los estimados en meses_financieros y estado_financiero_anual
 // cuando el perfil del usuario cambia (gastos fijos, variables base, deudas).
 // Fire-and-forget: llámalo con .catch() para no bloquear la respuesta principal.
-async function _recalcularEstimadosAnio(firebase_uid, anio) {
+// opts.soloDesdeAqui=true evita reescribir el estimado de meses ya cerrados:
+// editar/eliminar una plantilla no debe alterar retroactivamente el presupuesto
+// contra el que ya se comparó un mes pasado (rompería el análisis de desviación).
+async function _recalcularEstimadosAnio(firebase_uid, anio, opts = {}) {
+  const { soloDesdeAqui = false } = opts;
   const year = anio || new Date().getFullYear();
   const [[efa]] = await db.execute(
     `SELECT id FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`,
@@ -311,10 +315,11 @@ async function _recalcularEstimadosAnio(firebase_uid, anio) {
 
   // Actualizar meses_financieros — estimados + ingreso por mes (respeta aplica_meses)
   const [meses] = await db.execute(
-    `SELECT id, mes FROM meses_financieros WHERE firebase_uid = ? AND anio = ?`,
+    `SELECT id, mes, estado FROM meses_financieros WHERE firebase_uid = ? AND anio = ?`,
     [firebase_uid, year]
   );
   for (const mesRow of meses) {
+    if (soloDesdeAqui && mesRow.estado === 'cerrado') continue;
     const m = mesRow.mes;
     const varMes = variablesBase.reduce((s, g) => {
       if (g.aplica_meses) {
