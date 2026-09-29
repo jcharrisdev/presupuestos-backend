@@ -92,7 +92,8 @@ router.post('/user/gastos-variables-base', async (req, res) => {
 router.put('/user/gastos-variables-base/:id', async (req, res) => {
   const { id } = req.params;
   const { firebase_uid, nombre, categoria, categoria_custom, subcategoria_id,
-    monto_estimado, frecuencia, mes_inicio, mes_fin, en_calendario, notas, activo } = req.body;
+    monto_estimado, frecuencia, mes_inicio, mes_fin, en_calendario, notas, activo,
+    alcance = 'desde_aqui' } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const fields = [], vals = [];
@@ -133,7 +134,7 @@ router.put('/user/gastos-variables-base/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
     const [[updated]] = await db.execute(`SELECT * FROM gastos_variables_base WHERE id = ?`, [id]);
     res.json(updated);
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear(), { soloDesdeAqui: alcance !== 'todos' }).catch(() => {});
     _logInfo(`/user/gastos-variables-base/${id}`, `Variable base editada: "${updated.nombre}" $${Number(updated.monto_estimado).toFixed(2)}`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -141,13 +142,13 @@ router.put('/user/gastos-variables-base/:id', async (req, res) => {
 // DELETE /user/gastos-variables-base/:id
 router.delete('/user/gastos-variables-base/:id', async (req, res) => {
   const { id } = req.params;
-  const { firebase_uid } = req.query;
+  const { firebase_uid, alcance = 'desde_aqui' } = req.query;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid requerido' });
   try {
     const [r] = await db.execute(`UPDATE gastos_variables_base SET activo = 0 WHERE id = ? AND firebase_uid = ?`, [id, firebase_uid]);
     if (!r.affectedRows) return res.status(404).json({ error: 'No encontrado' });
     res.json({ success: true });
-    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear()).catch(() => {});
+    _recalcularEstimadosAnio(firebase_uid, new Date().getFullYear(), { soloDesdeAqui: alcance !== 'todos' }).catch(() => {});
     _logInfo(`/user/gastos-variables-base/${id}`, `Variable base eliminada (id=${id})`, firebase_uid);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

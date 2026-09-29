@@ -6,6 +6,7 @@ import 'services/user_profile_service.dart';
 import 'services/gastos_variables_service.dart';
 import 'services/ingreso_extra_service.dart';
 import 'deudas/deudas_screen.dart';
+import 'widgets/financiero/alcance_edicion_dialog.dart';
 import 'widgets/financiero/mes_rango_selector.dart';
 import 'widgets/financiero/categoria_selector.dart';
 import 'invoice_scanner/invoice_scanner_screen.dart';
@@ -417,7 +418,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                     child: _GastoTile(
                       gasto: g as Map<String, dynamic>,
                       onEdit: () => _mostrarFormGasto(gasto: g),
-                      onDelete: () => _eliminarGasto((g)['id'] as int),
+                      onDelete: () => _eliminarGasto((g)['id'] as int, (g)['descripcion'] as String? ?? ''),
                     ),
                   )),
                   const SizedBox(height: 8),
@@ -472,7 +473,7 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
                     child: _GastoTile(
                       gasto: g as Map<String, dynamic>,
                       onEdit: () => _mostrarFormGasto(gasto: g),
-                      onDelete: () => _eliminarGasto((g)['id'] as int),
+                      onDelete: () => _eliminarGasto((g)['id'] as int, (g)['descripcion'] as String? ?? ''),
                     ),
                   )),
                   const SizedBox(height: 8),
@@ -518,28 +519,11 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
     );
   }
 
-  Future<void> _eliminarGasto(int id) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: Text('Eliminar gasto', style: TextStyle(color: AppTheme.textPrimary)),
-        content: Text(
-          '¿Eliminar este gasto del perfil? Se borrará también su recordatorio del calendario.',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await UserProfileService.eliminarGastoFijo(id, widget.firebaseUid);
-      _cargar();
-    }
+  Future<void> _eliminarGasto(int id, String nombre) async {
+    final alcance = await preguntarAlcanceEdicion(context, esEliminar: true, nombreGasto: nombre);
+    if (alcance == null) return;
+    await UserProfileService.eliminarGastoFijo(id, widget.firebaseUid, alcance: alcance);
+    _cargar();
   }
 
   Future<void> _confirmarEliminarIngreso() async {
@@ -621,7 +605,10 @@ class _PerfilFinancieroScreenState extends State<PerfilFinancieroScreen>
           ..._variablesBase.map((g) => _VariableBaseTile(
             gasto: g,
             onDelete: () async {
-              await GastosVariablesService.eliminar(widget.firebaseUid, g['id'] as int);
+              final alcance = await preguntarAlcanceEdicion(
+                  context, esEliminar: true, nombreGasto: g['nombre'] as String?);
+              if (alcance == null) return;
+              await GastosVariablesService.eliminar(widget.firebaseUid, g['id'] as int, alcance: alcance);
               _cargar();
             },
           )),
@@ -1423,6 +1410,12 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
           const SnackBar(content: Text('Indica el día de pago para activar el recordatorio')));
       return;
     }
+    String alcance = 'desde_aqui';
+    if (widget.gastoActual != null) {
+      final elegido = await preguntarAlcanceEdicion(context, esEliminar: false, nombreGasto: desc);
+      if (elegido == null) return;
+      alcance = elegido;
+    }
     setState(() => _guardando = true);
     final body = <String, dynamic>{
       'descripcion': desc,
@@ -1438,7 +1431,7 @@ class _GastoFormSheetState extends State<_GastoFormSheet> {
     try {
       if (widget.gastoActual != null) {
         await UserProfileService.actualizarGastoFijo(
-            widget.gastoActual!['id'] as int, widget.firebaseUid, body);
+            widget.gastoActual!['id'] as int, widget.firebaseUid, body, alcance: alcance);
       } else {
         await UserProfileService.crearGastoFijo(widget.firebaseUid, body);
       }

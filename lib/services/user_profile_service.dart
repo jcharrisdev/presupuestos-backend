@@ -53,16 +53,17 @@ class UserProfileService {
     throw Exception(errorMsg);
   }
 
-  static Future<bool> actualizarGastoFijo(int id, String uid, Map<String, dynamic> body) async {
-    final res = await ApiClient.put('/user/gastos-fijos/$id', {'firebase_uid': uid, ...body});
+  static Future<bool> actualizarGastoFijo(int id, String uid, Map<String, dynamic> body,
+      {String alcance = 'desde_aqui'}) async {
+    final res = await ApiClient.put('/user/gastos-fijos/$id', {'firebase_uid': uid, 'alcance': alcance, ...body});
     if (res.statusCode == 200) return true;
     final errorMsg = json.decode(res.body)['error'] ?? 'Error ${res.statusCode}';
     throw Exception(errorMsg);
   }
 
-  static Future<bool> eliminarGastoFijo(int id, String uid) async {
+  static Future<bool> eliminarGastoFijo(int id, String uid, {String alcance = 'desde_aqui'}) async {
     try {
-      final res = await ApiClient.delete('/user/gastos-fijos/$id?firebase_uid=$uid');
+      final res = await ApiClient.delete('/user/gastos-fijos/$id?firebase_uid=$uid&alcance=$alcance');
       return res.statusCode == 200;
     } catch (_) { return false; }
   }
