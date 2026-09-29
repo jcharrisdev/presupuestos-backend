@@ -90,6 +90,39 @@ test('J2: deuda con fecha_proximo_pago día 20 aparece completa en Q2 y ausente 
   assert.equal(cQ2.monto, 150);
 });
 
+test('J2: deuda con dos días de pago (quincenal) aparece partida a la mitad en cada quincena', async () => {
+  mockQuincena({
+    deuda: {
+      id: 1, nombre: 'Préstamo quincenal', monto: '100.00',
+      fecha_proximo_pago: null, dia_pago: 1, dia_pago_2: 15,
+      monto_pagado: 0, registro_ids_str: null,
+    },
+  });
+
+  const q1 = await llamar(handlerQuincena, { params: { anio: '2026', mes: '9', num: '1' }, query: { firebase_uid: 'u1' } });
+  const q2 = await llamar(handlerQuincena, { params: { anio: '2026', mes: '9', num: '2' }, query: { firebase_uid: 'u1' } });
+
+  assert.equal(deudaCompromiso(q1.body.compromisos_quincenal).monto, 50);
+  assert.equal(deudaCompromiso(q2.body.compromisos_quincenal).monto, 50);
+});
+
+test('J2: deuda con un solo día de pago manda sobre fecha_proximo_pago', async () => {
+  mockQuincena({
+    deuda: {
+      // dia_pago=5 (Q1) contradice fecha_proximo_pago=día 20 (Q2): debe ganar dia_pago.
+      id: 1, nombre: 'Tarjeta', monto: '60.00',
+      fecha_proximo_pago: new Date(Date.UTC(2026, 8, 20)), dia_pago: 5, dia_pago_2: null,
+      monto_pagado: 0, registro_ids_str: null,
+    },
+  });
+
+  const q1 = await llamar(handlerQuincena, { params: { anio: '2026', mes: '9', num: '1' }, query: { firebase_uid: 'u1' } });
+  const q2 = await llamar(handlerQuincena, { params: { anio: '2026', mes: '9', num: '2' }, query: { firebase_uid: 'u1' } });
+
+  assert.equal(deudaCompromiso(q1.body.compromisos_quincenal).monto, 60);
+  assert.equal(deudaCompromiso(q2.body.compromisos_quincenal), undefined);
+});
+
 test('J2: deuda sin fecha_proximo_pago conocida sigue con el fallback 50/50 en ambas quincenas', async () => {
   mockQuincena({
     deuda: {

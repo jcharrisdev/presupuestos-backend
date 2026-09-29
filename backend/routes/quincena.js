@@ -82,7 +82,7 @@ router.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
       [firebase_uid, anio, mes, firebase_uid]);
     const [compDeudas] = await db.execute(
       `SELECT d.id, d.nombre, IF(d.es_letra=1, d.cuota_fija, d.pago_minimo) AS monto,
-              d.fecha_proximo_pago,
+              d.fecha_proximo_pago, d.dia_pago, d.dia_pago_2,
               COALESCE(SUM(rg.monto), 0) AS monto_pagado,
               GROUP_CONCAT(rg.id ORDER BY rg.id SEPARATOR ',') AS registro_ids_str
        FROM deudas d
@@ -90,7 +90,7 @@ router.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
          ON rg.origen_deuda_id = d.id AND rg.firebase_uid = ? AND rg.anio = ? AND rg.mes = ?
          AND ${filtroQ}
        WHERE d.firebase_uid = ? AND d.activa = 1
-       GROUP BY d.id, d.nombre, d.cuota_fija, d.pago_minimo, d.es_letra, d.fecha_proximo_pago`,
+       GROUP BY d.id, d.nombre, d.cuota_fija, d.pago_minimo, d.es_letra, d.fecha_proximo_pago, d.dia_pago, d.dia_pago_2`,
       [firebase_uid, anio, mes, firebase_uid]);
     // B2 — monto del fijo en esta quincena según sus días de pago:
     //   dos días de pago (uno por quincena) → mitad en cada una
@@ -104,17 +104,21 @@ router.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
     };
     // J2 — misma lógica que _montoFijoQuincena, para que Calendario y
     // Quincenas dejen de contradecirse: antes toda deuda se partía 50/50 sin
-    // mirar fecha_proximo_pago, así que una deuda que vence completa el día 3
+    // mirar ninguna fecha, así que una deuda que vence completa el día 3
     // (toda en Q1) igual mostraba "debes la mitad" en Q2 — un pendiente
-    // fantasma que ningún pago real cancela nunca ahí. Con fecha conocida,
-    // el monto completo cae en su quincena real y $0 en la otra; sin fecha,
-    // se conserva el mismo fallback 50/50 de siempre.
-    const _montoDeudaQuincena = (montoMensual, fechaProximoPago) => {
+    // fantasma que ningún pago real cancela nunca ahí. Prioridad, de más a
+    // menos precisa: días de pago explícitos (dia_pago/dia_pago_2, "pago
+    // quincenal") > fecha_proximo_pago > fallback 50/50 de siempre.
+    const _montoDeudaQuincena = (montoMensual, diaPago, diaPago2, fechaProximoPago) => {
       const m = Number(montoMensual);
-      if (fechaProximoPago == null) return m / 2;
-      const f = fechaProximoPago instanceof Date ? fechaProximoPago : new Date(fechaProximoPago);
-      const dia = f.getUTCDate();
-      return (dia <= 15) === esQ1 ? m : 0;
+      if (diaPago != null && diaPago2 != null) return m / 2;
+      if (diaPago != null) return (Number(diaPago) <= 15) === esQ1 ? m : 0;
+      if (fechaProximoPago != null) {
+        const f = fechaProximoPago instanceof Date ? fechaProximoPago : new Date(fechaProximoPago);
+        const dia = f.getUTCDate();
+        return (dia <= 15) === esQ1 ? m : 0;
+      }
+      return m / 2;
     };
     const todosCompromisos = [
       ...compFijos
@@ -148,7 +152,7 @@ router.get('/user/quincena/:anio/:mes/:num', async (req, res) => {
       }),
       ...compDeudas
         .map(d => {
-          const montoQ = parseFloat(_montoDeudaQuincena(d.monto, d.fecha_proximo_pago).toFixed(2));
+          const montoQ = parseFloat(_montoDeudaQuincena(d.monto, d.dia_pago, d.dia_pago_2, d.fecha_proximo_pago).toFixed(2));
           const montoPagado = parseFloat(Number(d.monto_pagado || 0).toFixed(2));
           const ids = d.registro_ids_str ? d.registro_ids_str.split(',').map(Number) : [];
           return {

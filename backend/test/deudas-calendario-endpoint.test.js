@@ -58,6 +58,48 @@ test('J2: deuda con fecha_proximo_pago conocida sigue generando un evento mensua
   }
 });
 
+test('J2: deuda con dos días de pago (quincenal) genera un evento por día, con el monto partido a la mitad', async () => {
+  const calls = [];
+  mockImpl = async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.includes('SELECT id, nombre, fecha_proximo_pago')) {
+      return [[{ id: 3, nombre: 'Préstamo quincenal', fecha_proximo_pago: null, dia_pago: 1, dia_pago_2: 15, cuota: '100.00' }]];
+    }
+    return [{}];
+  };
+
+  await router._sincronizarEventosDeudas('u1');
+
+  const inserts = insertsDeCalendario(calls);
+  // 3 meses × 2 días de pago = 6 eventos
+  assert.equal(inserts.length, 6);
+  for (const p of inserts) {
+    assert.equal(p[4], 50, 'con dos días de pago cada ocurrencia lleva la mitad del monto');
+    assert.equal(p[2], 'Préstamo quincenal', 'con día de pago explícito no se marca "(fecha estimada)"');
+  }
+});
+
+test('J2: deuda con un solo día de pago genera un evento mensual con el monto completo, y gana sobre fecha_proximo_pago', async () => {
+  const calls = [];
+  mockImpl = async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.includes('SELECT id, nombre, fecha_proximo_pago')) {
+      // dia_pago Y fecha_proximo_pago presentes a la vez: dia_pago manda.
+      return [[{ id: 4, nombre: 'Tarjeta', fecha_proximo_pago: '2026-09-20', dia_pago: 5, dia_pago_2: null, cuota: '60.00' }]];
+    }
+    return [{}];
+  };
+
+  await router._sincronizarEventosDeudas('u1');
+
+  const inserts = insertsDeCalendario(calls);
+  assert.equal(inserts.length, 3, 'un evento por cada uno de los próximos 3 meses');
+  for (const p of inserts) {
+    assert.equal(p[4], 60, 'con un solo día de pago no se divide el monto');
+    assert.equal(p[3].slice(8, 10), '05', 'debe usar el día 5, no la fecha_proximo_pago');
+  }
+});
+
 test('J2: SELECT de deudas activas ya no excluye las que no tienen fecha_proximo_pago', async () => {
   let sqlCapturado;
   mockImpl = async (sql) => {

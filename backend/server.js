@@ -464,6 +464,11 @@ pool.getConnection(async (err, conn) => {
     `ALTER TABLE deudas ADD COLUMN cuota_fija DECIMAL(12,2) DEFAULT NULL`,
     `ALTER TABLE deudas ADD COLUMN nombre_acreedor VARCHAR(255) DEFAULT NULL`,
     `ALTER TABLE deudas ADD COLUMN fecha_inicio DATE DEFAULT NULL`,
+    // J2 — el form de deudas ya enviaba dia_pago/dia_pago_2 ("Pago quincenal:
+    // día X y día Y") pero la tabla nunca tuvo esas columnas: el backend las
+    // descartaba en silencio. Mismo par que ya usa user_gastos_fijos.
+    `ALTER TABLE deudas ADD COLUMN dia_pago INT DEFAULT NULL`,
+    `ALTER TABLE deudas ADD COLUMN dia_pago_2 INT DEFAULT NULL`,
   ];
   for (const sql of alterDeudas) {
     try { await db.execute(sql); } catch (_) { /* columna ya existe */ }

@@ -40,7 +40,8 @@ router.post('/deudas/sync-calendario', async (req, res) => {
 // Se llama como fire-and-forget tras crear o editar una deuda.
 async function _sincronizarEventosDeudas(firebase_uid) {
   const [deudas] = await db.execute(
-    `SELECT id, nombre, fecha_proximo_pago, IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
+    `SELECT id, nombre, fecha_proximo_pago, dia_pago, dia_pago_2,
+            IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
      FROM deudas WHERE firebase_uid = ? AND activa = 1`,
     [firebase_uid]);
   const hoy = new Date();
@@ -50,7 +51,28 @@ async function _sincronizarEventosDeudas(firebase_uid) {
       `DELETE FROM calendario_eventos WHERE firebase_uid = ? AND deuda_id = ? AND estado IN ('pendiente','vencido')`,
       [firebase_uid, d.id]).catch(() => {});
 
-    if (d.fecha_proximo_pago) {
+    if (d.dia_pago != null) {
+      // J2 — días de pago explícitos (misma lógica que ya usa
+      // generarEventosPerfilGasto para fijos): un solo día → completo;
+      // dos días → mitad en cada uno, para no duplicar el total mensual.
+      const dias = [d.dia_pago, d.dia_pago_2].filter(v => v != null);
+      const montoPorEvento = dias.length === 2 ? Number(d.cuota || 0) / 2 : Number(d.cuota || 0);
+      for (let i = 0; i < 3; i++) {
+        const base = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
+        const ultimoDia = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+        for (const diaNum of dias) {
+          const dia = Math.min(diaNum, ultimoDia);
+          const fecha = new Date(base.getFullYear(), base.getMonth(), dia);
+          const fechaStr = fecha.toISOString().slice(0, 10);
+          const estado = fecha < hoy ? 'vencido' : 'pendiente';
+          await db.execute(
+            `INSERT INTO calendario_eventos (firebase_uid, deuda_id, titulo, tipo, fecha_evento, monto_esperado, estado, notificacion_activa, dias_anticipacion)
+             VALUES (?, ?, ?, 'pago', ?, ?, ?, 1, 3)`,
+            [firebase_uid, d.id, d.nombre, fechaStr, montoPorEvento, estado]
+          ).catch(() => {});
+        }
+      }
+    } else if (d.fecha_proximo_pago) {
       // Fecha real conocida: un evento por mes con el monto completo.
       const base = new Date(d.fecha_proximo_pago);
       for (let i = 0; i < 3; i++) {
@@ -123,6 +145,9 @@ router.post('/deudas', async (req, res) => {
     // Campos de letra/cuota
     es_letra = 0, num_cuotas_total = null, num_cuotas_pagadas = 0,
     cuota_fija = null, nombre_acreedor = null, fecha_inicio = null,
+    // J2 — días de pago (pago quincenal): el form ya los enviaba, se agrega
+    // la columna y se guardan de verdad.
+    dia_pago = null, dia_pago_2 = null,
   } = req.body;
   if (!firebase_uid || !nombre || monto_total == null || monto_pendiente == null)
     return res.status(400).json({ error: 'firebase_uid, nombre, monto_total y monto_pendiente son requeridos' });
@@ -135,11 +160,13 @@ router.post('/deudas', async (req, res) => {
       `INSERT INTO deudas
          (firebase_uid, nombre, tipo, monto_total, monto_pendiente, tasa_interes,
           pago_minimo, fecha_proximo_pago, notas,
-          es_letra, num_cuotas_total, num_cuotas_pagadas, cuota_fija, nombre_acreedor, fecha_inicio)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          es_letra, num_cuotas_total, num_cuotas_pagadas, cuota_fija, nombre_acreedor, fecha_inicio,
+          dia_pago, dia_pago_2)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [firebase_uid, nombre, tipoFinal, monto_total, monto_pendiente, tasa_interes,
        pagoMinFinal, fecha_proximo_pago, notas,
-       Number(es_letra), num_cuotas_total, Number(num_cuotas_pagadas), cuota_fija, nombre_acreedor, fecha_inicio]
+       Number(es_letra), num_cuotas_total, Number(num_cuotas_pagadas), cuota_fija, nombre_acreedor, fecha_inicio,
+       dia_pago, dia_pago_2]
     );
     const [[created]] = await db.execute(`SELECT * FROM deudas WHERE id = ?`, [result.insertId]);
     res.status(201).json(_enriquecerDeuda(created));
@@ -159,6 +186,7 @@ router.put('/deudas/:id', async (req, res) => {
     firebase_uid, nombre, tipo, monto_total, monto_pendiente,
     tasa_interes, pago_minimo, fecha_proximo_pago, notas,
     es_letra, num_cuotas_total, num_cuotas_pagadas, cuota_fija, nombre_acreedor, fecha_inicio,
+    dia_pago, dia_pago_2,
   } = req.body;
   if (!firebase_uid) return res.status(400).json({ error: 'firebase_uid es requerido' });
   try {
@@ -177,6 +205,8 @@ router.put('/deudas/:id', async (req, res) => {
     if (cuota_fija !== undefined)         { fields.push('cuota_fija = ?');         vals.push(cuota_fija); }
     if (nombre_acreedor !== undefined)    { fields.push('nombre_acreedor = ?');    vals.push(nombre_acreedor); }
     if (fecha_inicio !== undefined)       { fields.push('fecha_inicio = ?');       vals.push(fecha_inicio); }
+    if (dia_pago !== undefined)           { fields.push('dia_pago = ?');           vals.push(dia_pago); }
+    if (dia_pago_2 !== undefined)         { fields.push('dia_pago_2 = ?');         vals.push(dia_pago_2); }
     if (fields.length === 0) return res.status(400).json({ error: 'Nada que actualizar' });
     vals.push(id, firebase_uid);
     const [result] = await db.execute(
