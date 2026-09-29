@@ -105,14 +105,13 @@
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
 
-**Progreso: 84 ✅ implementadas · 2 ⚠️ parciales · 0 ❌ pendientes** (86 ítems)
+**Progreso: 85 ✅ implementadas · 1 ⚠️ parcial · 0 ❌ pendientes** (86 ítems)
 
-### ✅ Implementadas (84)
-A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **W5**, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
+### ✅ Implementadas (85)
+A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, **J2**, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **W5**, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
-### ⚠️ Parciales (2)
+### ⚠️ Parcial (1)
 - **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
-- **J2** — el vínculo evento↔origen ya es visible (J3), pero Calendario y Tab Quincenas siguen siendo dos motores de cálculo independientes (Quincenas incluye gastos variables y reparto 50/50; Calendario no). Unificarlos de verdad queda diferido: mayor riesgo, toca el motor de quincenas ya validado.
 
 Todos los ítems de la lista original están ✅ o ⚠️ (con el resto diferido a propósito). Queda por delante:
 
@@ -479,12 +478,22 @@ Acompañar con mensaje positivo: "No estás solo/a en esto. Salarying te ayudar�
 
 ---
 
-### J2. El calendario no conecta visualmente con el Tab Quincenas del mes
+### ✅ J2. El calendario no conecta visualmente con el Tab Quincenas del mes
 **Problema:** El Tab Quincenas en mes_detalle_screen y el Calendario son dos vistas separadas que muestran información similar (compromisos de pago por fecha). El usuario no sabe cuál usar ni cuándo.
 
 **Impacto:** Media. Duplicidad confusa.
 
-**Solución:** El calendario debería ser la fuente de verdad visual de cuándo pagar cada cosa. El Tab Quincenas debería consumir del calendario o referenciarlo, no ser una vista paralela independiente.
+**Estado:** IMPLEMENTADO — Validado con el asesor financiero antes de codear (regla del proyecto para cualquier cambio de cómo se calculan los números del usuario). El problema real no era solo "dos pantallas parecidas" — era un bug de fondo: Quincenas ya trataba bien a los gastos fijos (un fijo con un solo día de pago se muestra completo en su quincena real, $0 en la otra), pero a las **deudas siempre las partía 50/50 sin mirar `fecha_proximo_pago`**, así que una deuda que vence completa el día 3 (toda en Q1) igual mostraba "debes la mitad" en Q2 — un pendiente fantasma que ningún pago real cancela ahí. Calendario, además, duplicaba el monto aparente de un fijo con dos días de pago al mes (mostraba el monto mensual completo en cada una de las dos fechas, en vez de la mitad).
+
+Ambos motores ahora calculan desde las mismas columnas fuente (`dia_pago`/`dia_pago_2` en fijos, `fecha_proximo_pago` en deudas) en vez de que Quincenas lea literalmente de la tabla `calendario_eventos` — así se evita que Quincenas pierda un compromiso real solo porque su recordatorio de calendario fue borrado por el usuario o está fuera de la ventana de 3 meses en que se generan eventos de deudas. Variables base (presupuesto estimado sin fecha fija) se dejaron fuera a propósito: no tienen una fecha real que unificar.
+
+Cambios: `backend/lib/calendario_helpers.js` (`generarEventosPerfilGasto` ahora divide el monto entre 2 cuando hay dos días de pago) y `backend/routes/quincena.js` (nuevo helper `_montoDeudaQuincena`, espejo de `_montoFijoQuincena` ya existente, usando `fecha_proximo_pago`). **El "disponible" quincenal no cambia** (se calcula de `registros_gasto` reales, no de la lista de compromisos) — lo que cambia es en qué quincena aparece cada deuda con fecha conocida, y por cuánto. 5 tests nuevos (`quincena-endpoint.test.js`, `calendario-helpers.test.js`), 101/101 tests del backend en verde.
+
+**Bug encontrado en QA de J2 (2026-09-28), corregido en el mismo lote:** el usuario reportó que sus deudas no aparecían en el Calendario. Causa: la fecha de "próximo pago" es opcional al crear/editar una deuda, y `_sincronizarEventosDeudas` solo generaba eventos cuando esa fecha existía — una deuda sin fecha nunca tenía ningún evento, en ningún mes. Con el usuario: fabricar una fecha falsa (ej. "día 1") iría contra la regla de nunca mostrar un estimado como hecho, así que se usó el mismo criterio de fallback que ya tiene Quincenas cuando no hay fecha (repartir entre ambas quincenas): sin `fecha_proximo_pago`, se generan recordatorios los días 15 y último día de cada mes, con el monto partido a la mitad en cada uno (para no duplicar el total) y el título marcado "(fecha estimada)" para que nunca se confunda con una fecha confirmada. Como el disparador automático solo corre al crear/editar una deuda, se agregó además un backfill: `DeudasScreen` llama `POST /deudas/sync-calendario` (endpoint que ya existía pero nunca se usaba desde el frontend) al abrir la pantalla, así las deudas creadas antes de este fix también generan su evento sin que el usuario tenga que volver a guardarlas. 3 tests nuevos (`deudas-calendario-endpoint.test.js`), 104/104 tests del backend en verde.
+
+**Segundo bug encontrado probando el fix anterior, mismo lote:** el usuario había puesto "pago quincenal" en una deuda (el form de `crear_deuda_sheet.dart` ya tiene una sección "DÍAS DE PAGO" con esa opción) y el Calendario seguía sin actualizarse. Causa: la tabla `deudas` **nunca tuvo columnas `dia_pago`/`dia_pago_2`** — el formulario ya enviaba esos campos al guardar, pero el backend (`POST`/`PUT /deudas`) nunca los leía del body, así que se descartaban en silencio. Exactamente el patrón de LECCIONES_APRENDIDAS de "se agregó el campo visual pero nunca se guarda" — y además el sheet de edición tampoco los precargaba al abrir una deuda existente. Fix: se agregaron las columnas (migración idempotente, mismo patrón que `user_gastos_fijos`), se guardan de verdad en crear/editar, se precargan al editar, y tanto `_sincronizarEventosDeudas` como `_montoDeudaQuincena` ahora dan prioridad a `dia_pago`/`dia_pago_2` sobre `fecha_proximo_pago` (misma matemática ya validada para fijos: un día → completo en su quincena/evento; dos días → mitad en cada uno). 4 tests nuevos, 108/108 tests del backend en verde.
+
+**Solución (original del roadmap):** El calendario debería ser la fuente de verdad visual de cuándo pagar cada cosa. El Tab Quincenas debería consumir del calendario o referenciarlo, no ser una vista paralela independiente.
 
 ---
 

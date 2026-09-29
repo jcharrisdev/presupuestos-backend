@@ -33,6 +33,13 @@ class DeudasService {
     if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['error'] ?? 'Error al archivar la deuda');
   }
 
+  // J2 — backfill: regenera los eventos de calendario de todas las deudas
+  // activas. Crear/editar una deuda ya lo dispara solo; esto cubre deudas
+  // que existían antes de ese fix y nunca generaron su evento.
+  static Future<void> syncCalendario(String uid) async {
+    await ApiClient.post('/deudas/sync-calendario', {'firebase_uid': uid});
+  }
+
   static Future<Map<String, dynamic>> getProyeccion(String uid) async {
     final res = await ApiClient.get('/deudas/proyeccion?firebase_uid=$uid');
     return jsonDecode(res.body) as Map<String, dynamic>;

@@ -95,6 +95,8 @@ class _CrearDeudaFormState extends State<_CrearDeudaForm> {
       final numCuotas = d['num_cuotas_total'];
       if (numCuotas != null) _numCuotasCtrl.text = numCuotas.toString();
       _mesInicioPago = (d['mes_inicio_pago'] as int?) ?? DateTime.now().month;
+      _diaPago  = d['dia_pago'] as int?;
+      _diaPago2 = d['dia_pago_2'] as int?;
       final fechaStr = d['fecha_proximo_pago'] as String?;
       if (fechaStr != null && fechaStr.isNotEmpty) {
         _fechaProximoPago = DateTime.tryParse(fechaStr.substring(0, 10));
