@@ -103,7 +103,7 @@
 
 **Lo que responde ahora:** el cierre anual ya no puede sugerir "sube tu límite de Ocio" solo porque el año se gastó de más ahí — aplica el mismo criterio validado por el asesor financiero que ya protege el cierre mensual.
 
-## 📊 RESUMEN DE ESTADO — actualizado 2026-09-25
+## 📊 RESUMEN DE ESTADO — actualizado 2026-09-29
 
 **Progreso: 85 ✅ implementadas · 1 ⚠️ parcial · 0 ❌ pendientes** (86 ítems)
 
@@ -111,7 +111,7 @@
 A1, A2, A3, B1, B2, B3, C1, C2, **D1**, D2, D3, E1, E2, E3, F1, F2, F3, G1, H1, H2, H3, H4, I1, I2, I3, I4, **J2**, J1, **J3**, K1, K2, K3, L1, L2, M1, M2, N1, N2, O1, O2, O3, O4, O5, P1, P2, P3, Q1, Q2, R1, R2, S1, T1, T2, U1, U2, U3, U4, U5, **U7**, V1, V2, G2, W1, W2, W3, W4, **W5**, **X1**, X2, X3, Y1, Y2, Z1, Z2, Z3, Z4, AA1, AA2, AA3, AB1, AB2, AC1, AC2, AD1, AE1
 
 ### ⚠️ Parcial (1)
-- **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1. Quedan pendientes: Patrimonio↔gastos (sin diseño aún) y los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
+- **U6** — Patrimonio→Pasivos ya estaba bien conectado (falso positivo del audit); Ventas→ingreso puntual resuelto vía S1; Patrimonio↔gastos resuelto (sugerencia no-bloqueante al guardar un gasto grande en vivienda/tecnología). Queda pendiente: los cobros reales de Ventas/Servicios (~5,000 líneas, alcance grande, diferido a propósito).
 
 Todos los ítems de la lista original están ✅ o ⚠️ (con el resto diferido a propósito). Queda por delante:
 
@@ -844,7 +844,7 @@ Cada paso es un link directo. El checklist desaparece cuando los 3 están comple
 - ✅ **Facturas QR** — ya resuelto (M2): badge de pendientes por asignar en HomeShell.
 - ✅ **Patrimonio → Pasivos** — verificado: **ya estaba bien conectado**, no era un silo real. `GET /user/patrimonio` calcula el patrimonio neto en vivo usando `deudas.monto_pendiente` (backend/server.js:6591-6608), no una réplica manual. Lo que faltaba era solo la comunicación (ya cubierta por R1/AC1).
 - ✅ **Ventas → Ingreso real** (caso más común) — resuelto vía S1: nueva opción "Ingreso puntual" en la landing de Ventas.
-- ❌ **Patrimonio → Activos ↔ gastos** — sigue sin conexión (sugerir crear un activo desde un gasto grande). Sin ningún gancho existente; es una feature nueva completa que necesita diseño de producto propio antes de codear.
+- ✅ **Patrimonio → Activos ↔ gastos** — diseño validado con el skill `asesor-financiero-salarying` (categorías acotadas a `vivienda`/`tecnologia` — se descartó `transporte` por riesgo de falso positivo con gastos de mantenimiento; umbral $100; enfoque no-bloqueante). Al guardar un gasto `variable` o `no_presupuestado` en esas categorías con monto ≥ $100, `agregar_gasto_sheet.dart` muestra un SnackBar (no bloqueante, se puede ignorar) con acción "Agregar" que abre el formulario de activo (`patrimonio_screen.dart` → `ActivoForm`, ahora público y reutilizable vía `mostrarFormularioAgregarActivo()`) prellenado con el nombre y el monto del gasto. Se muestra una sola vez, justo al guardar — no hay lógica de "recordar si ya se mostró" porque el trigger vive en el flujo de guardado, no en cada vista del registro. Copy explícito de que el valor es un punto de partida ("El valor es un punto de partida — puedes actualizarlo cuando quieras desde Patrimonio"), no un hecho fijo, dado que electrónica y similares pierden valor con el tiempo (ya conecta con AC2, que permite actualizar el valor después). Cero cambios de backend: reutiliza `POST /user/activos` ya existente.
 - ❌ **Ventas → cobros reales** — los cobros de las divisiones grandes (`PUT /cobros/:id/cobrar` en Venta de productos, `POST /jobs/:id/customer-payments` en Servicios) siguen sin tocar `registros_ingreso`. El patrón a reusar ya está identificado (mismo mecanismo de Ingresos Extra), pero conectar los ~5,000 líneas del módulo completo se dejó fuera de este alcance por decisión explícita del usuario — S1 cubre el caso de uso más común con mucho menos riesgo.
 
 **Problema original:** Los siguientes módulos existían como silos sin impacto visible en el presupuesto: Compartido, Patrimonio, Ventas, Facturas QR.

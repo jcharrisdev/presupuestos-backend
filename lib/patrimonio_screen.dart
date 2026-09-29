@@ -148,7 +148,7 @@ class _PatrimonioScreenState extends State<PatrimonioScreen> {
       isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => _ActivoForm(uid: widget.firebaseUid, existing: existing),
+      builder: (_) => ActivoForm(uid: widget.firebaseUid, existing: existing),
     );
     if (result == true) _cargar();
   }
@@ -309,15 +309,34 @@ class _PasivoTile extends StatelessWidget {
   }
 }
 
-class _ActivoForm extends StatefulWidget {
-  final String uid;
-  final Map<String, dynamic>? existing;
-  const _ActivoForm({required this.uid, this.existing});
-  @override
-  State<_ActivoForm> createState() => _ActivoFormState();
+// U6 — abre el formulario de activo prellenado desde un gasto (Patrimonio ↔ gastos).
+// El valor sugerido es el monto pagado, no una tasación: el usuario lo confirma o ajusta.
+Future<bool?> mostrarFormularioAgregarActivo(
+  BuildContext context,
+  String uid, {
+  String? nombreSugerido,
+  double? valorSugerido,
+}) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppTheme.surface,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    builder: (_) => ActivoForm(uid: uid, nombreSugerido: nombreSugerido, valorSugerido: valorSugerido),
+  );
 }
 
-class _ActivoFormState extends State<_ActivoForm> {
+class ActivoForm extends StatefulWidget {
+  final String uid;
+  final Map<String, dynamic>? existing;
+  final String? nombreSugerido;
+  final double? valorSugerido;
+  const ActivoForm({Key? key, required this.uid, this.existing, this.nombreSugerido, this.valorSugerido}) : super(key: key);
+  @override
+  State<ActivoForm> createState() => _ActivoFormState();
+}
+
+class _ActivoFormState extends State<ActivoForm> {
   final _nombreCtrl = TextEditingController();
   final _valorCtrl  = TextEditingController();
   final _descCtrl   = TextEditingController();
@@ -341,8 +360,14 @@ class _ActivoFormState extends State<_ActivoForm> {
       _valorCtrl.text  = (widget.existing!['valor'] ?? '').toString();
       _descCtrl.text   = widget.existing!['descripcion'] as String? ?? '';
       _tipo = widget.existing!['tipo'] as String? ?? 'otro';
+    } else {
+      if (widget.nombreSugerido != null) { _nombreCtrl.text = widget.nombreSugerido!; }
+      if (widget.valorSugerido != null) { _valorCtrl.text = widget.valorSugerido!.toStringAsFixed(2); }
     }
   }
+
+  bool get _esPrellenado =>
+      widget.existing == null && (widget.nombreSugerido != null || widget.valorSugerido != null);
 
   @override
   void dispose() {
@@ -377,9 +402,12 @@ class _ActivoFormState extends State<_ActivoForm> {
           Text(widget.existing != null ? 'Editar activo' : 'Nuevo activo',
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          // R2 — explicar para qué sirve registrar un activo
+          // R2 — explicar para qué sirve registrar un activo. U6: si viene prellenado
+          // desde un gasto, aclarar que el valor es un punto de partida, no un hecho fijo.
           Text(
-            'Registrar tus activos te ayuda a ver tu salud financiera completa. No afecta tu presupuesto mensual.',
+            _esPrellenado
+                ? 'Prellenamos estos datos desde tu gasto. El valor es un punto de partida — puedes actualizarlo cuando quieras desde Patrimonio.'
+                : 'Registrar tus activos te ayuda a ver tu salud financiera completa. No afecta tu presupuesto mensual.',
             style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.35),
           ),
           const SizedBox(height: 16),

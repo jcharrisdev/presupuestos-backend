@@ -8,6 +8,7 @@ import '../../services/gastos_variables_service.dart';
 import '../../services/api_client.dart';
 import '../../services/ia_service.dart';
 import '../../perfil_financiero_screen.dart';
+import '../../patrimonio_screen.dart';
 import 'mes_rango_selector.dart';
 import 'categoria_selector.dart';
 import 'split_section.dart';
@@ -679,6 +680,15 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
           duration: const Duration(seconds: 3),
         ));
       }
+      // U6 — Patrimonio ↔ gastos: si el gasto es en una categoría con activos
+      // físicos duraderos y supera el umbral, invitar (sin bloquear) a
+      // registrarlo en Patrimonio. Se muestra una sola vez, justo al guardar.
+      final montoNum = double.tryParse(_monto.text) ?? 0;
+      if ((categoriaFinal == 'vivienda' || categoriaFinal == 'tecnologia') &&
+          (_tipo == 'variable' || _tipo == 'no_presupuestado') &&
+          montoNum >= 100) {
+        _ofrecerAgregarActivo(messenger, rootNav, _nombre.text.trim(), montoNum);
+      }
     } catch (e) {
       messenger.showSnackBar(
           SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger));
@@ -750,6 +760,25 @@ class _AgregarGastoSheetState extends State<AgregarGastoSheet> {
         }
       }
     }
+  }
+
+  // U6 — ofrece registrar el gasto como activo en Patrimonio (no bloqueante,
+  // el usuario puede ignorarlo). Usa rootNav.context porque el sheet ya cerró.
+  void _ofrecerAgregarActivo(
+      ScaffoldMessengerState messenger, NavigatorState rootNav, String nombre, double monto) {
+    messenger.showSnackBar(SnackBar(
+      content: Text('¿"$nombre" es algo que sigues teniendo? Agrégalo a tu Patrimonio'),
+      backgroundColor: AppTheme.surfaceAlt,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+      action: SnackBarAction(
+        label: 'Agregar',
+        textColor: AppTheme.primary,
+        onPressed: () => mostrarFormularioAgregarActivo(
+            rootNav.context, widget.firebaseUid,
+            nombreSugerido: nombre, valorSugerido: monto),
+      ),
+    ));
   }
 }
 
