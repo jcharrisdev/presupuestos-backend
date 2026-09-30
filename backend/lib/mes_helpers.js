@@ -262,8 +262,10 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
 // editar/eliminar una plantilla no debe alterar retroactivamente el presupuesto
 // contra el que ya se comparó un mes pasado (rompería el análisis de desviación).
 async function _recalcularEstimadosAnio(firebase_uid, anio, opts = {}) {
-  const { soloDesdeAqui = false } = opts;
-  const year = anio || new Date().getFullYear();
+  const { soloDesdeAqui = false, hoy = new Date() } = opts;
+  const year = anio || hoy.getFullYear();
+  const anioActual = hoy.getFullYear();
+  const mesActual = hoy.getMonth() + 1;
   const [[efa]] = await db.execute(
     `SELECT id FROM estado_financiero_anual WHERE firebase_uid = ? AND anio = ?`,
     [firebase_uid, year]
@@ -319,7 +321,11 @@ async function _recalcularEstimadosAnio(firebase_uid, anio, opts = {}) {
     [firebase_uid, year]
   );
   for (const mesRow of meses) {
-    if (soloDesdeAqui && mesRow.estado === 'cerrado') continue;
+    // `estado` solo se refresca al generar el año o al cerrar el mes explícitamente —
+    // si el usuario nunca cerró un mes pasado, seguiría marcado 'activo'/'futuro' aunque
+    // ya haya pasado. Comparamos también contra la fecha real para no depender de eso.
+    const yaPaso = year < anioActual || (year === anioActual && mesRow.mes < mesActual);
+    if (soloDesdeAqui && (mesRow.estado === 'cerrado' || yaPaso)) continue;
     const m = mesRow.mes;
     const varMes = variablesBase.reduce((s, g) => {
       if (g.aplica_meses) {
