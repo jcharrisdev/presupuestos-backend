@@ -114,14 +114,16 @@
 Diseño validado con el skill `asesor-financiero-salarying`: se descartó construir "solo este mes" como mecanismo nuevo (sobreingeniería — ya se resuelve registrando el gasto real de ese mes, que ya tiene prioridad sobre el estimado). Quedaron solo 2 alcances: **"Desde ahora"** (default, recomendado, un toque) y **"Todos los meses"** (secundario, con una segunda confirmación explícita que advierte que reescribe el historial — nunca queda como opción muda).
 
 **Solución implementada:**
-- ✅ **Backend:** `_recalcularEstimadosAnio(firebase_uid, anio, { soloDesdeAqui })` (`backend/lib/mes_helpers.js`) — con `soloDesdeAqui: true` salta los meses con `estado = 'cerrado'` al reescribir `fijos_estimados`/`variables_estimados`, dejando su historial intacto. Nuevo parámetro `alcance` (`'desde_aqui'` default | `'todos'`) en `PUT`/`DELETE /user/gastos-fijos/:id` y `PUT`/`DELETE /user/gastos-variables-base/:id`, que se traduce 1:1 a `soloDesdeAqui`.
+- ✅ **Backend:** `_recalcularEstimadosAnio(firebase_uid, anio, { soloDesdeAqui })` (`backend/lib/mes_helpers.js`) — con `soloDesdeAqui: true` salta los meses ya cerrados al reescribir `fijos_estimados`/`variables_estimados`, dejando su historial intacto. Nuevo parámetro `alcance` (`'desde_aqui'` default | `'todos'`) en `PUT`/`DELETE /user/gastos-fijos/:id` y `PUT`/`DELETE /user/gastos-variables-base/:id`, que se traduce 1:1 a `soloDesdeAqui`.
 - ✅ **Frontend:** nuevo diálogo compartido `preguntarAlcanceEdicion()` (`lib/widgets/financiero/alcance_edicion_dialog.dart`) — un toque para "Desde ahora", segunda confirmación explícita solo si se elige "Todos los meses". Conectado en los 6 puntos donde se edita/elimina un fijo o variable base: `mes_detalle_screen.dart` (menú de gasto fijo, `EditarGastoFijoSheet`, `_LineaVariableRowState` de variable base) y `perfil_financiero_screen.dart` (`_eliminarGasto`, `_GastoFormSheet`, eliminar variable base). Los servicios (`UserProfileService.actualizarGastoFijo/eliminarGastoFijo`, `GastosVariablesService.eliminar`) ahora aceptan `alcance`.
 
-**Verificado localmente:**
-- ✅ 111/111 tests de backend pasando (108 previos + 3 nuevos de `_recalcularEstimadosAnio` con/sin `soloDesdeAqui`)
-- ✅ `flutter analyze` sin issues nuevos atribuibles al cambio (694 vs 694 baseline)
+**Bug encontrado en QA de producción (2026-09-30) y corregido en el mismo paquete:** la primera versión solo protegía meses con `estado = 'cerrado'` en `meses_financieros`. Ese campo NO se actualiza solo con el paso del tiempo — únicamente se marca `'cerrado'` al generar el estado anual (usando el mes de ESE momento) o al usar explícitamente el wizard de cierre mensual. Un usuario que nunca cerró un mes pasado seguía teniendo `estado='activo'` en ese mes aunque ya hubiera pasado en el calendario real, así que "Desde ahora" no lo protegía — exactamente el bug que reportó el usuario en producción ("actualicé este mes y se actualizó en los meses anteriores"). Fix: `_recalcularEstimadosAnio` ahora también compara `(anio, mes)` contra la fecha real (`opts.hoy`, default `new Date()`) — un mes se protege si `estado === 'cerrado'` **o** si ya pasó cronológicamente, sin depender de que el usuario lo haya cerrado a mano.
 
-**Lo que responde ahora:** tu análisis de desviación de un mes cerrado ya no cambia por algo que ajustaste hoy — y corregir un error de captura de todo el año sigue siendo posible, pero pidiendo confirmación explícita en vez de ser el comportamiento silencioso por default.
+**Verificado localmente:**
+- ✅ 113/113 tests de backend pasando (108 previos + 5 de `_recalcularEstimadosAnio`: con/sin `soloDesdeAqui`, mes cerrado, mes pasado con `estado` desactualizado, año anterior completo)
+- ✅ `flutter analyze` sin issues nuevos atribuibles al cambio (694 vs 694 baseline) — este fix es puramente de backend, sin cambios de frontend
+
+**Lo que responde ahora:** tu análisis de desviación de un mes cerrado ya no cambia por algo que ajustaste hoy — ni siquiera si nunca usaste el wizard de "cerrar mes" — y corregir un error de captura de todo el año sigue siendo posible, pero pidiendo confirmación explícita en vez de ser el comportamiento silencioso por default.
 
 ## 📊 RESUMEN DE ESTADO — actualizado 2026-09-29
 
