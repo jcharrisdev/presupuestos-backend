@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import 'home_shell.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
+import 'services/push_notification_service.dart';
 import 'services/cache_service.dart';
 import 'services/theme_pref.dart';
 
@@ -22,6 +23,7 @@ void main() async {
   await CacheService.init();
   await NotificationService.init();
   await NotificationService.requestPermission();
+  await PushNotificationService.inicializar();
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,

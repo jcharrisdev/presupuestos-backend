@@ -40,6 +40,7 @@ const { _logError, _logInfo } = require('./lib/logger');
 const LOG_SECRET = process.env.LOG_SECRET;
 const { calcularFechasEvento, generarEventosCalendario, generarEventosPerfilGasto: _generarEventosPerfilGasto } = require('./lib/calendario_helpers');
 const { _actualizarTotalesMes, _generarAlertasMes, _recalcularEstimadosAnio } = require('./lib/mes_helpers');
+const { _enviarPushSiNueva } = require('./lib/push_notifications');
 const { getPeriodoActivo, crearPrimerPeriodo, crearNuevoPeriodo } = require('./lib/periodo_helpers');
 
 const app = express();
@@ -62,6 +63,7 @@ app.use(require('./routes/sobres'));
 app.use(require('./routes/ingresos_extra'));
 app.use(require('./routes/gastos_globales'));
 app.use(require('./routes/gastos_variables_base'));
+app.use(require('./routes/notifications'));
 
 // Verifica la conexión y ejecuta migraciones al arrancar
 pool.getConnection(async (err, conn) => {
@@ -364,6 +366,30 @@ pool.getConnection(async (err, conn) => {
     try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
   }
   console.log('✅ Migración calendario_eventos columnas extra OK');
+
+  // Migración: tokens de dispositivo (push) y registro anti-duplicados
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS device_tokens (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid  VARCHAR(255) NOT NULL,
+      token         VARCHAR(500) NOT NULL,
+      plataforma    VARCHAR(20) DEFAULT 'web',
+      updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_dt_token (token),
+      KEY idx_dt_user (firebase_uid)
+    )`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS notificaciones_enviadas (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      firebase_uid  VARCHAR(255) NOT NULL,
+      tipo          VARCHAR(50) NOT NULL,
+      referencia_id INT NOT NULL,
+      enviada_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_ne_evento (firebase_uid, tipo, referencia_id)
+    )`);
+    console.log('✅ Migración device_tokens / notificaciones_enviadas OK');
+  } catch (e) {
+    console.error('⚠️ Migración push notifications:', e.message);
+  }
 
   // Limpieza de alertas duplicadas: mantener solo la más reciente por (firebase_uid, anio, mes, tipo, categoria)
   try {
@@ -3213,6 +3239,36 @@ app.delete('/pedido-items/:id', async (req, res) => {
 // Cron diario: marcar eventos de calendario vencidos
 cron.schedule('0 0 * * *', async () => {
   try {
+    // Push de recordatorio — antes de que venza, solo una vez por evento
+    // (notificacion_enviada evita repetirlo). Los de deudas ya los cubre
+    // _generarAlertasMes/pago_vencido; aquí van fijos y recordatorios sueltos.
+    const [porVencer] = await db.execute(
+      `SELECT id, firebase_uid, titulo FROM calendario_eventos
+       WHERE estado = 'pendiente' AND notificacion_activa = 1 AND notificacion_enviada = 0
+         AND fecha_evento = DATE_ADD(CURDATE(), INTERVAL dias_anticipacion DAY)`
+    );
+    for (const ev of porVencer) {
+      _enviarPushSiNueva(
+        ev.firebase_uid, 'recordatorio_pago', ev.id,
+        'Un pago se acerca', `Tu pago de "${ev.titulo}" vence pronto. Tócalo para revisarlo.`
+      ).then(enviado => {
+        if (enviado) db.execute(`UPDATE calendario_eventos SET notificacion_enviada = 1 WHERE id = ?`, [ev.id]).catch(() => {});
+      }).catch(() => {});
+    }
+
+    // Push de vencido — solo fijos (deuda_id IS NULL); las deudas ya las cubre
+    // _generarAlertasMes/pago_vencido, para no notificar dos veces lo mismo.
+    const [nuevosVencidos] = await db.execute(
+      `SELECT id, firebase_uid, titulo FROM calendario_eventos
+       WHERE estado = 'pendiente' AND fecha_evento < CURDATE() AND deuda_id IS NULL`
+    );
+    for (const ev of nuevosVencidos) {
+      _enviarPushSiNueva(
+        ev.firebase_uid, 'pago_vencido_evento', ev.id,
+        'Un pago venció', `Tu pago de "${ev.titulo}" venció. Tócalo para marcarlo o ajustar la fecha.`
+      ).catch(() => {});
+    }
+
     const [result] = await db.execute(
       `UPDATE calendario_eventos
        SET estado = 'vencido'
