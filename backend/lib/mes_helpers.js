@@ -5,6 +5,7 @@
  */
 const { db } = require('./db');
 const { _montoMensual } = require('./calculos_financieros');
+const { _enviarPushSiNueva } = require('./push_notifications');
 
 async function _actualizarTotalesMes(mesId, firebaseUid) {
   const [rows] = await db.execute(
@@ -55,7 +56,7 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
 
   // Alerta pagos vencidos: deudas con fecha_proximo_pago < hoy
   const [deudasVencidas] = await db.execute(
-    `SELECT nombre, fecha_proximo_pago, IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
+    `SELECT id, nombre, fecha_proximo_pago, IF(es_letra=1, cuota_fija, pago_minimo) AS cuota
      FROM deudas WHERE firebase_uid = ? AND activa = 1 AND fecha_proximo_pago < CURDATE()`,
     [firebase_uid]);
   for (const d of deudasVencidas) {
@@ -66,6 +67,11 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
       mensaje: `El pago de $${Number(d.cuota).toFixed(2)} de "${d.nombre}" venció el ${fecha}. Los retrasos generan intereses moratorios y afectan tu historial.`,
       accion_sugerida: `Realiza el pago de "${d.nombre}" lo antes posible y actualiza la fecha en tu perfil.`,
     });
+    // Push — una sola vez por deuda vencida, copy sin cifras ni tono acusador.
+    _enviarPushSiNueva(
+      firebase_uid, 'pago_vencido', d.id,
+      'Un pago venció', `Tu pago de "${d.nombre}" venció. Tócalo para marcarlo o ajustar la fecha.`
+    ).catch(() => {});
   }
 
   // Gastos variables base del usuario (presupuesto estimado por categoría)
@@ -158,6 +164,11 @@ async function _generarAlertasMes(firebase_uid, anio, mes) {
       mensaje: `Tus gastos superan tu ingreso en $${Math.abs(remanenteReal).toFixed(2)} este mes.`,
       accion_sugerida: 'Identifica los gastos que puedas eliminar o reducir para volver a terreno positivo.',
     });
+    // Push — una sola vez por mes, el día que cruza a rojo por primera vez.
+    _enviarPushSiNueva(
+      firebase_uid, 'remanente_negativo', mesRow.id,
+      'Tu mes va ajustado', 'Este mes el gasto viene más alto de lo esperado — revisa qué ajustar antes de que cierre.'
+    ).catch(() => {});
   }
 
   // Alerta 5: tendencia creciente — categoría con gasto creciendo 3 meses seguidos

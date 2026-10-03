@@ -125,7 +125,32 @@ Diseño validado con el skill `asesor-financiero-salarying`: se descartó constr
 
 **Lo que responde ahora:** tu análisis de desviación de un mes cerrado ya no cambia por algo que ajustaste hoy — ni siquiera si nunca usaste el wizard de "cerrar mes" — y corregir un error de captura de todo el año sigue siendo posible, pero pidiendo confirmación explícita en vez de ser el comportamiento silencioso por default.
 
-## 📊 RESUMEN DE ESTADO — actualizado 2026-09-29
+---
+
+## ✅ FIN-06 — Notificaciones push (2026-10-03)
+
+**Estado:** IMPLEMENTADO — rama `claude/app-status-analysis-ecnunj`. Proyecto Firebase real ("salary-bi") conectado por primera vez — antes `firebase_uid` era solo el email de Google Sign-In, sin Firebase Messaging real.
+
+**Diseño validado con el skill `asesor-financiero-salarying`** antes de codear — catálogo deliberadamente corto:
+- **Sí empujan push** (urgente y accionable *hoy*, sin cifras ni tono acusador en el texto — el usuario puede verlo en la pantalla de bloqueo sin contexto): pago vencido, recordatorio antes de la fecha de pago, el mes entra en rojo.
+- **Solo quedan in-app** (ya visibles en Tab Resumen/Análisis): DTI crítico, categoría excedida, tendencia creciente, presupuesto subestimado, impacto anual — empujarlas al teléfono sería ruido, no ayuda, y entrena al usuario a ignorar la app.
+- **Disparo por cambio de estado, no por persistencia**: cada alerta empuja una sola vez por ocurrencia (tabla `notificaciones_enviadas` / columna `notificacion_enviada` existente en `calendario_eventos`), nunca mientras siga siendo cierta — evita el "regaño diario".
+- El permiso del navegador se pide solo a usuarios que ya configuraron su ingreso (ya vieron valor de la app), no en la primera pantalla.
+
+**Solución implementada:**
+- ✅ **Backend:** `backend/lib/push_notifications.js` (Firebase Admin SDK, credenciales vía env vars `FIREBASE_PROJECT_ID`/`FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY` — nunca en el repo) con `_enviarPushSiNueva()` (dedup + limpieza de tokens inválidos). Dos tablas nuevas: `device_tokens`, `notificaciones_enviadas`. Nuevo endpoint `POST/DELETE /notifications/register-token`. Enganchado en 3 puntos ya existentes: `_generarAlertasMes` (pago_vencido de deudas, remanente_negativo) y el cron diario de medianoche en `server.js` (recordatorio_pago y pago_vencido de fijos, vía `calendario_eventos`).
+- ✅ **Frontend:** `firebase_core`+`firebase_messaging` en pubspec.yaml, `lib/firebase_options.dart` (config web del proyecto "salary-bi" — valores públicos, no secretos), `web/firebase-messaging-sw.js` (service worker de FCM), `lib/services/push_notification_service.dart` (pide permiso + registra token + escucha refresh). Conectado en `main.dart` (init de Firebase) y `home_shell.dart` (solicitud de permiso solo si `income != null`).
+
+**Riesgo conocido, pendiente de verificación manual en navegador:** `firebase-messaging-sw.js` se registra en la raíz ('/'), el mismo scope donde Flutter Web ya registra su propio service worker (`flutter_service_worker.js`, con lógica custom de reload en `web/index.html`). En teoría ambos coexisten (la convención de FlutterFire es tener el archivo presente en la raíz), pero esta app ya tuvo bugs de caché de service worker antes — **hay que probar en un navegador real** que: (1) el push realmente llega, y (2) el mecanismo de "recarga automática al desplegar" sigue funcionando sin romperse.
+
+**Verificado localmente:**
+- ✅ 118/118 tests de backend pasando (113 previos + 5 nuevos de `push_notifications.js`: registrar/eliminar token, sin credenciales no truena, dedup por ocurrencia, distinto referencia_id sí permite nuevo intento)
+- ✅ `flutter analyze` sin issues nuevos atribuibles al cambio (694 vs 694 baseline)
+- ✅ `flutter build web` build exitoso
+
+**Lo que responde ahora:** el usuario se entera de un pago vencido o de que su mes entra en rojo aunque tenga la app cerrada — sin regaño, sin cifras en la pantalla de bloqueo, y sin que se repita todos los días por lo mismo.
+
+## 📊 RESUMEN DE ESTADO — actualizado 2026-10-03
 
 **Progreso: 85 ✅ implementadas · 1 ⚠️ parcial · 0 ❌ pendientes** (86 ítems)
 
@@ -139,7 +164,6 @@ Todos los ítems de la lista original están ✅ o ⚠️ (con el resto diferido
 
 **📦 Features grandes de la visión (aún no empezadas)**
 - Base de datos de productos y precios (historial: "el arroz subió 10%")
-- Notificaciones push
 - Metas de ahorro completas con barra de progreso
 
 ---

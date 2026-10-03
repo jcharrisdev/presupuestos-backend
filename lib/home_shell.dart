@@ -4,6 +4,7 @@ import 'services/auth_service.dart';
 import 'services/user_settings_service.dart';
 import 'services/user_profile_service.dart';
 import 'services/estado_anual_service.dart';
+import 'services/push_notification_service.dart';
 import 'services/api_client.dart';
 import 'dart:convert';
 import 'login_screen.dart';
@@ -79,6 +80,13 @@ class _HomeShellState extends State<HomeShell> {
     });
 
     _cargarAlertasCount();
+
+    // Push: solo a usuarios que ya configuraron su ingreso (ya vieron valor
+    // de la app) — pedir el permiso del navegador en la primera pantalla
+    // generaría más rechazos que aceptaciones.
+    if (income != null) {
+      PushNotificationService.solicitarPermisoYRegistrar(uid);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
